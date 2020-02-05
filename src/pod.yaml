@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {pod_name}
+  labels:
+    name: {pod_name}
+spec:
+  containers:
+    - name: {pod_name}
+      image: {pod_image}
+      resources:
+        limits:
+          memory: "128Mi"
+          cpu: "500m"
