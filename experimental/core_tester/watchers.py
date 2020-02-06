@@ -1,10 +1,15 @@
 import kubernetes
 import threading
 from threading import Thread
-from typing import Dict, List
+from typing import Dict
 
 
-class KubernetesWatchRawStream(kubernetes.watch.Watch):
+class KubernetesWatchStream(kubernetes.watch.Watch):
+    _request_object = None
+
+    def __init__(self, return_type=None):
+        super().__init__(return_type=return_type)
+
     @staticmethod
     def iter_resp_lines(resp):
         prev = ""
@@ -38,6 +43,9 @@ class KubernetesWatchRawStream(kubernetes.watch.Watch):
         """
 
         self._stop = False
+        return_type = (
+            None if self._raw_return_type == "raw" else self.get_return_type(func)
+        )
         kwargs["watch"] = True
         kwargs["_preload_content"] = False
         if "resource_version" in kwargs:
@@ -47,8 +55,10 @@ class KubernetesWatchRawStream(kubernetes.watch.Watch):
         while True:
             resp = func(*args, **kwargs)
             try:
-                for line in KubernetesWatchRawStream.iter_resp_lines(resp):
-                    yield line
+                for data in KubernetesWatchStream.iter_resp_lines(resp):
+                    yield data if return_type is None else self.unmarshal_event(
+                        data, return_type
+                    )
                     if self._stop:
                         break
             finally:
@@ -62,9 +72,11 @@ class KubernetesWatchRawStream(kubernetes.watch.Watch):
 
 class EventHandler:
     message_handlers: dict = None
+    _pipeto: [] = None
 
     def __init__(self):
         super().__init__()
+        self._pipeto = []
         self.message_handlers = dict()
 
     def on(self, name, handler):
@@ -80,10 +92,15 @@ class EventHandler:
             del self.message_handlers[name]
 
     def emit(self, name, *args, **kwargs):
-        if not self.hasEvent(name):
-            return
-        for handler in self.message_handlers[name]:
-            handler(*args, **kwargs)
+        if self.hasEvent(name):
+            for handler in self.message_handlers[name]:
+                handler(*args, **kwargs)
+        for evnet_handler in self._pipeto:
+            evnet_handler.emit(name, *args, **kwargs)
+
+    def pipe(self, other):
+        assert isinstance(other, EventHandler)
+        self._pipeto.append(other)
 
 
 class ThreadedKubernetesWatcher(EventHandler):
@@ -155,7 +172,7 @@ class ThreadedKuebrnetesLogReader(ThreadedKubernetesWatcher):
             )
             return val[0]
 
-        for log_line in KubernetesWatchRawStream().stream(read_log):
+        for log_line in KubernetesWatchStream().stream(read_log):
             self.emit("log", msg=log_line)
             if self.is_stopped:
                 break
@@ -167,6 +184,7 @@ class ThreadedKubernetesNamespaceWatcher(ThreadedKubernetesWatcher):
     namespace: str = None
     field_selector: str = None
     label_selector: str = None
+    _watch = None
 
     def __init__(self, client, namespace, field_selector=None, label_selector=None):
         super().__init__(client, lambda: self.read_pod_status())
@@ -181,34 +199,48 @@ class ThreadedKubernetesNamespaceWatcher(ThreadedKubernetesWatcher):
             if self.label_selector is not None:
                 kwargs["label_selector"] = self.label_selector
             (request, info, headers) = self.client.list_namespaced_event_with_http_info(
-                self.namespace, *args, timeout_seconds=1, **kwargs
+                self.namespace, _continue=True, **kwargs
             )
             return request
 
-        while True:
-            for event in kubernetes.watch.Watch().stream(list_namespace_events):
-                self.emit("updated", event)
-                self.emit(event["type"], event)
-                if self.is_stopped:
-                    break
+        self._watch = kubernetes.watch.Watch()
+        for event in self._watch.stream(list_namespace_events):
+            self.emit("updated", event)
+            self.emit(event["type"], event)
             if self.is_stopped:
                 break
+
+    def stop(self):
+        super().stop()
+        self._watch.stop()
 
 
 class ThreadedKubernetesNamespaceObjectWatchStatus:
     object_type: str = None
+    object_yaml: str = None
     status: str = None
+    log_reader: ThreadedKuebrnetesLogReader = None
+
+    def __init__(self, object_yaml, auto_watch_pod_logs: bool = True):
+        super().__init__()
+
+    def stop(self):
+        if self.log_reader is not None and not self.log_reader.is_stopped:
+            self.log_reader.stop()
 
 
 class ThreadedKubernetesNamespaceObjectWatcher(EventHandler):
     _object_state: Dict[str, ThreadedKubernetesNamespaceObjectWatchStatus] = None
-    _watchers: List[ThreadedKubernetesWatcher] = None
+    _namespace_watchers: Dict[str, ThreadedKubernetesWatcher] = None
     auto_watch_pod_logs: bool = True
 
     def __init__(self):
         super().__init__()
         self._object_state = dict()
-        self._watchers = []
+        self._watchers = dict()
+
+    def get_kubernetes_object_id(obj: dict):
+        pass
 
     def watch_namespace(
         self, namespace: str, label_selector: str = None, field_selector: str = None
