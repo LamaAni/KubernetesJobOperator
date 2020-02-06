@@ -2,16 +2,16 @@ import kubernetes
 import threading
 from threading import Thread
 from typing import Dict
+from urllib3.response import HTTPResponse
 
 
 class KubernetesWatchStream(kubernetes.watch.Watch):
-    _request_object = None
+    _response_object: HTTPResponse = None
 
     def __init__(self, return_type=None):
         super().__init__(return_type=return_type)
 
-    @staticmethod
-    def iter_resp_lines(resp):
+    def read_lines(self, resp: HTTPResponse):
         prev = ""
         for seg in resp.read_chunked(decode_content=False):
             if isinstance(seg, bytes):
@@ -54,14 +54,18 @@ class KubernetesWatchStream(kubernetes.watch.Watch):
         timeouts = "timeout_seconds" in kwargs
         while True:
             resp = func(*args, **kwargs)
+            self._response_object = resp
             try:
-                for data in KubernetesWatchStream.iter_resp_lines(resp):
-                    yield data if return_type is None else self.unmarshal_event(
-                        data, return_type
-                    )
+                lines_reader = self.read_lines(resp)
+                for data in lines_reader:
+                    if len(data.strip()) > 0:
+                        yield data if return_type is None else self.unmarshal_event(
+                            data, return_type
+                        )
                     if self._stop:
                         break
             finally:
+                self._response_object = None
                 kwargs["resource_version"] = self.resource_version
                 resp.close()
                 resp.release_conn()
@@ -108,17 +112,19 @@ class ThreadedKubernetesWatcher(EventHandler):
     _active_log_read_thread: Thread = None
     _is_stopped: bool = False
     _invoke_method = None
+    watcher: KubernetesWatchStream = None
 
-    def __init__(self, client, invoke_method):
+    def __init__(self, client, invoke_method, return_type=None):
         super().__init__()
         assert client is not None
         self.client = client
         assert invoke_method is not None
         self._invoke_method = invoke_method
+        self.watcher = KubernetesWatchStream(return_type)
 
     @property
     def is_stopped(self):
-        return self._is_stopped
+        return self.watcher._stop
 
     def start(self, method=None):
         self.emit("start")
@@ -128,24 +134,36 @@ class ThreadedKubernetesWatcher(EventHandler):
         if self._active_log_read_thread is not None:
             raise Exception("Log reader has already been started.")
 
-        self._is_stopped = False
         self._active_log_read_thread = threading.Thread(target=self._invoke_method)
         self._active_log_read_thread.start()
 
     def reset(self):
-        self._active_log_read_thread = None
+        self.stop()
 
     def stop(self):
-        self.emit("stop")
-        self._is_stopped = True
+        if self.is_stopped:
+            return
 
-    def abort(self):
-        self.emit("abort")
+        self.watcher.stop()
+
+        # FIXME: This approach is good as long as _stop is available.
+        # maybe there is another way to kill the thread?
         if (
             self._active_log_read_thread is not None
-            and self._active_log_read_thread.isAlive()
+            and threading.currentThread().ident != self._active_log_read_thread.ident
         ):
-            self._active_log_read_thread._stop()
+            try:
+                # Wait for clean finish after marking watcher as stopped
+                self._active_log_read_thread.join(0.1)
+            except Exception:
+                pass
+
+            if self._active_log_read_thread.isAlive():
+                self._active_log_read_thread._reset_internal_locks(False)
+                self._active_log_read_thread._stop()
+
+        self.emit("stopped")
+        self._active_log_read_thread = None
 
     def join(self, timeout: float = None):
         self.emit("join")
@@ -160,7 +178,7 @@ class ThreadedKuebrnetesLogReader(ThreadedKubernetesWatcher):
     namespace: str = None
 
     def __init__(self, client, pod_name, namespace):
-        super().__init__(client, lambda: self.log_reader())
+        super().__init__(client, lambda: self.log_reader(), return_type="raw")
         self.client = client
         self.pod_name = pod_name
         self.namespace = namespace
@@ -172,7 +190,7 @@ class ThreadedKuebrnetesLogReader(ThreadedKubernetesWatcher):
             )
             return val[0]
 
-        for log_line in KubernetesWatchStream().stream(read_log):
+        for log_line in self.watcher.stream(read_log):
             self.emit("log", msg=log_line)
             if self.is_stopped:
                 break
@@ -203,16 +221,11 @@ class ThreadedKubernetesNamespaceWatcher(ThreadedKubernetesWatcher):
             )
             return request
 
-        self._watch = kubernetes.watch.Watch()
-        for event in self._watch.stream(list_namespace_events):
+        for event in self.watcher.stream(list_namespace_events):
             self.emit("updated", event)
             self.emit(event["type"], event)
             if self.is_stopped:
                 break
-
-    def stop(self):
-        super().stop()
-        self._watch.stop()
 
 
 class ThreadedKubernetesNamespaceObjectWatchStatus:
@@ -249,4 +262,3 @@ class ThreadedKubernetesNamespaceObjectWatcher(EventHandler):
 
     def waitfor(self, predict, include_log_events: bool = False):
         pass
-
