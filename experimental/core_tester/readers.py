@@ -1,5 +1,6 @@
 import kubernetes
 import threading
+from threading import Thread
 
 
 class EventHandler:
@@ -32,7 +33,8 @@ class ThreadedKuebrnetesLogReader(EventHandler):
     namespace: str = None
     pod_name: str = None
     client: kubernetes.client.CoreV1Api = None
-    active_log_read_thread = None
+    _active_log_read_thread: Thread = None
+    _is_stopped: bool = False
 
     def __init__(self, client, pod_name, namespace, on_message):
         super().__init__()
@@ -41,5 +43,28 @@ class ThreadedKuebrnetesLogReader(EventHandler):
         self.pod_name = pod_name
         self.namespace = namespace
 
-    def start():
-        pass
+    def start(self):
+        if self.active_log_read_thread is not None:
+            raise Exception("Log reader has already been started.")
+
+        def read_log(*args, **kwargs):
+            val = self.client.read_namespaced_pod_log_with_http_info(
+                self.pod_name, self.namespace, _preload_content=False, follow=True
+            )
+            return val[0]
+
+        def log_reader(reader: ThreadedKuebrnetesLogReader):
+            for log_line in kubernetes.watch.Watch().stream(read_log):
+                self.emit("log", msg=log_reader)
+
+        self._active_log_read_thread = threading.Thread(target=log_reader, args=(self))
+
+    def stop(self):
+        self._is_stopped = True
+
+    def abort(self):
+        if (
+            self.active_log_read_thread is not None
+            and self.active_log_read_thread.isAlive()
+        ):
+            self._active_log_read_thread._stop()
