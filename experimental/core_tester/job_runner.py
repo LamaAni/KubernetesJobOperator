@@ -6,7 +6,7 @@ from time import sleep
 from typing import List
 import logging
 from datetime import datetime
-from readers import ThreadedKuebrnetesLogReader
+from watchers import ThreadedKuebrnetesLogReader, ThreadedKubernetesNamespaceWatcher
 
 logging.basicConfig(level="INFO")
 
@@ -44,6 +44,17 @@ done
 
 pod_to_execute = create_pod_v1_object("lama", "ubuntu", ["bash", "-c", bash_script])
 
+ns_watcher = ThreadedKubernetesNamespaceWatcher(client, current_namespace)
+
+
+def ns_watcher_updated(event):
+    logging.info(event["type"])
+    pass
+
+
+ns_watcher.on("updated", ns_watcher_updated)
+ns_watcher.start()
+
 print("Validate the pod...")
 try:
     status = client.read_namespaced_pod_status("lama", current_namespace)
@@ -54,8 +65,33 @@ except Exception:
 
 print("Watch...")
 
-reader = ThreadedKuebrnetesLogReader(client, "lama", current_namespace)
-reader.on("log", lambda msg: logging.info(msg))
-reader.start()
-reader.join()
+log_reader = ThreadedKuebrnetesLogReader(client, "lama", current_namespace)
 
+global started
+started = None
+
+
+def read_log_test(msg: str):
+    global started
+    try:
+        for timestamp in msg.split("\n"):
+            timestamp = timestamp.strip()
+            if len(timestamp) == 0:
+                continue
+            dt = datetime.utcfromtimestamp(int(timestamp) / 1000)
+            logging.info(f"Read timestamp: {dt}")
+            if started is None:
+                started = dt
+            elif (dt - started).seconds > 20:
+                logging.info("Stopped...")
+                log_reader.stop()
+    except Exception as e:
+        logging.warn(e)
+        logging.warn("Could not read log message: " + msg)
+
+
+log_reader.on("log", read_log_test)
+log_reader.start()
+log_reader.join()
+logging.info("Stopping namespace watcher..")
+ns_watcher.stop()

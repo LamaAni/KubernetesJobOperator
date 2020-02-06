@@ -1,6 +1,7 @@
 import kubernetes
 import threading
 from threading import Thread
+from typing import Dict, List
 
 
 class KubernetesWatchRawStream(kubernetes.watch.Watch):
@@ -85,44 +86,44 @@ class EventHandler:
             handler(*args, **kwargs)
 
 
-class ThreadedKuebrnetesLogReader(EventHandler):
-    namespace: str = None
-    pod_name: str = None
+class ThreadedKubernetesWatcher(EventHandler):
     client: kubernetes.client.CoreV1Api = None
     _active_log_read_thread: Thread = None
     _is_stopped: bool = False
+    _invoke_method = None
 
-    def __init__(self, client, pod_name, namespace):
+    def __init__(self, client, invoke_method):
         super().__init__()
+        assert client is not None
         self.client = client
-        self.pod_name = pod_name
-        self.namespace = namespace
+        assert invoke_method is not None
+        self._invoke_method = invoke_method
 
-    def start(self):
+    @property
+    def is_stopped(self):
+        return self._is_stopped
+
+    def start(self, method=None):
+        self.emit("start")
+
+        method = method or self._invoke_method
+
         if self._active_log_read_thread is not None:
             raise Exception("Log reader has already been started.")
 
-        def read_log(*args, **kwargs):
-            val = self.client.read_namespaced_pod_log_with_http_info(
-                self.pod_name, self.namespace, _preload_content=False, follow=True
-            )
-            return val[0]
-
-        def log_reader():
-            for log_line in KubernetesWatchRawStream().stream(read_log):
-                self.emit("log", msg=log_line)
-                if self._is_stopped:
-                    break
-            self._active_log_read_thread = None
-
         self._is_stopped = False
-        self._active_log_read_thread = threading.Thread(target=log_reader)
+        self._active_log_read_thread = threading.Thread(target=self._invoke_method)
         self._active_log_read_thread.start()
 
+    def reset(self):
+        self._active_log_read_thread = None
+
     def stop(self):
+        self.emit("stop")
         self._is_stopped = True
 
     def abort(self):
+        self.emit("abort")
         if (
             self._active_log_read_thread is not None
             and self._active_log_read_thread.isAlive()
@@ -130,7 +131,90 @@ class ThreadedKuebrnetesLogReader(EventHandler):
             self._active_log_read_thread._stop()
 
     def join(self, timeout: float = None):
+        self.emit("join")
         if self._active_log_read_thread is None:
             raise Exception("Logger must be started before it can be joined")
 
         self._active_log_read_thread.join(timeout)
+
+
+class ThreadedKuebrnetesLogReader(ThreadedKubernetesWatcher):
+    pod_name: str = None
+    namespace: str = None
+
+    def __init__(self, client, pod_name, namespace):
+        super().__init__(client, lambda: self.log_reader())
+        self.client = client
+        self.pod_name = pod_name
+        self.namespace = namespace
+
+    def log_reader(self):
+        def read_log(*args, **kwargs):
+            val = self.client.read_namespaced_pod_log_with_http_info(
+                self.pod_name, self.namespace, _preload_content=False, follow=True
+            )
+            return val[0]
+
+        for log_line in KubernetesWatchRawStream().stream(read_log):
+            self.emit("log", msg=log_line)
+            if self.is_stopped:
+                break
+
+        self.reset()
+
+
+class ThreadedKubernetesNamespaceWatcher(ThreadedKubernetesWatcher):
+    namespace: str = None
+    field_selector: str = None
+    label_selector: str = None
+
+    def __init__(self, client, namespace, field_selector=None, label_selector=None):
+        super().__init__(client, lambda: self.read_pod_status())
+        self.namespace = namespace
+        self.field_selector = field_selector
+        self.label_selector = label_selector
+
+    def read_pod_status(self):
+        def list_namespace_events(*args, **kwargs):
+            if self.field_selector is not None:
+                kwargs["field_selector"] = self.field_selector
+            if self.label_selector is not None:
+                kwargs["label_selector"] = self.label_selector
+            (request, info, headers) = self.client.list_namespaced_event_with_http_info(
+                self.namespace, *args, timeout_seconds=1, **kwargs
+            )
+            return request
+
+        while True:
+            for event in kubernetes.watch.Watch().stream(list_namespace_events):
+                self.emit("updated", event)
+                self.emit(event["type"], event)
+                if self.is_stopped:
+                    break
+            if self.is_stopped:
+                break
+
+
+class ThreadedKubernetesNamespaceObjectWatchStatus:
+    object_type: str = None
+    status: str = None
+
+
+class ThreadedKubernetesNamespaceObjectWatcher(EventHandler):
+    _object_state: Dict[str, ThreadedKubernetesNamespaceObjectWatchStatus] = None
+    _watchers: List[ThreadedKubernetesWatcher] = None
+    auto_watch_pod_logs: bool = True
+
+    def __init__(self):
+        super().__init__()
+        self._object_state = dict()
+        self._watchers = []
+
+    def watch_namespace(
+        self, namespace: str, label_selector: str = None, field_selector: str = None
+    ):
+        pass
+
+    def waitfor(self, predict, include_log_events: bool = False):
+        pass
+
