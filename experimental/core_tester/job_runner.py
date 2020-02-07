@@ -9,7 +9,7 @@ from datetime import datetime
 from watchers import (
     ThreadedKuebrnetesLogReader,
     ThreadedKubernetesNamespaceWatcher,
-    ThreadedKubernetesNamespaceObjectWatcher,
+    ThreadedKubernetesNamespaceObjectsWatcher,
 )
 
 logging.basicConfig(level="INFO")
@@ -50,7 +50,7 @@ pod_to_execute = create_pod_v1_object(
     "lama", "python:3.7.4", ["bash", "-c", bash_script]
 )
 
-ko_watcher = ThreadedKubernetesNamespaceObjectWatcher(client)
+ko_watcher = ThreadedKubernetesNamespaceObjectsWatcher(client)
 ko_watcher.watch_namespace(current_namespace)
 
 ns_watcher = ThreadedKubernetesNamespaceWatcher("pod", client, current_namespace)
@@ -93,9 +93,6 @@ def read_log_test(msg: str):
             logging.info(f"Read timestamp: {dt}")
             if started is None:
                 started = dt
-            elif (dt - started).seconds > 50:
-                logging.info("Stopped...")
-                log_reader.stop()
         except Exception:
             logging.info(f"log: {msg_part}")
 
