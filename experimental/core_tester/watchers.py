@@ -19,7 +19,7 @@ class EventHandler:
 
     def on(self, name, handler):
         if not self.hasEvent(name):
-            self.message_handlers[name] = []
+            self.message_handlers[name] = dict()
         idx = self._handler_last_idx
         self._handler_last_idx += 1
 
@@ -381,37 +381,52 @@ class ThreadedKubernetesNamespaceObjectWatcher(EventHandler):
         pass
 
     def waitfor(self, predict, include_log_events: bool = False, timeout: float = None):
+        class wait_event:
+            event: object = None
+            sender: object = None
+
+            def __init__(self, event, sender):
+                super().__init__()
+                self.event = event
+                self.sender = sender
+
         event_queue = SimpleQueue()
 
         def add_queue_event(event, sender=None):
-            event_queue.put((event, sender))
+            event_queue.put(wait_event(event, sender))
 
         event_handler_idx = self.on("update", add_queue_event)
 
-        for event, sender in event_queue.get(timeout=timeout):
-            if predict(event, sender):
+        while True:
+            info = event_queue.get(timeout=timeout)
+            if predict(info.event, info.sender):
                 break
 
         self.clear("update", event_handler_idx)
 
     def waitfor_pod_status(
         self,
-        status: str,
         pod_name: str,
         namespace: str,
+        phase: str = None,
         predict=None,
         timeout: float = None,
     ):
+        assert phase is not None or predict is not None
+
         def default_predict(status, event):
-            return status == status
+            return status["phase"] == phase
 
         predict = predict or default_predict
 
         def wait_predict(event, sender=None):
             pod_obj = event["object"]
-            if pod_obj["metadata"]["name"] != pod_name:
+            if (
+                pod_obj["metadata"]["name"] != pod_name
+                or pod_obj["metadata"]["namespace"] != namespace
+            ):
                 return
-                
+
             status = pod_obj["status"]
             return predict(status, event)
 

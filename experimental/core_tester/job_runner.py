@@ -26,7 +26,7 @@ def load_raw_formatted_file(fpath):
 
 def create_pod_v1_object(pod_name, pod_image, command) -> kubernetes.client.V1Pod:
     pod_yaml = load_raw_formatted_file(os.path.join(CUR_DIRECTORY, "pod.yaml"))
-    pod_yaml = pod_yaml.format(pod_name="lama", pod_image="ubuntu")
+    pod_yaml = pod_yaml.format(pod_name=pod_name, pod_image=pod_image)
     pod = yaml.safe_load(pod_yaml)
     pod["spec"]["containers"][0]["command"] = command
     return pod
@@ -46,7 +46,9 @@ while true; do
 done
 """
 
-pod_to_execute = create_pod_v1_object("lama", "ubuntu", ["bash", "-c", bash_script])
+pod_to_execute = create_pod_v1_object(
+    "lama", "python:3.7.4", ["bash", "-c", bash_script]
+)
 
 ko_watcher = ThreadedKubernetesNamespaceObjectWatcher(client)
 ko_watcher.watch_namespace(current_namespace)
@@ -68,7 +70,8 @@ try:
 except Exception:
     print("Pod dose not exist creating...")
     client.create_namespaced_pod(current_namespace, pod_to_execute)
-    ko_watcher.wait_for_pod_status("Running", "lama", current_namespace)
+    ko_watcher.waitfor_pod_status("lama", current_namespace, phase="Running")
+    print("Pod is running...")
 
 print("Watch...")
 
@@ -80,21 +83,21 @@ started = None
 
 def read_log_test(msg: str):
     global started
-    try:
-        for timestamp in msg.split("\n"):
-            timestamp = timestamp.strip()
-            if len(timestamp) == 0:
-                continue
-            dt = datetime.utcfromtimestamp(int(timestamp) / 1000)
+
+    for msg_part in msg.split("\n"):
+        msg_part = msg_part.strip()
+        if len(msg_part) == 0:
+            continue
+        try:
+            dt = datetime.utcfromtimestamp(int(msg_part) / 1000)
             logging.info(f"Read timestamp: {dt}")
             if started is None:
                 started = dt
             elif (dt - started).seconds > 50:
                 logging.info("Stopped...")
                 log_reader.stop()
-    except Exception as e:
-        logging.warning(e)
-        logging.warning("Could not read log message: " + msg)
+        except Exception:
+            logging.info(f"log: {msg_part}")
 
 
 log_reader.on("log", read_log_test)
