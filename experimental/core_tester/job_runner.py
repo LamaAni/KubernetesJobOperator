@@ -61,9 +61,10 @@ except Exception as e:
     job_to_execute = create_job(job_id, "ubuntu", ["bash", "-c", bash_script])
     try:
         batchClient.create_namespaced_job(current_namespace, job_to_execute)
-    finally:
+    except Exception as e:
         logging.warning("Stopped watcher since due to errors in job create.")
         ko_watcher.stop()
+        raise e
 
     print("Waiting for job to run..")
     ko_watcher.waitfor_status(
@@ -79,7 +80,7 @@ job_watch_object = ko_watcher.waitfor_status(
     kind="Job",
     name="lama",
     namespace=current_namespace,
-    predict=lambda status, sender: status != "Running",
+    status_list=["Failed", "Succeeded"],
 )
 
 logging.info("Stopping namespace watcher..")

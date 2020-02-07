@@ -416,6 +416,10 @@ class ThreadedKubernetesObjectsWatcher(EventHandler):
             elif "startTime" in self.yaml["status"]:
                 if "completionTime" in self.yaml["status"]:
                     job_status = "Succeeded"
+                elif "failed" in self.yaml["status"] and int(
+                    self.yaml["status"]["failed"]
+                ) > int(self.yaml["spec"]["backoffLimit"]):
+                    job_status = "Failed"
                 else:
                     job_status = "Running"
             else:
@@ -437,9 +441,9 @@ class ThreadedKubernetesObjectsWatcher(EventHandler):
                             and "BackOff"
                             in container_status["state"]["waiting"]["reason"]
                         ):
-                            return "Error"
+                            return "Failed"
                         if "error" in container_status["state"]:
-                            return "Error"
+                            return "Failed"
 
             return pod_status
         else:
