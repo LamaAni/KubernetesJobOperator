@@ -34,7 +34,7 @@ client = kubernetes.client.CoreV1Api()
 bash_script = load_raw_formatted_file(os.path.join(CUR_DIRECTORY, "pod_script.sh"))
 
 pod_to_execute = create_pod_v1_object(
-    "lama", "python:3.7.4", ["bash", "-c", bash_script]
+    "lama", "ubuntu", ["bash", "-c", bash_script]
 )
 
 

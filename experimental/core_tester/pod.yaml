@@ -5,6 +5,8 @@ metadata:
   labels:
     name: {pod_name}
 spec:
+  # important to set! otherwise will restart the pod.
+  restartPolicy: Never
   containers:
     - name: {pod_name}
       image: {pod_image}
