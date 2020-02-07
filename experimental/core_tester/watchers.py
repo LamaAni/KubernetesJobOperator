@@ -38,7 +38,8 @@ class EventHandler:
 
     def emit(self, name, *args, **kwargs):
         if self.hasEvent(name):
-            for handler in self.message_handlers[name].values():
+            cur_handlers = list(self.message_handlers[name].values())
+            for handler in cur_handlers:
                 handler(*args, **kwargs)
         for evnet_handler in self._pipeto:
             evnet_handler.emit(name, *args, **kwargs)
@@ -50,6 +51,7 @@ class EventHandler:
 
 class KubernetesWatchStream(kubernetes.watch.Watch, EventHandler):
     _response_object: HTTPResponse = None
+    allow_stream_restart = True
 
     def __init__(self, return_type=None):
         EventHandler.__init__(self)
@@ -103,12 +105,15 @@ class KubernetesWatchStream(kubernetes.watch.Watch, EventHandler):
                 resp = func(*args, **kwargs)
             except Exception as e:
                 if (
-                    e.reason == "Not Found" or "is terminated" in e.body
+                    e.reason == "Not Found" or "is terminated" in str(e.body)
                 ) and was_started:
                     # pod was deleted, or removed, clean exit.
                     break
                 else:
                     raise e
+
+            if was_started and not self.allow_stream_restart:
+                break
 
             if not was_started:
                 self.emit("response_started")
@@ -209,9 +214,13 @@ class ThreadedKuebrnetesLogReader(ThreadedKubernetesWatcher):
 
     def __init__(self, client, pod_name, namespace):
         super().__init__(client, lambda: self.log_reader(), return_type="raw")
+        self.watcher.allow_stream_restart = False
         self.client = client
         self.pod_name = pod_name
         self.namespace = namespace
+
+    def log_line(self, line):
+        self.emit("log", line)
 
     def log_reader(self):
         def read_log(*args, **kwargs):
@@ -221,9 +230,9 @@ class ThreadedKuebrnetesLogReader(ThreadedKubernetesWatcher):
 
             return val[0]
 
-        for log_line in self.watcher.stream(read_log):
-            if log_line is not None:
-                self.emit("log", msg=log_line)
+        for line in self.watcher.stream(read_log):
+            if line is not None:
+                self.log_line(line)
             if self.is_stopped:
                 break
 
@@ -236,7 +245,7 @@ class ThreadedKuebrnetesLogReader(ThreadedKubernetesWatcher):
 
         for possible_line in log_lines:
             for line in possible_line.split("\n"):
-                self.emit("log", msg=line)
+                self.log_line(line)
 
 
 class ThreadedKubernetesNamespaceWatcher(ThreadedKubernetesWatcher):
@@ -339,7 +348,7 @@ class ThreadedKubernetesNamespaceWatcher(ThreadedKubernetesWatcher):
                 break
 
 
-class ThreadedKubernetesObjectsWatcher:
+class ThreadedKubernetesObjectsWatcher(EventHandler):
     _object_yaml: str = None
     auto_watch_pod_logs: bool = True
     _log_reader: ThreadedKuebrnetesLogReader = None
@@ -352,11 +361,15 @@ class ThreadedKubernetesObjectsWatcher:
         self.client = client
         self._id = ThreadedKubernetesObjectsWatcher.compose_object_id(object_yaml)
         self.auto_watch_pod_logs = auto_watch_pod_logs
-        self.update_object_state(object_yaml)
+
+    def emit(self, name, *args, **kwargs):
+        if len(args) < 2:
+            args = list(args) + [self]
+        super().emit(name, *args, **kwargs)
 
     def stop(self):
-        if self.log_reader is not None and not self.log_reader.is_stopped:
-            self.log_reader.stop()
+        if self._log_reader is not None and not self._log_reader.is_stopped:
+            self._log_reader.stop()
 
     @property
     def id(self):
@@ -364,7 +377,7 @@ class ThreadedKubernetesObjectsWatcher:
 
     @property
     def kind(self):
-        return self.yaml["Kind"]
+        return self.yaml["kind"]
 
     @property
     def yaml(self) -> dict:
@@ -375,15 +388,15 @@ class ThreadedKubernetesObjectsWatcher:
         return self.yaml["metadata"]["name"]
 
     @property
-    def namesapce(self) -> str:
-        return self.yaml["metadata"]["namesapce"]
+    def namespace(self) -> str:
+        return self.yaml["metadata"]["namespace"]
 
     @staticmethod
     def compose_object_id(object_yaml):
         return "/".join(
             [
-                object_yaml["Kind"],
-                object_yaml["metadata"]["namesapce"],
+                object_yaml["kind"],
+                object_yaml["metadata"]["namespace"],
                 object_yaml["metadata"]["name"],
             ]
         )
@@ -411,12 +424,22 @@ class ThreadedKubernetesObjectsWatcher:
                 pod_status = "Deleted"
             else:
                 pod_status = self.yaml["status"]["phase"]
+            if "status" in self.yaml and "containerStatuses" in self.yaml["status"]:
+                for container_status in self.yaml["status"]["containerStatuses"]:
+                    if "state" in container_status:
+                        if (
+                            "waiting" in container_status["state"]
+                            and "reason" in container_status["state"]["waiting"]
+                            and "BackOff"
+                            in container_status["state"]["waiting"]["reason"]
+                        ):
+                            return "Error"
+                        if "error" in container_status["state"]:
+                            return "Error"
+
             return pod_status
         else:
             raise Exception("Not implemented for kind: " + self.kind)
-
-    def emit(self, name, *args, **kwargs):
-        super().emit(name, *args, self, **kwargs)
 
     def update_pod_state(self, event_type, old_status):
         # Called to update a current pod state.
@@ -429,7 +452,7 @@ class ThreadedKubernetesObjectsWatcher:
 
         if need_read_pod_logs:
             self._log_reader = ThreadedKuebrnetesLogReader(
-                self.client, self.name, self.namesapce
+                self.client, self.name, self.namespace
             )
             self._log_reader.pipe(self)
             self._has_read_logs = True
@@ -489,10 +512,13 @@ class ThreadedKubernetesNamespaceObjectsWatcher(EventHandler):
             watchers.append(watcher)
 
     def emit(self, name, *args, **kwargs):
-        if name == "ADDED" or name == "MODIFED":
-            self.update_object(args[0])
-        elif name == "DELETED":
+        if name == "DELETED":
             self.delete_object(args[0])
+        elif name == "update":
+            self.update_object(args[0])
+
+        if len(args) < 2:
+            args = list(args) + [self]
 
         super().emit(name, *args, **kwargs)
 
@@ -506,8 +532,9 @@ class ThreadedKubernetesNamespaceObjectsWatcher(EventHandler):
             self._object_watchers[oid] = ThreadedKubernetesObjectsWatcher(
                 self.client, kube_object, self.auto_watch_pod_logs
             )
-        else:
-            self._object_watchers[oid].update_object_state(event_type, kube_object)
+            self._object_watchers[oid].pipe(self)
+
+        self._object_watchers[oid].update_object_state(event_type, kube_object)
 
     def delete_object(self, event):
         # first update the current object.
@@ -521,58 +548,77 @@ class ThreadedKubernetesNamespaceObjectsWatcher(EventHandler):
             if self.remove_deleted_kube_objects_from_memory:
                 del self._object_watchers[oid]
 
-    def waitfor(self, predict, include_log_events: bool = False, timeout: float = None):
+    def waitfor(
+        self,
+        predict,
+        include_log_events: bool = False,
+        timeout: float = None,
+        event: str = "update",
+    ):
         class wait_event:
-            event: object = None
-            sender: object = None
+            args: list = None
+            kwargs: dict = None
 
-            def __init__(self, event, sender):
+            def __init__(self, args, kwargs):
                 super().__init__()
-                self.event = event
-                self.sender = sender
+                self.args = args
+                self.kwargs = kwargs
 
         event_queue = SimpleQueue()
 
-        def add_queue_event(event, sender=None):
-            event_queue.put(wait_event(event, sender))
+        def add_queue_event(*args, **kwargs):
+            event_queue.put(wait_event(list(args), dict(kwargs)))
 
-        event_handler_idx = self.on("update", add_queue_event)
+        event_handler_idx = self.on(event, add_queue_event)
 
         while True:
             info = event_queue.get(timeout=timeout)
-            if predict(info.event, info.sender):
+            args = info.args
+            kwargs = info.kwargs
+            if predict(*args, **kwargs):
                 break
 
         self.clear("update", event_handler_idx)
 
     def waitfor_status(
         self,
-        name: str,
-        namespace: str,
         kind: str = None,
-        status: List[str] = None,
+        name: str = None,
+        namespace: str = None,
+        status: str = None,
+        status_list: List[str] = None,
         predict=None,
         timeout: float = None,
     ):
-        assert phase is not None or predict is not None
+        assert (
+            status is not None
+            or (status_list is not None and len(status_list) > 0)
+            or predict is not None
+        )
 
-        def default_predict(status, event):
-            return status["phase"] == phase
+        def default_predict(
+            match_status: str, sender: ThreadedKubernetesObjectsWatcher
+        ):
+            if status is not None and status == match_status:
+                return True
+            if status_list is not None:
+                for sli in status_list:
+                    if sli == match_status:
+                        return True
+            return False
 
         predict = predict or default_predict
 
-        def wait_predict(event, sender=None):
-            pod_obj = event["object"]
-            if (
-                pod_obj["metadata"]["name"] != pod_name
-                or pod_obj["metadata"]["namespace"] != namespace
-            ):
-                return
+        def wait_predict(status, sender: ThreadedKubernetesObjectsWatcher):
+            if name is not None and sender.name != name:
+                return False
+            if namespace is not None and sender.namespace != namespace:
+                return False
+            if kind is not None and sender.kind != kind:
+                return False
+            return predict(status, sender)
 
-            status = pod_obj["status"]
-            return predict(status, event)
-
-        self.waitfor(wait_predict, False, timeout)
+        self.waitfor(wait_predict, False, timeout=timeout, event="status")
 
     def stop(self):
         for namespace, watchers in self._namespace_watchers.items():
