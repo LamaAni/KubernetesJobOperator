@@ -359,7 +359,9 @@ class ThreadedKubernetesObjectsWatcher(EventHandler):
     def __init__(self, client, object_yaml, auto_watch_pod_logs: bool = True):
         super().__init__()
         self.client = client
-        self._id = ThreadedKubernetesObjectsWatcher.compose_object_id(object_yaml)
+        self._id = ThreadedKubernetesObjectsWatcher.compose_object_id_from_yaml(
+            object_yaml
+        )
         self.auto_watch_pod_logs = auto_watch_pod_logs
 
     def emit(self, name, *args, **kwargs):
@@ -392,14 +394,16 @@ class ThreadedKubernetesObjectsWatcher(EventHandler):
         return self.yaml["metadata"]["namespace"]
 
     @staticmethod
-    def compose_object_id(object_yaml):
-        return "/".join(
-            [
-                object_yaml["kind"],
-                object_yaml["metadata"]["namespace"],
-                object_yaml["metadata"]["name"],
-            ]
+    def compose_object_id_from_yaml(object_yaml):
+        return ThreadedKubernetesObjectsWatcher.compose_object_id_from_values(
+            object_yaml["kind"],
+            object_yaml["metadata"]["namespace"],
+            object_yaml["metadata"]["name"],
         )
+
+    @staticmethod
+    def compose_object_id_from_values(kind, namespace, name):
+        return "/".join([kind, namespace, name])
 
     @property
     def status(self):
@@ -409,9 +413,7 @@ class ThreadedKubernetesObjectsWatcher(EventHandler):
             job_status = None
             if self.was_deleted:
                 job_status = "Deleted"
-            elif (
-                "startTime" in self.yaml["status"]
-            ):
+            elif "startTime" in self.yaml["status"]:
                 if "completionTime" in self.yaml["status"]:
                     job_status = "Succeeded"
                 else:
@@ -527,7 +529,7 @@ class ThreadedKubernetesNamespaceObjectsWatcher(EventHandler):
     def update_object(self, event):
         kube_object = event["object"]
         event_type = event["type"]
-        oid = ThreadedKubernetesObjectsWatcher.compose_object_id(kube_object)
+        oid = ThreadedKubernetesObjectsWatcher.compose_object_id_from_yaml(kube_object)
         if oid not in self._object_watchers:
             if event_type == "DELETED":
                 return
@@ -543,7 +545,7 @@ class ThreadedKubernetesNamespaceObjectsWatcher(EventHandler):
         self.update_object(event)
 
         kube_object = event["object"]
-        oid = ThreadedKubernetesObjectsWatcher.compose_object_id(kube_object)
+        oid = ThreadedKubernetesObjectsWatcher.compose_object_id_from_yaml(kube_object)
         if oid in self._object_watchers:
             watcher = self._object_watchers[oid]
             watcher.stop()
@@ -593,6 +595,7 @@ class ThreadedKubernetesNamespaceObjectsWatcher(EventHandler):
         status_list: List[str] = None,
         predict=None,
         timeout: float = None,
+        check_past_events: bool = True,
     ):
         assert (
             status is not None
@@ -621,6 +624,12 @@ class ThreadedKubernetesNamespaceObjectsWatcher(EventHandler):
             if kind is not None and sender.kind != kind:
                 return False
             return predict(status, sender)
+
+        # check if was already read.
+        if check_past_events:
+            for sender in self._object_watchers.values():
+                if wait_predict(sender.status, sender):
+                    return sender
 
         return self.waitfor(wait_predict, False, timeout=timeout, event="status")
 

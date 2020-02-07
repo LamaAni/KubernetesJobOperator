@@ -55,14 +55,22 @@ job_id = "lama"
 
 
 try:
-    status = batchClient.read_namespaced_job_status("lama")
-except Exception:
-    print("Job does not exist. creating...")
+    status = batchClient.read_namespaced_job_status("lama", current_namespace)
+except Exception as e:
+    print(f"Job does not exist {e.reason}. creating...")
     job_to_execute = create_job(job_id, "ubuntu", ["bash", "-c", bash_script])
-    batchClient.create_namespaced_job(current_namespace, job_to_execute)
+    try:
+        batchClient.create_namespaced_job(current_namespace, job_to_execute)
+    finally:
+        logging.warning("Stopped watcher since due to errors in job create.")
+        ko_watcher.stop()
+
     print("Waiting for job to run..")
     ko_watcher.waitfor_status(
-        kind="Job", name="lama", namespace=current_namespace, status="Running"
+        kind="Job",
+        name="lama",
+        namespace=current_namespace,
+        predict=lambda status, sender: status != "Pending",
     )
 
 print("Watch...")
