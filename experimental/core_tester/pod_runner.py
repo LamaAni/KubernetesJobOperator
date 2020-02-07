@@ -10,11 +10,11 @@ logging.basicConfig(level="INFO")
 CUR_DIRECTORY = os.path.abspath(os.path.dirname(__file__))
 
 
-def create_job(job_name, pod_image, command) -> kubernetes.client.V1Pod:
-    job_yaml = load_raw_formatted_file(os.path.join(CUR_DIRECTORY, "job.yaml"))
-    job_yaml = job_yaml.format(job_name=job_name, pod_image=pod_image)
-    pod = yaml.safe_load(job_yaml)
-    pod["spec"]["template"]["spec"]["containers"][0]["command"] = command
+def create_pod_v1_object(pod_name, pod_image, command) -> kubernetes.client.V1Pod:
+    pod_yaml = load_raw_formatted_file(os.path.join(CUR_DIRECTORY, "pod.yaml"))
+    pod_yaml = pod_yaml.format(pod_name=pod_name, pod_image=pod_image)
+    pod = yaml.safe_load(pod_yaml)
+    pod["spec"]["containers"][0]["command"] = command
     return pod
 
 
@@ -23,12 +23,13 @@ kubernetes.config.load_kube_config()
 contexts, active_context = kubernetes.config.list_kube_config_contexts()
 current_namespace = active_context["context"]["namespace"]
 client = kubernetes.client.CoreV1Api()
-batchClient = kubernetes.client.BatchV1Api()
 
 bash_script = load_raw_formatted_file(os.path.join(CUR_DIRECTORY, "pod_script.sh"))
 
+pod_to_execute = create_pod_v1_object("lama", "ubuntu", ["bash", "-c", bash_script])
 
-def read_pod_log(msg: str, sender):
+
+def read_log_test(msg: str, sender):
     for msg_part in msg.split("\n"):
         msg_part = msg_part.strip()
         if len(msg_part) == 0:
@@ -46,29 +47,26 @@ def object_status_changed(status, sender):
 
 
 ko_watcher = ThreadedKubernetesNamespaceObjectsWatcher(client)
-ko_watcher.on("log", read_pod_log)
+ko_watcher.on("log", read_log_test)
 ko_watcher.on("status", object_status_changed)
 
 ko_watcher.watch_namespace(current_namespace)
-print("Executing the job")
-job_id = "lama"
-
+print("Validate the pod...")
 
 try:
-    status = batchClient.read_namespaced_job_status("lama")
+    status = client.read_namespaced_pod_status("lama", current_namespace)
 except Exception:
-    print("Job does not exist. creating...")
-    job_to_execute = create_job(job_id, "ubuntu", ["bash", "-c", bash_script])
-    batchClient.create_namespaced_job(current_namespace, job_to_execute)
-    print("Waiting for job to run..")
+    print("Pod dose not exist creating...")
+    client.create_namespaced_pod(current_namespace, pod_to_execute)
     ko_watcher.waitfor_status(
-        kind="Job", name="lama", namespace=current_namespace, status="Running"
+        kind="Pod", name="lama", namespace=current_namespace, status="Running"
     )
+    print("Pod is running...")
 
 print("Watch...")
 
-job_watch_object = ko_watcher.waitfor_status(
-    kind="Job",
+ko_watcher.waitfor_status(
+    kind="Pod",
     name="lama",
     namespace=current_namespace,
     predict=lambda status, sender: status != "Running",

@@ -409,8 +409,10 @@ class ThreadedKubernetesObjectsWatcher(EventHandler):
             job_status = None
             if self.was_deleted:
                 job_status = "Deleted"
-            elif self.yaml["status"]["startTime"] is not None:
-                if self.yaml["status"]["startTime"] is not None:
+            elif (
+                "startTime" in self.yaml["status"]
+            ):
+                if "completionTime" in self.yaml["status"]:
                     job_status = "Succeeded"
                 else:
                     job_status = "Running"
@@ -571,6 +573,7 @@ class ThreadedKubernetesNamespaceObjectsWatcher(EventHandler):
 
         event_handler_idx = self.on(event, add_queue_event)
 
+        info = None
         while True:
             info = event_queue.get(timeout=timeout)
             args = info.args
@@ -579,6 +582,7 @@ class ThreadedKubernetesNamespaceObjectsWatcher(EventHandler):
                 break
 
         self.clear("update", event_handler_idx)
+        return None if info is None else info.args[-1]
 
     def waitfor_status(
         self,
@@ -618,7 +622,7 @@ class ThreadedKubernetesNamespaceObjectsWatcher(EventHandler):
                 return False
             return predict(status, sender)
 
-        self.waitfor(wait_predict, False, timeout=timeout, event="status")
+        return self.waitfor(wait_predict, False, timeout=timeout, event="status")
 
     def stop(self):
         for namespace, watchers in self._namespace_watchers.items():
