@@ -194,7 +194,8 @@ class ThreadedKubernetesNamespaceObjectsWatcher(EventHandler):
     def update_object(self, event):
         kube_object = event["object"]
         event_type = event["type"]
-        oid = ThreadedKubernetesObjectsWatcher.compose_object_id_from_yaml(kube_object)
+        oid = ThreadedKubernetesObjectsWatcher.compose_object_id_from_yaml(
+            kube_object)
         if oid not in self._object_watchers:
             if event_type == "DELETED":
                 return
@@ -210,7 +211,8 @@ class ThreadedKubernetesNamespaceObjectsWatcher(EventHandler):
         self.update_object(event)
 
         kube_object = event["object"]
-        oid = ThreadedKubernetesObjectsWatcher.compose_object_id_from_yaml(kube_object)
+        oid = ThreadedKubernetesObjectsWatcher.compose_object_id_from_yaml(
+            kube_object)
         if oid in self._object_watchers:
             watcher = self._object_watchers[oid]
             watcher.stop()
@@ -223,7 +225,7 @@ class ThreadedKubernetesNamespaceObjectsWatcher(EventHandler):
         include_log_events: bool = False,
         timeout: float = None,
         event: str = "update",
-    ):
+    ) -> ThreadedKubernetesObjectsWatcher:
         class wait_event:
             args: list = None
             kwargs: dict = None
@@ -261,7 +263,7 @@ class ThreadedKubernetesNamespaceObjectsWatcher(EventHandler):
         predict=None,
         timeout: float = None,
         check_past_events: bool = True,
-    ):
+    ) -> ThreadedKubernetesObjectsWatcher:
         assert (
             status is not None
             or (status_list is not None and len(status_list) > 0)

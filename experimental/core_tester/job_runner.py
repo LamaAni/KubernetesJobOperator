@@ -8,7 +8,6 @@ from watchers.threaded_kubernetes_object_watchers import (
 )
 
 logging.basicConfig(level="INFO")
-
 CUR_DIRECTORY = os.path.abspath(os.path.dirname(__file__))
 
 
@@ -27,7 +26,8 @@ current_namespace = active_context["context"]["namespace"]
 client = kubernetes.client.CoreV1Api()
 batchClient = kubernetes.client.BatchV1Api()
 
-bash_script = load_raw_formatted_file(os.path.join(CUR_DIRECTORY, "pod_script.sh"))
+bash_script = load_raw_formatted_file(
+    os.path.join(CUR_DIRECTORY, "pod_script.sh"))
 
 
 def read_pod_log(msg: str, sender):

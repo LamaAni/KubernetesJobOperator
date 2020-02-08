@@ -3,7 +3,9 @@ import os
 import yaml
 from utils import logging, load_raw_formatted_file
 from datetime import datetime
-from watchers import ThreadedKubernetesNamespaceObjectsWatcher
+from watchers.threaded_kubernetes_object_watchers import (
+    ThreadedKubernetesNamespaceObjectsWatcher,
+)
 
 logging.basicConfig(level="INFO")
 
