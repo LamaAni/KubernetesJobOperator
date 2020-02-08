@@ -174,8 +174,11 @@ class ThreadedKubernetesNamespaceObjectsWatcher(EventHandler):
         self._namespace_watchers[namespace] = watchers
         for watch_type in ["pod", "job", "deployment", "service"]:
             watcher = ThreadedKubernetesNamespaceWatcher(
-                watch_type, self.client, namespace, field_selector=field_selector,
-                label_selector=label_selector
+                watch_type,
+                self.client,
+                namespace,
+                field_selector=field_selector,
+                label_selector=label_selector,
             )
             watcher.pipe(self)
             watcher.start()
@@ -195,8 +198,7 @@ class ThreadedKubernetesNamespaceObjectsWatcher(EventHandler):
     def update_object(self, event):
         kube_object = event["object"]
         event_type = event["type"]
-        oid = ThreadedKubernetesObjectsWatcher.compose_object_id_from_yaml(
-            kube_object)
+        oid = ThreadedKubernetesObjectsWatcher.compose_object_id_from_yaml(kube_object)
         if oid not in self._object_watchers:
             if event_type == "DELETED":
                 return
@@ -212,8 +214,7 @@ class ThreadedKubernetesNamespaceObjectsWatcher(EventHandler):
         self.update_object(event)
 
         kube_object = event["object"]
-        oid = ThreadedKubernetesObjectsWatcher.compose_object_id_from_yaml(
-            kube_object)
+        oid = ThreadedKubernetesObjectsWatcher.compose_object_id_from_yaml(kube_object)
         if oid in self._object_watchers:
             watcher = self._object_watchers[oid]
             watcher.stop()

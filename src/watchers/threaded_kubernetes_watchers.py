@@ -31,8 +31,7 @@ class ThreadedKubernetesWatcher(EventHandler):
         if self._active_log_read_thread is not None:
             raise Exception("Log reader has already been started.")
 
-        self._active_log_read_thread = threading.Thread(
-            target=self._invoke_method)
+        self._active_log_read_thread = threading.Thread(target=self._invoke_method)
         self._active_log_read_thread.start()
 
     def reset(self):
@@ -104,8 +103,7 @@ class ThreadedKuebrnetesLogReader(ThreadedKubernetesWatcher):
         self.reset()
 
     def read_currnet_logs(self):
-        log_lines = self.client.read_namespaced_pod_log(
-            self.pod_name, self.namespace)
+        log_lines = self.client.read_namespaced_pod_log(self.pod_name, self.namespace)
         if not isinstance(log_lines, list):
             log_lines = log_lines.split("\n")
 

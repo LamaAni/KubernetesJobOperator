@@ -44,8 +44,7 @@ class KubernetesWatchStream(kubernetes.watch.Watch, EventHandler):
 
         self._stop = False
         return_type = (
-            None if self._raw_return_type == "raw" else self.get_return_type(
-                func)
+            None if self._raw_return_type == "raw" else self.get_return_type(func)
         )
         kwargs["watch"] = True
         kwargs["_preload_content"] = False
