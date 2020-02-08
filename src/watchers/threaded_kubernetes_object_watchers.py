@@ -1,8 +1,8 @@
 import kubernetes
 from typing import Dict, List
 from queue import SimpleQueue
-from watchers.event_handler import EventHandler
-from watchers.threaded_kubernetes_watchers import (
+from .event_handler import EventHandler
+from .threaded_kubernetes_watchers import (
     ThreadedKubernetesWatcher,
     ThreadedKuebrnetesLogReader,
     ThreadedKubernetesNamespaceWatcher,
@@ -174,7 +174,8 @@ class ThreadedKubernetesNamespaceObjectsWatcher(EventHandler):
         self._namespace_watchers[namespace] = watchers
         for watch_type in ["pod", "job", "deployment", "service"]:
             watcher = ThreadedKubernetesNamespaceWatcher(
-                watch_type, self.client, namespace
+                watch_type, self.client, namespace, field_selector=field_selector,
+                label_selector=label_selector
             )
             watcher.pipe(self)
             watcher.start()

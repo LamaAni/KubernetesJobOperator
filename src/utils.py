@@ -2,21 +2,23 @@ import random
 import string
 
 
-def get_from_dictionary_path(path_names):
+def get_from_dictionary_path(dictionary, path_names):
     val = None
-    col = job_yaml
+    col = dictionary
     cur_path = []
     for name in path_names:
         cur_path.append(name)
+        path_string = '.'.join(map(lambda v: str(v), path_names))
         if isinstance(col, dict):
-            assert name in col, "Missing path:"+'.'.join(cur_path)
-        if isinstance(col, list):
-            assert len(col) > name, "Missing path:"+'.'.join(cur_path)
+            assert name in col, "Missing path:"+path_string
+        elif isinstance(col, list):
+            assert len(col) > name, "Missing path:"+path_string
         else:
             raise Exception(
-                "Expected path "+'.'.join(cur_path) +
+                "Expected path "+path_string +
                 " to be a list or a dictionary")
         val = col[name]
+        col = val
     return val
 
 

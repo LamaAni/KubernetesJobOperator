@@ -4,19 +4,15 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: '{job_name}'
-  labels:
-    zmake-job: '{job_name}'
+  name: '{name}'
+  namespace: '{namespace}'
   finalizers:
     - foregroundDeletion
 spec:
   template:
-    metadata:
-      labels:
-        zmake-job: '{job_name}'
     spec:
       restartPolicy: Never
       containers:
         - name: job-executor
-          image: '{pod_image}'
+          image: '{image}'
   backoffLimit: 0

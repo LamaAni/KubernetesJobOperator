@@ -1,6 +1,6 @@
 import kubernetes
 from urllib3.response import HTTPResponse
-from watchers.event_handler import EventHandler
+from .event_handler import EventHandler
 
 
 class KubernetesWatchStream(kubernetes.watch.Watch, EventHandler):
@@ -44,7 +44,8 @@ class KubernetesWatchStream(kubernetes.watch.Watch, EventHandler):
 
         self._stop = False
         return_type = (
-            None if self._raw_return_type == "raw" else self.get_return_type(func)
+            None if self._raw_return_type == "raw" else self.get_return_type(
+                func)
         )
         kwargs["watch"] = True
         kwargs["_preload_content"] = False
@@ -58,6 +59,8 @@ class KubernetesWatchStream(kubernetes.watch.Watch, EventHandler):
             try:
                 resp = func(*args, **kwargs)
             except Exception as e:
+                if not hasattr(e, "reason"):
+                    raise e
                 if (
                     e.reason == "Not Found" or "is terminated" in str(e.body)
                 ) and was_started:

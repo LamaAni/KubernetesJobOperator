@@ -3,7 +3,7 @@ import os
 import yaml
 from utils import logging, load_raw_formatted_file
 from datetime import datetime
-from watchers.threaded_kubernetes_object_watchers import (
+from .threaded_kubernetes_object_watchers import (
     ThreadedKubernetesNamespaceObjectsWatcher,
 )
 

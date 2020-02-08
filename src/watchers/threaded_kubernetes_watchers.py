@@ -1,8 +1,8 @@
 import kubernetes
 import threading
 from threading import Thread
-from watchers.event_handler import EventHandler
-from watchers.kubernetes_watch_stream import KubernetesWatchStream
+from .event_handler import EventHandler
+from .kubernetes_watch_stream import KubernetesWatchStream
 
 
 class ThreadedKubernetesWatcher(EventHandler):
@@ -31,7 +31,8 @@ class ThreadedKubernetesWatcher(EventHandler):
         if self._active_log_read_thread is not None:
             raise Exception("Log reader has already been started.")
 
-        self._active_log_read_thread = threading.Thread(target=self._invoke_method)
+        self._active_log_read_thread = threading.Thread(
+            target=self._invoke_method)
         self._active_log_read_thread.start()
 
     def reset(self):
@@ -103,7 +104,8 @@ class ThreadedKuebrnetesLogReader(ThreadedKubernetesWatcher):
         self.reset()
 
     def read_currnet_logs(self):
-        log_lines = self.client.read_namespaced_pod_log(self.pod_name, self.namespace)
+        log_lines = self.client.read_namespaced_pod_log(
+            self.pod_name, self.namespace)
         if not isinstance(log_lines, list):
             log_lines = log_lines.split("\n")
 
@@ -150,11 +152,10 @@ class ThreadedKubernetesNamespaceWatcher(ThreadedKubernetesWatcher):
 
         path_params = {"namespace": self.namespace}
         query_params = {
-            "include_uninitialized": False,
             "pretty": False,
             "_continue": True,
-            "field_selector": self.field_selector or "",
-            "label_selector": self.label_selector or "",
+            "fieldSelector": self.field_selector or "",
+            "labelSelector": self.label_selector or "",
             "watch": True,
         }
 

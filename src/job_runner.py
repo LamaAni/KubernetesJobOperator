@@ -20,7 +20,7 @@ class JobRunner(EventHandler):
         to execute a job.
 
         Example:
-        
+
             runner = JobRunner()
             runner.on("log", lambda msg, sender: print(msg))
             jobyaml = runner.prepare_job_yaml(
@@ -59,29 +59,47 @@ class JobRunner(EventHandler):
 
         def get(path_names, default=None):
             try:
-                return get_from_dictionary_path(path_names)
+                return get_from_dictionary_path(job_yaml, path_names)
             except Exception as e:
                 if default:
                     return default
                 raise Exception("Error reading yaml: "+str(e)) from e
 
+        def assert_defined(path_names: list, def_name=None):
+            path_string = '.'.join(map(lambda v: str(v), path_names))
+            assert get(path_names) is not None,\
+                f"job {def_name or path_names[-1]} must be defined @ {path_string}"
+
         assert get(["kind"]) == "Job",\
             "job_yaml object 'kind' must be of kind job, recived " + \
             get(["kind"], "[null]")
-        assert get(["metadata", "name"]) is not None,\
-            "job name must be defined @ metadata.name"
-        assert get(["metadata", "namespace"]) is not None,\
-            "job namespace must be defined @ metadata.namespace"
+
+        assert_defined(["metadata", "name"])
+        assert_defined(["metadata", "namespace"])
+        assert_defined(["spec", "template"])
+        assert_defined(
+            ["spec", "template", "spec", "containers", 0],
+            "main container"
+        )
 
         if random_name_postfix_length > 0:
             job_yaml["metadata"]["name"] += '-' + \
                 randomString(random_name_postfix_length)
 
+        # FIXME: Should be a better way to add missing values.
         if "labels" not in job_yaml["metadata"]:
-            job_yaml["metadata"]["labels"] = dict
+            job_yaml["metadata"]["labels"] = dict()
 
-        job_yaml["metadata"]["labels"][JOB_RUNNER_INSTANCE_ID_LABEL] = \
-            randomString(15)
+        if "metadata" not in job_yaml["spec"]["template"]:
+            job_yaml["spec"]["template"]["metadata"] = dict()
+
+        if "labels" not in job_yaml["spec"]["template"]["metadata"]:
+            job_yaml["spec"]["template"]["metadata"]["labels"] = dict()
+
+        instance_id = randomString(15)
+        job_yaml["metadata"]["labels"][JOB_RUNNER_INSTANCE_ID_LABEL] = instance_id
+        job_yaml["spec"]["template"]["metadata"]["labels"][JOB_RUNNER_INSTANCE_ID_LABEL] = instance_id
+
         return job_yaml
 
     def execute_job(
@@ -105,7 +123,7 @@ class JobRunner(EventHandler):
         """
 
         assert "metadata" in job_yaml \
-            and "labeles" in job_yaml["metadata"]\
+            and "labels" in job_yaml["metadata"]\
             and JOB_RUNNER_INSTANCE_ID_LABEL in job_yaml["metadata"]["labels"],\
             "job_yaml is not configured correctly, " +\
             "did you forget to call JobRunner.prepare_job_yaml?"
@@ -119,6 +137,17 @@ class JobRunner(EventHandler):
         coreClient = kubernetes.client.CoreV1Api()
         batchClient = kubernetes.client.BatchV1Api()
 
+        # checking if job exists.
+        status = None
+        try:
+            status = batchClient.read_namespaced_job_status(name, namespace)
+        except Exception:
+            pass
+
+        if status is not None:
+            raise Exception(
+                f"Job {name} already exists in namespace {namespace}, cannot exec.")
+
         # starting the watcher.
         watcher = ThreadedKubernetesNamespaceObjectsWatcher(coreClient)
         watcher.watch_namespace(
@@ -126,14 +155,6 @@ class JobRunner(EventHandler):
             label_selector=f"{JOB_RUNNER_INSTANCE_ID_LABEL}={instance_id}"
         )
         watcher.pipe(self)
-
-        # checking if job exists.
-        try:
-            status = batchClient.read_namespaced_job_status(name, namespace)
-            raise Exception(
-                f"Job {name} already exists in namespace {namespace}, cannot exec.")
-        except Exception:
-            pass
 
         # starting the job
         batchClient.create_namespaced_job(namespace, job_yaml)
