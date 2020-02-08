@@ -1,6 +1,7 @@
 # Env
 local/
 .vscode/
+Pipefile.lock
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
