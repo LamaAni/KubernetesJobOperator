@@ -1,7 +1,11 @@
 from airflow import DAG
+import logging
+from os.path import expanduser
+home = expanduser("~")
+logging.info('-'*20)
+logging.info(home)
+logging.info('-'*20)
 from src.kubernetes_job_operator import KubernetesBaseJobOperator
-
-# Operators; we need this to operate!
 from airflow.operators.bash_operator import BashOperator
 from airflow.utils.dates import days_ago
 
@@ -10,41 +14,20 @@ from airflow.utils.dates import days_ago
 default_args = {"owner": "tester", "start_date": days_ago(2), "retries": 0}
 
 dag = DAG(
-    "test-base-job-operator",
+    "bjo",
     default_args=default_args,
     description="Test base job operator",
     schedule_interval=None,
 )
 
-# t1, t2 and t3 are examples of tasks created by instantiating operators
-job_operator = BashOperator(task_id="print_date", bash_command="date", dag=dag)
 
-t2 = BashOperator(
-    task_id="sleep", depends_on_past=False, bash_command="sleep 5", retries=3, dag=dag,
-)
-dag.doc_md = __doc__
+job_yaml = ""
+with open(__file__ + ".yaml", "r", encoding="utf-8") as job_yaml_reader:
+    job_yaml = job_yaml_reader.read()
 
-t1.doc_md = """\
-#### Task Documentation
-You can document your task using the attributes `doc_md` (markdown),
-`doc` (plain text), `doc_rst`, `doc_json`, `doc_yaml` which gets
-rendered in the UI's Task Instance Details page.
-![img](http://montcs.bloomu.edu/~bobmon/Semesters/2012-01/491/import%20soul.png)
-"""
-templated_command = """
-{% for i in range(5) %}
-    echo "{{ ds }}"
-    echo "{{ macros.ds_add(ds, 7)}}"
-    echo "{{ params.my_param }}"
-{% endfor %}
-"""
+bash_task = BashOperator(bash_command="date", task_id="test-bash", dag=dag)
 
-t3 = BashOperator(
-    task_id="templated",
-    depends_on_past=False,
-    bash_command=templated_command,
-    params={"my_param": "Parameter I passed in"},
-    dag=dag,
-)
+job_task = KubernetesBaseJobOperator(task_id="test-job", job_yaml=job_yaml, dag=dag)
 
-t1 >> [t2, t3]
+bash_task >> job_task
+

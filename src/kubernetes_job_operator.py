@@ -2,6 +2,7 @@ from airflow.utils.decorators import apply_defaults
 from airflow.exceptions import AirflowException
 from airflow.operators import BaseOperator
 from airflow.operators.bash_operator import BashOperator
+
 # from airflow.contrib.operators.kubernetes_pod_operator import KubernetesPodOperator
 # from airflow.contrib.kubernetes import kube_client
 from .job_runner import JobRunner
@@ -32,7 +33,7 @@ class KubernetesBaseJobOperator(BaseOperator):
         *args,
         **kwargs,
     ):
-        super(BashOperator, self).__init__(*args, **kwargs)
+        super(KubernetesBaseJobOperator, self).__init__(*args, **kwargs)
 
         assert job_yaml is not None and (
             isinstance(job_yaml, (dict, str))
@@ -87,6 +88,9 @@ class KubernetesBaseJobOperator(BaseOperator):
         return super().pre_execute(context)
 
     def execute(self, context):
+
+        self.log.info("Starting job...")
+
         # Executing the job
         (job_watcher, watcher) = self.job_runner.execute_job(self.job_yaml)
 

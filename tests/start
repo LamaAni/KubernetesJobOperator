@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+
+export AIRFLOW_HOME=$PWD
+export PYTHONPATH=$(realpath $PWD/..)
+
+airflow "$@"
