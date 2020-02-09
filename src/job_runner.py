@@ -90,7 +90,7 @@ class JobRunner(EventHandler):
         )
 
         assert_defined(["metadata", "name"])
-        assert_defined(["metadata", "namespace"])
+        # assert_defined(["metadata", "namespace"])
         assert_defined(["spec", "template"])
         assert_defined(["spec", "template", "spec", "containers", 0], "main container")
 
@@ -98,6 +98,12 @@ class JobRunner(EventHandler):
             job_yaml["metadata"]["name"] += "-" + randomString(
                 random_name_postfix_length
             )
+
+        # assign current namespace if one is not defined.
+        if "namespace" not in job_yaml["metadata"]:
+            contexts, active_context = kubernetes.config.list_kube_config_contexts()
+            current_namespace = active_context["context"]["namespace"]
+            job_yaml["metadata"]["namespace"] = current_namespace
 
         # FIXME: Should be a better way to add missing values.
         if "labels" not in job_yaml["metadata"]:
