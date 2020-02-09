@@ -1,10 +1,4 @@
 from airflow import DAG
-import logging
-from os.path import expanduser
-home = expanduser("~")
-logging.info('-'*20)
-logging.info(home)
-logging.info('-'*20)
 from src.kubernetes_job_operator import KubernetesBaseJobOperator
 from airflow.operators.bash_operator import BashOperator
 from airflow.utils.dates import days_ago
