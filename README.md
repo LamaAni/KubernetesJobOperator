@@ -4,8 +4,8 @@ An implementation of a job operator that allows running a task as a kubernetes j
 Will forward all job logs from the job pods to the airflow log.
 
 # ALPHA
-This repository is in alpha, and should not be used
-for production. 
+This repository is in alpha testing, and is published
+to allow contribution.
 
 # Why to use
 

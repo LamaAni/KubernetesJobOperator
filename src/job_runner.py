@@ -1,6 +1,7 @@
 import kubernetes
 import yaml
 import copy
+import os
 from .watchers.threaded_kubernetes_object_watchers import (
     ThreadedKubernetesNamespaceObjectsWatcher,
     ThreadedKubernetesObjectsWatcher,
@@ -12,7 +13,6 @@ JOB_RUNNER_INSTANCE_ID_LABEL = "job-runner-instance-id"
 
 
 class JobRunner(EventHandler):
-    batchClient: kubernetes.client.BatchV1Api
     _id: str = None
 
     def __init__(self):
@@ -32,6 +32,20 @@ class JobRunner(EventHandler):
             print(info.yaml)
         """
         super().__init__()
+
+    def load_kuberntes_configuration(
+        self, in_cluster=True, config_file=None, context=None
+    ):
+        # loading the current config to use.
+        if in_cluster:
+            kubernetes.config.load_incluster_config()
+        else:
+            # load from file must have a config file,
+            assert os.path.exists(
+                config_file
+            ), f"Cannot find kubernetes configuration file @ {config_file}"
+
+            kubernetes.config.load_kube_config(config_file=config_file, context=context)
 
     def prepare_job_yaml(self, job_yaml, random_name_postfix_length: int = 0) -> dict:
         """Pre-prepare the job yaml dictionary for execution,
@@ -95,6 +109,15 @@ class JobRunner(EventHandler):
         if "labels" not in job_yaml["spec"]["template"]["metadata"]:
             job_yaml["spec"]["template"]["metadata"]["labels"] = dict()
 
+        if "finalizers" not in job_yaml["metadata"]:
+            job_yaml["metadata"]["finalizers"] = []
+
+        if "foregroundDeletion" not in set(job_yaml["metadata"]["finalizers"]):
+            job_yaml["metadata"]["finalizers"].append("foregroundDeletion")
+
+        if "restartPolicy" not in job_yaml["spec"]["template"]["spec"]:
+            job_yaml["spec"]["template"]["spec"]["restartPolicy"] = "Never"
+
         instance_id = randomString(15)
         job_yaml["metadata"]["labels"][JOB_RUNNER_INSTANCE_ID_LABEL] = instance_id
         job_yaml["spec"]["template"]["metadata"]["labels"][
@@ -103,7 +126,9 @@ class JobRunner(EventHandler):
 
         return job_yaml
 
-    def execute_job(self, job_yaml: dict) -> ThreadedKubernetesObjectsWatcher:
+    def execute_job(
+        self, job_yaml: dict
+    ) -> (ThreadedKubernetesObjectsWatcher, ThreadedKubernetesNamespaceObjectsWatcher):
         """Executes a job with a pre-prepared job yaml,
         to prepare the job yaml please call JobRunner.prepare_job_yaml
 
@@ -176,4 +201,4 @@ class JobRunner(EventHandler):
         if job_watch_object.status == "Failed":
             self.emit("job_failed", job_watch_object, self)
 
-        return job_watch_object
+        return job_watch_object, watcher
