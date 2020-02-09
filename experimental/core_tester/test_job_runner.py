@@ -11,8 +11,7 @@ CUR_DIRECTORY = os.path.abspath(os.path.dirname(__file__))
 
 def create_job(name, namespace, image, command) -> kubernetes.client.V1Pod:
     job_yaml = load_raw_formatted_file(os.path.join(CUR_DIRECTORY, "job.yaml"))
-    job_yaml = job_yaml.format(
-        name=name, namespace=namespace, image=image)
+    job_yaml = job_yaml.format(name=name, namespace=namespace, image=image)
     pod = yaml.safe_load(job_yaml)
     pod["spec"]["template"]["spec"]["containers"][0]["command"] = command
     return pod
@@ -46,18 +45,12 @@ runner.on("log", read_pod_log)
 runner.on("status", object_status_changed)
 
 # prepare the job to execute.
-bash_script = load_raw_formatted_file(
-    os.path.join(CUR_DIRECTORY, "pod_script.sh"))
-job_yaml = create_job(
-    "lama",
-    current_namespace,
-    "ubuntu",
-    ["bash", "-c", bash_script]
-)
+bash_script = load_raw_formatted_file(os.path.join(CUR_DIRECTORY, "pod_script.sh"))
+job_yaml = create_job("lama", current_namespace, "ubuntu", ["bash", "-c", bash_script])
 job_yaml = runner.prepare_job_yaml(job_yaml, 5)
 
 # executing the job.
-info = runner.execute_job(job_yaml)
+info, watcher = runner.execute_job(job_yaml)
 
 # printing the result.
-logging.info("Job result: "+info.status)
+logging.info("Job result: " + info.status)
