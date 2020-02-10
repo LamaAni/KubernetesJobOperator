@@ -147,7 +147,6 @@ class ThreadedKubernetesNamespaceWatcher(ThreadedKubernetesWatcher):
         raise Exception("Watch type not found: " + self._watch_type)
 
     def __get_kube_objects_list_watch_response(self):
-
         path_params = {"namespace": self.namespace}
         query_params = {
             "pretty": False,
