@@ -15,10 +15,21 @@ dag = DAG(
 )
 
 
-job_yaml = ""
-with open(__file__ + ".yaml", "r", encoding="utf-8") as job_yaml_reader:
-    job_yaml = job_yaml_reader.read()
+def read_job_yaml(fpath):
+    job_yaml = ""
+    with open(fpath, "r", encoding="utf-8") as job_yaml_reader:
+        job_yaml = job_yaml_reader.read()
+    return job_yaml
 
-bash_task = BashOperator(bash_command="date", task_id="test-bash", dag=dag)
 
-job_task = KubernetesBaseJobOperator(task_id="test-job", job_yaml=job_yaml, dag=dag)
+success_job_yaml = read_job_yaml(__file__ + ".success.yaml")
+fail_job_yaml = read_job_yaml(__file__ + ".fail.yaml")
+
+BashOperator(bash_command="date", task_id="test-bash", dag=dag)
+
+KubernetesBaseJobOperator(
+    task_id="test-job-success", job_yaml=success_job_yaml, dag=dag
+)
+
+KubernetesBaseJobOperator(task_id="test-job-fail", job_yaml=fail_job_yaml, dag=dag)
+
