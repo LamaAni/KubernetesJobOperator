@@ -34,14 +34,14 @@ class JobRunner(EventHandler):
         super().__init__()
 
     def load_kuberntes_configuration(
-        self, in_cluster=True, config_file=None, context=None
+        self, in_cluster=False, config_file=None, context=None
     ):
         # loading the current config to use.
         if in_cluster:
             kubernetes.config.load_incluster_config()
         else:
             # load from file must have a config file,
-            assert os.path.exists(
+            assert config_file is None or os.path.exists(
                 config_file
             ), f"Cannot find kubernetes configuration file @ {config_file}"
 

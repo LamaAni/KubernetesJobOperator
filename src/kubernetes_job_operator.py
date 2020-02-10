@@ -13,7 +13,7 @@ from .watchers.threaded_kubernetes_object_watchers import (
 class KubernetesBaseJobOperator(BaseOperator):
     job_yaml: dict = None
     job_runner: JobRunner = None
-    in_cluster: bool = True
+    in_cluster: bool = False
     config_file: str = None
     cluster_context: str = None
     job_name_random_postfix_length: int = 5
@@ -26,7 +26,7 @@ class KubernetesBaseJobOperator(BaseOperator):
         self,
         job_yaml,
         delete_policy: str = "IfFailed",
-        in_cluster: bool = True,
+        in_cluster: bool = False,
         config_file: str = None,
         cluster_context: str = None,
         *args,
