@@ -1,5 +1,5 @@
 from airflow import DAG
-from src.kubernetes_job_operator import KubernetesBaseJobOperator
+from src.kubernetes_base_job_operator import KubernetesBaseJobOperator
 
 # from airflow.operators.bash_operator import BashOperator
 from airflow.utils.dates import days_ago
