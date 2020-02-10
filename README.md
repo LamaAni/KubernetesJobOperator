@@ -20,7 +20,7 @@ we would lose the state of the job only if the job is deliberately deleted.
 if connection is lost.
 
 # Contribution
-Feel free to ping me in issues or directly on linkedin to contribute.
+Feel free to ping me in issues or directly on LinkedIn to contribute.
 
 # Licence
 
