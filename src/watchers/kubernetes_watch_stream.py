@@ -58,7 +58,7 @@ class KubernetesWatchStream(kubernetes.watch.Watch, EventHandler):
 
         timeouts = "timeout_seconds" in kwargs
         was_started = False
-        self.emit("start")
+        self.emit("started")
         while True:
             try:
                 resp = func(*args, **kwargs)

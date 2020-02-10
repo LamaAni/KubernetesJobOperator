@@ -2,6 +2,7 @@ import kubernetes
 from typing import Dict, List
 from queue import SimpleQueue
 from .event_handler import EventHandler
+from .threaded_kubernetes_watch import ThreadedKubernetesWatch
 from .threaded_kubernetes_watchers import (
     ThreadedKubernetesWatcher,
     ThreadedKuebrnetesLogReader,
