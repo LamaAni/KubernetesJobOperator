@@ -3,6 +3,7 @@ import yaml
 from airflow.utils.decorators import apply_defaults
 from airflow.exceptions import AirflowException
 from airflow.operators import BaseOperator
+from .utils import to_kubernetes_valid_name
 
 # from airflow.operators.bash_operator import BashOperator
 # from airflow.contrib.operators.kubernetes_pod_operator import KubernetesPodOperator
@@ -19,6 +20,11 @@ DEFAULT_VALIDATE_YAML_ON_INIT = (
     == "true"
 )
 
+# FIXME: To be moved to airflow config.
+MAX_JOB_NAME_LENGTH = int(
+    os.environ.get("AIRFLOW__KUBE_JOB_OPERATOR__MAX_JOB_NAME_LENGTH", "50")
+)
+
 
 class KubernetesBaseJobOperator(BaseOperator):
     job_yaml: dict = None
@@ -27,6 +33,8 @@ class KubernetesBaseJobOperator(BaseOperator):
     config_file: str = None
     cluster_context: str = None
     job_name_random_postfix_length: int = 5
+    autogenerate_job_id_from_task_id: bool = True
+    __waiting_for_job_execution: bool = False
 
     # Can be any of: IfSucceeded, Always, Never
     delete_policy: str = "IfSucceeded"
@@ -72,6 +80,9 @@ class KubernetesBaseJobOperator(BaseOperator):
         if validate_yaml_on_init:
             self.job_runner.prepare_job_yaml(self.job_yaml)
 
+    def create_job_name(self):
+        return to_kubernetes_valid_name(self.task_id, max_length=MAX_JOB_NAME_LENGTH)
+
     def on_job_log(self, msg, sender: ThreadedKubernetesObjectsWatcher):
         self.log.info(f"{sender.id}: {msg}")
 
@@ -85,7 +96,7 @@ class KubernetesBaseJobOperator(BaseOperator):
         job_watcher: ThreadedKubernetesObjectsWatcher,
         namespace_watcher: ThreadedKubernetesNamespaceObjectsWatcher,
     ):
-        if job_watcher.status == "Failed":
+        if job_watcher.status in ["Failed", "Deleted"]:
             pod_count = len(
                 list(
                     filter(
@@ -124,11 +135,17 @@ class KubernetesBaseJobOperator(BaseOperator):
             self.in_cluster, self.config_file, self.cluster_context
         )
 
+        job_name = None
+        if self.autogenerate_job_id_from_task_id:
+            job_name = self.create_job_name()
+
         # fromat the yaml to the expected values of the job.
         # override this method to allow pre/post formatting
         # of the yaml dictionary.
         self.job_yaml = self.job_runner.prepare_job_yaml(
-            self.job_yaml, self.job_name_random_postfix_length
+            self.job_yaml,
+            random_name_postfix_length=self.job_name_random_postfix_length,
+            force_job_name=job_name,
         )
 
         # call parent.
@@ -136,10 +153,12 @@ class KubernetesBaseJobOperator(BaseOperator):
 
     def execute(self, context):
         self.log.info("Starting job...")
+        self.__waiting_for_job_execution = True
 
         # Executing the job
         (job_watcher, namespace_watcher) = self.job_runner.execute_job(self.job_yaml)
 
+        self.__waiting_for_job_execution = False
         self.log_final_result(job_watcher, namespace_watcher)
 
         # Check delete policy.
@@ -148,9 +167,19 @@ class KubernetesBaseJobOperator(BaseOperator):
             delete_policy == "ifsucceeded" and job_watcher.status == "Succeeded"
         ):
             self.log.info("Deleting job leftovers")
-            self.job_runner.delete_job(job_watcher)
+            self.job_runner.delete_job(job_watcher.yaml)
         else:
             self.log.warning("Job object(s) left in namespace")
 
         if job_watcher.status != "Succeeded":
-            raise AirflowException("Job failed")
+            raise AirflowException(f"Job {job_watcher.status}")
+
+    def on_kill(self):
+        if self.__waiting_for_job_execution:
+            self.log.info(
+                f"Job killed/aborted while waiting for execution to complete. Deleting job..."
+            )
+            self.job_runner.delete_job(self.job_yaml)
+            self.log.info("Job deleted.")
+
+        return super().on_kill()

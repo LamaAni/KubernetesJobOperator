@@ -1,5 +1,5 @@
 import random
-import string
+import re
 
 
 def get_from_dictionary_path(dictionary, path_names):
@@ -33,3 +33,17 @@ def randomString(stringLength=10):
     """
     letters = "abcdefghijklmnopqrstvwxyz0123456789"
     return "".join(random.choice(letters) for i in range(stringLength))
+
+
+def to_kubernetes_valid_name(name, max_length=50, start_trim_offset=10):
+    assert (
+        start_trim_offset < max_length
+    ), "start_trim_offset must be smaller then max_length"
+    name = re.sub(r"[^a-z0-9]", "-", name.lower())
+
+    if len(name) > max_length:
+        first_part = name[0:start_trim_offset] if start_trim_offset > 0 else ""
+        second_part = name[start_trim_offset:]
+        second_part = second_part[-max_length + start_trim_offset + 2 :]
+        name = first_part + "--" + second_part
+    return name

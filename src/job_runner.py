@@ -47,7 +47,9 @@ class JobRunner(EventHandler):
 
             kubernetes.config.load_kube_config(config_file=config_file, context=context)
 
-    def prepare_job_yaml(self, job_yaml, random_name_postfix_length: int = 0) -> dict:
+    def prepare_job_yaml(
+        self, job_yaml, random_name_postfix_length: int = 0, force_job_name: str = None
+    ) -> dict:
         """Pre-prepare the job yaml dictionary for execution,
         can also accept a string input.
 
@@ -57,12 +59,22 @@ class JobRunner(EventHandler):
 
         Keyword Arguments:
             random_name_postfix_length {int} -- The number of random
-            characters to add to job name, if 0 then do not add.
-            allow for the rapid generation of random jobs. (default: {0})
+                characters to add to job name, if 0 then do not add.
+                allow for the rapid generation of random jobs. (default: {0})
+            force_job_name {str} -- If exist will replace the job name.
 
         Returns:
             dict -- The prepared job yaml dictionary.
         """
+        if (
+            isinstance(job_yaml, dict)
+            and "metadata" in job_yaml
+            and "labels" in job_yaml["metadata"]
+            and JOB_RUNNER_INSTANCE_ID_LABEL in job_yaml["metadata"]["labels"]
+        ):
+            # already initialized.
+            return
+
         # make sure the yaml is an object.
         job_yaml = (
             copy.deepcopy(job_yaml)
@@ -92,6 +104,9 @@ class JobRunner(EventHandler):
         assert_defined(["metadata", "name"])
         assert_defined(["spec", "template"])
         assert_defined(["spec", "template", "spec", "containers", 0], "main container")
+
+        if force_job_name is not None:
+            job_yaml["metadata"]["name"] = force_job_name
 
         if random_name_postfix_length > 0:
             job_yaml["metadata"]["name"] += "-" + randomString(
@@ -185,6 +200,7 @@ class JobRunner(EventHandler):
 
         # starting the watcher.
         watcher = ThreadedKubernetesNamespaceObjectsWatcher(coreClient)
+        watcher.remove_deleted_kube_objects_from_memory = False
         watcher.watch_namespace(
             namespace, label_selector=f"{JOB_RUNNER_INSTANCE_ID_LABEL}={instance_id}"
         )
@@ -200,7 +216,7 @@ class JobRunner(EventHandler):
 
         # waiting for the job to completed.
         job_watch_object = watcher.waitfor_status(
-            "Job", name, namespace, status_list=["Failed", "Succeeded"]
+            "Job", name, namespace, status_list=["Failed", "Succeeded", "Deleted"]
         )
 
         # not need to read status and logs anymore.
@@ -211,11 +227,10 @@ class JobRunner(EventHandler):
 
         return job_watch_object, watcher
 
-    def delete_job(self, job_watch_object: ThreadedKubernetesObjectsWatcher):
-        metadata = job_watch_object.yaml["metadata"]
+    def delete_job(self, job_yaml):
+        metadata = job_yaml["metadata"]
         name = metadata["name"]
         namespace = metadata["namespace"]
 
         batchClient = kubernetes.client.BatchV1Api()
         batchClient.delete_namespaced_job(name, namespace)
-

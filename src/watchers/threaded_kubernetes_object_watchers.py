@@ -16,6 +16,7 @@ class ThreadedKubernetesObjectsWatcher(EventHandler):
     _id: str = None
     _has_read_logs = False
     client: kubernetes.client.CoreV1Api = None
+    _was_deleted: bool = False
 
     def __init__(self, client, object_yaml, auto_watch_pod_logs: bool = True):
         super().__init__()
@@ -24,6 +25,7 @@ class ThreadedKubernetesObjectsWatcher(EventHandler):
             object_yaml
         )
         self.auto_watch_pod_logs = auto_watch_pod_logs
+        self._was_deleted = False
 
     def emit(self, name, *args, **kwargs):
         if len(args) < 2:
@@ -66,30 +68,44 @@ class ThreadedKubernetesObjectsWatcher(EventHandler):
     def compose_object_id_from_values(kind, namespace, name):
         return "/".join([kind, namespace, name])
 
+    @staticmethod
+    def read_job_status_from_yaml(status_yaml, backoffLimit: int = 0):
+        job_status = "Pending"
+        if "startTime" in status_yaml:
+            if "completionTime" in status_yaml:
+                job_status = "Succeeded"
+            elif "failed" in status_yaml and int(status_yaml["failed"]) > backoffLimit:
+                job_status = "Failed"
+            else:
+                job_status = "Running"
+        return job_status
+
     @property
     def status(self):
         if self.kind == "Service":
-            return "Deleted" if self.was_deleted else "Active"
+            return "Deleted" if self._was_deleted else "Active"
         elif self.kind == "Job":
             job_status = None
-            if self.was_deleted:
+            if self._was_deleted:
                 job_status = "Deleted"
-            elif "startTime" in self.yaml["status"]:
-                if "completionTime" in self.yaml["status"]:
-                    job_status = "Succeeded"
-                elif "failed" in self.yaml["status"] and int(
-                    self.yaml["status"]["failed"]
-                ) > int(self.yaml["spec"]["backoffLimit"]):
-                    job_status = "Failed"
-                else:
-                    job_status = "Running"
+            # elif "startTime" in self.yaml["status"]:
+            #     if "completionTime" in self.yaml["status"]:
+            #         job_status = "Succeeded"
+            #     elif "failed" in self.yaml["status"] and int(
+            #         self.yaml["status"]["failed"]
+            #     ) > int(self.yaml["spec"]["backoffLimit"]):
+            #         job_status = "Failed"
+            #     else:
+            #         job_status = "Running"
             else:
-                job_status = "Pending"
+                job_status = ThreadedKubernetesObjectsWatcher.read_job_status_from_yaml(
+                    self.yaml["status"], int(self.yaml["spec"]["backoffLimit"])
+                )
 
             return job_status
         elif self.kind == "Pod":
             pod_status = None
-            if self.was_deleted:
+            if self._was_deleted:
                 pod_status = "Deleted"
             else:
                 pod_status = self.yaml["status"]["phase"]
@@ -137,11 +153,13 @@ class ThreadedKubernetesObjectsWatcher(EventHandler):
 
     def update_object_state(self, event_type, object_yaml: dict):
         is_new = self._object_yaml is None
-        self.was_deleted = event_type == "DELETED"
         old_status = None if is_new else self.status
 
         # update the current yaml.
         self._object_yaml = object_yaml
+
+        if not self._was_deleted:
+            self._was_deleted = event_type == "DELETED"
 
         if self.kind == "Pod":
             self.update_pod_state(event_type, old_status)
@@ -298,7 +316,7 @@ class ThreadedKubernetesNamespaceObjectsWatcher(EventHandler):
                 return False
             return predict(status, sender)
 
-        # check if was already read.
+        # check if need past events to be loaded.
         if check_past_events:
             for sender in self._object_watchers.values():
                 if wait_predict(sender.status, sender):

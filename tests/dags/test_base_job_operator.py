@@ -1,6 +1,7 @@
 from airflow import DAG
 from src.kubernetes_job_operator import KubernetesBaseJobOperator
-from airflow.operators.bash_operator import BashOperator
+
+# from airflow.operators.bash_operator import BashOperator
 from airflow.utils.dates import days_ago
 
 # These args will get passed on to each operator
@@ -27,9 +28,9 @@ fail_job_yaml = read_job_yaml(__file__ + ".fail.yaml")
 
 # BashOperator(bash_command="date", task_id="test-bash", dag=dag)
 
-# KubernetesBaseJobOperator(
-#     task_id="test-job-success", job_yaml=success_job_yaml, dag=dag
-# )
+KubernetesBaseJobOperator(
+    task_id="test-job-success", job_yaml=success_job_yaml, dag=dag
+)
 
 KubernetesBaseJobOperator(task_id="test-job-fail", job_yaml=fail_job_yaml, dag=dag)
 
