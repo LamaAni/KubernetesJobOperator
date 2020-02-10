@@ -2,6 +2,11 @@ import kubernetes
 from urllib3.response import HTTPResponse
 from .event_handler import EventHandler
 
+# FIXME: Deprecate this watch stream and move to a more stable
+# threaded approach with queue. The queue should allow for
+# the process to be re-started and killed properly and
+# for the thread to keep seeking the source if connection was lost.
+
 
 class KubernetesWatchStream(kubernetes.watch.Watch, EventHandler):
     _response_object: HTTPResponse = None
