@@ -313,7 +313,7 @@ class ThreadedKubernetesNamespaceObjectsWatcher(EventHandler):
                 if wait_predict(sender.status, sender):
                     return sender
 
-        return self.waitfor(wait_predict, False, timeout=timeout, event="status")
+        return self.waitfor(wait_predict, False, timeout=timeout, event_type="status")
 
     def stop(self):
         for namespace, watchers in self._namespace_watchers.items():
