@@ -3,6 +3,9 @@ local/
 .vscode/
 Pipefile.lock
 
+# ignore the test airflow db.
+/tests/airflow.db
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
