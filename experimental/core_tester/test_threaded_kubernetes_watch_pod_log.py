@@ -1,7 +1,5 @@
 import kubernetes
 import os
-import yaml
-from time import sleep
 from utils import logging
 from src.watchers.threaded_kubernetes_watch import (
     ThreadedKubernetesWatchPodLog,
