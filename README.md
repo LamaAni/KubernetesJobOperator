@@ -1,21 +1,18 @@
 # Python Airflow KubernetesJobOperator
 
-An implementation of a job operator that allows running a task as a kubernetes job.
-Will forward all job logs from the job pods to the airflow log.
+An airflow job operator, for kubernetes. Given a specific yaml or image and command,
+the operator will execute a Kuberntes Job.
 
 # ALPHA
 This repository is in alpha testing, and is published
 to allow contribution.
 
-# Why to use
+# Why not use the [kubernetes pod operator](https://github.com/apache/airflow/blob/master/airflow/contrib/operators/kubernetes_pod_operator.p)?
 
-Even though a single pod approach (As the one taken in the [kubernetes pod operator](https://github.com/apache/airflow/blob/master/airflow/contrib/operators/kubernetes_pod_operator.p))
-will produce a task that would run in a pod, the kubernetes Job object allows 
-other definitions such as retries/timeouts/etc.. that cannot be applied to a pod.
-Also, multiple executions of the same thing, i.e. multiple/parallel tasks are not supported.
+the kubernetes Job object allows for more definitions such as retries/timeouts/deadlines/replicas/etc.. which cannot be defined in directly on a pod. 
 
-Finally, the connection between the pod and the worker can be lost, due to communication issues,
-pod death or just pod scheduling issues while for the a Job, which behaves as a definition in kubernetes,
+Also, the connection between the pod and the worker can be lost, due to communication issues,
+pod death or just pod scheduling issues while for the a Job (a definition in kubernetes)
 we would lose the state of the job only if the job is deliberately deleted.
 
 # Contribution
