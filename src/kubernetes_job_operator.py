@@ -179,7 +179,13 @@ class KubernetesBaseJobOperator(BaseOperator):
             self.log.info(
                 f"Job killed/aborted while waiting for execution to complete. Deleting job..."
             )
-            self.job_runner.delete_job(self.job_yaml)
-            self.log.info("Job deleted.")
+            try:
+                self.job_runner.delete_job(self.job_yaml)
+                self.log.info("Job deleted.")
+            except Exception:
+                self.log.error(
+                    "Failed to delete an aborted/killed"
+                    + " job! The job may still be executing."
+                )
 
         return super().on_kill()
