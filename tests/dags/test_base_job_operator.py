@@ -25,11 +25,11 @@ def read_job_yaml(fpath):
 success_job_yaml = read_job_yaml(__file__ + ".success.yaml")
 fail_job_yaml = read_job_yaml(__file__ + ".fail.yaml")
 
-BashOperator(bash_command="date", task_id="test-bash", dag=dag)
+# BashOperator(bash_command="date", task_id="test-bash", dag=dag)
 
-KubernetesBaseJobOperator(
-    task_id="test-job-success", job_yaml=success_job_yaml, dag=dag
-)
+# KubernetesBaseJobOperator(
+#     task_id="test-job-success", job_yaml=success_job_yaml, dag=dag
+# )
 
 KubernetesBaseJobOperator(task_id="test-job-fail", job_yaml=fail_job_yaml, dag=dag)
 
