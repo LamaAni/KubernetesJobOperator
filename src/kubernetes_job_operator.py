@@ -1,12 +1,20 @@
+import os
 from airflow.utils.decorators import apply_defaults
 from airflow.exceptions import AirflowException
 from airflow.operators import BaseOperator
+
 # from airflow.operators.bash_operator import BashOperator
 # from airflow.contrib.operators.kubernetes_pod_operator import KubernetesPodOperator
 # from airflow.contrib.kubernetes import kube_client
 from .job_runner import JobRunner
 from .watchers.threaded_kubernetes_object_watchers import (
     ThreadedKubernetesObjectsWatcher,
+)
+
+# FIXME: To be moved to airflow config.
+DEFAULT_VALIDATE_YAML_ON_INIT = (
+    os.environ.get("AIRFLOW__KUBE_JOB_OPERATOR__VALIDATE_YAML_ON_INIT", "false").lower()
+    == "true"
 )
 
 
@@ -29,6 +37,7 @@ class KubernetesBaseJobOperator(BaseOperator):
         in_cluster: bool = False,
         config_file: str = None,
         cluster_context: str = None,
+        validate_yaml_on_init: bool = DEFAULT_VALIDATE_YAML_ON_INIT,
         *args,
         **kwargs,
     ):
@@ -37,6 +46,12 @@ class KubernetesBaseJobOperator(BaseOperator):
         assert job_yaml is not None and (
             isinstance(job_yaml, (dict, str))
         ), "job_yaml must either be a string yaml or a dict object"
+
+        assert delete_policy in [
+            "Never",
+            "Always",
+            "IfFailed",
+        ], "the delete_policy must be one of: Never, Always, IfFailed"
 
         self.job_yaml = job_yaml
         self.config_file = config_file
@@ -51,6 +66,9 @@ class KubernetesBaseJobOperator(BaseOperator):
             "status",
             lambda status, sender: self.on_job_object_status_changed(status, sender),
         )
+
+        if validate_yaml_on_init:
+            self.job_runner.prepare_job_yaml(self.job_yaml)
 
     def on_job_log(self, msg, sender: ThreadedKubernetesObjectsWatcher):
         self.log.info(f"{sender.id}: {msg}")
@@ -94,6 +112,8 @@ class KubernetesBaseJobOperator(BaseOperator):
         (job_watcher, watcher) = self.job_runner.execute_job(self.job_yaml)
 
         self.log_final_result(job_watcher)
+
+        # Check delete policy.
 
         if job_watcher.status != "Succeeded":
             raise AirflowException("Job failed")
