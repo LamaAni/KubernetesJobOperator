@@ -17,7 +17,7 @@ pod deletions or just pod scheduling issues in the cluster. The Kubernetes Job i
 
 You can find a description of the kubernetes Job object [here](https://kubernetes.io/docs/concepts/workloads/controllers/jobs-run-to-completion/)
 
-## Open issues for needed for beta release
+## Open issues needed for beta release
 
 1. Correction of the kuberntes watcher to allow restart of the watch process
    if connection is lost.
