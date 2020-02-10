@@ -20,7 +20,7 @@ spec:
             - |
                 #/usr/bin/env bash
                 echo "Starting"
-                TIC_COUNT=10
+                TIC_COUNT=0
                 cur_count=0
                 while true; do
                     cur_count=$((cur_count + 1))
@@ -33,4 +33,4 @@ spec:
 
                 echo "Force throw error:"
                 exit 99
-  backoffLimit: 3
+  backoffLimit: 0
