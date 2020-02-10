@@ -88,15 +88,6 @@ class ThreadedKubernetesObjectsWatcher(EventHandler):
             job_status = None
             if self._was_deleted:
                 job_status = "Deleted"
-            # elif "startTime" in self.yaml["status"]:
-            #     if "completionTime" in self.yaml["status"]:
-            #         job_status = "Succeeded"
-            #     elif "failed" in self.yaml["status"] and int(
-            #         self.yaml["status"]["failed"]
-            #     ) > int(self.yaml["spec"]["backoffLimit"]):
-            #         job_status = "Failed"
-            #     else:
-            #         job_status = "Running"
             else:
                 job_status = ThreadedKubernetesObjectsWatcher.read_job_status_from_yaml(
                     self.yaml["status"], int(self.yaml["spec"]["backoffLimit"])
