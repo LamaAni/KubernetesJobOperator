@@ -26,14 +26,14 @@ class KubernetesBaseJobOperator(BaseOperator):
     cluster_context: str = None
     job_name_random_postfix_length: int = 5
 
-    # Can be any of: IfFailed, Always, Never
-    delete_policy: str = "IfFailed"
+    # Can be any of: IfSucceeded, Always, Never
+    delete_policy: str = "IfSucceeded"
 
     @apply_defaults
     def __init__(
         self,
         job_yaml,
-        delete_policy: str = "IfFailed",
+        delete_policy: str = "IfSucceeded",
         in_cluster: bool = False,
         config_file: str = None,
         cluster_context: str = None,
@@ -47,11 +47,11 @@ class KubernetesBaseJobOperator(BaseOperator):
             isinstance(job_yaml, (dict, str))
         ), "job_yaml must either be a string yaml or a dict object"
 
-        assert delete_policy in [
-            "Never",
-            "Always",
-            "IfFailed",
-        ], "the delete_policy must be one of: Never, Always, IfFailed"
+        assert delete_policy is not None and delete_policy.lower() in [
+            "never",
+            "always",
+            "ifsucceeded",
+        ], "the delete_policy must be one of: Never, Always, IfSucceeded"
 
         self.job_yaml = job_yaml
         self.config_file = config_file
@@ -105,7 +105,6 @@ class KubernetesBaseJobOperator(BaseOperator):
         return super().pre_execute(context)
 
     def execute(self, context):
-
         self.log.info("Starting job...")
 
         # Executing the job
@@ -114,6 +113,14 @@ class KubernetesBaseJobOperator(BaseOperator):
         self.log_final_result(job_watcher)
 
         # Check delete policy.
+        delete_policy = self.delete_policy.lower()
+        if delete_policy == "always" or (
+            delete_policy == "ifsucceeded" and job_watcher.status == "Succeeded"
+        ):
+            self.log.info("Deleting job leftovers")
+            self.job_runner.delete_job(job_watcher)
+        else:
+            self.log.info("Job object left in namespace")
 
         if job_watcher.status != "Succeeded":
             raise AirflowException("Job failed")

@@ -208,3 +208,12 @@ class JobRunner(EventHandler):
             self.emit("job_failed", job_watch_object, self)
 
         return job_watch_object, watcher
+
+    def delete_job(job_watch_object: ThreadedKubernetesObjectsWatcher):
+        metadata = job_watch_object.yaml["metadata"]
+        name = metadata["name"]
+        namespace = metadata["namespace"]
+
+        batchClient = kubernetes.client.BatchV1Api()
+        batchClient.delete_namespaced_job(name, namespace)
+
