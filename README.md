@@ -13,7 +13,7 @@ to allow contribution.
 The kubernetes Job allows for more execution options such as retries/timeouts/deadlines/replicas/etc.. which cannot be defined directly on a pod.
 
 Also, the connection between the pod and the worker can be lost, due to communication issues,
-pod deletions or just pod scheduling issues in the cluster. The Kubernetes Job is a definition in kubernetes, we therefore would lose the state of the job only if the job is deliberately deleted.A job will also recover, by itself, from pod manual deletions and pod scheduling errors.
+pod deletions or just pod scheduling issues in the cluster. The Kubernetes Job is more like a "definition" of pending execution, we therefore would lose the state of the job only if the job is deliberately deleted. A job will also recover automatically from pod manual deletions and pod scheduling errors.
 
 You can find a description of the kubernetes Job object [here](https://kubernetes.io/docs/concepts/workloads/controllers/jobs-run-to-completion/)
 
