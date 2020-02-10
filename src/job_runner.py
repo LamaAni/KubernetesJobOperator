@@ -90,7 +90,6 @@ class JobRunner(EventHandler):
         )
 
         assert_defined(["metadata", "name"])
-        # assert_defined(["metadata", "namespace"])
         assert_defined(["spec", "template"])
         assert_defined(["spec", "template", "spec", "containers", 0], "main container")
 
@@ -108,6 +107,9 @@ class JobRunner(EventHandler):
         # FIXME: Should be a better way to add missing values.
         if "labels" not in job_yaml["metadata"]:
             job_yaml["metadata"]["labels"] = dict()
+
+        if "backoffLimit" not in job_yaml["spec"]:
+            job_yaml["spec"]["backoffLimit"] = 0
 
         if "metadata" not in job_yaml["spec"]["template"]:
             job_yaml["spec"]["template"]["metadata"] = dict()
@@ -209,7 +211,7 @@ class JobRunner(EventHandler):
 
         return job_watch_object, watcher
 
-    def delete_job(job_watch_object: ThreadedKubernetesObjectsWatcher):
+    def delete_job(self, job_watch_object: ThreadedKubernetesObjectsWatcher):
         metadata = job_watch_object.yaml["metadata"]
         name = metadata["name"]
         namespace = metadata["namespace"]

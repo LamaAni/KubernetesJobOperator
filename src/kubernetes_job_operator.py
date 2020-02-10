@@ -1,4 +1,5 @@
 import os
+import yaml
 from airflow.utils.decorators import apply_defaults
 from airflow.exceptions import AirflowException
 from airflow.operators import BaseOperator
@@ -9,6 +10,7 @@ from airflow.operators import BaseOperator
 from .job_runner import JobRunner
 from .watchers.threaded_kubernetes_object_watchers import (
     ThreadedKubernetesObjectsWatcher,
+    ThreadedKubernetesNamespaceObjectsWatcher,
 )
 
 # FIXME: To be moved to airflow config.
@@ -78,10 +80,38 @@ class KubernetesBaseJobOperator(BaseOperator):
     ):
         self.log.info(f"{sender.id} ({status})")
 
-    def log_final_result(self, job_watcher: ThreadedKubernetesObjectsWatcher):
+    def log_final_result(
+        self,
+        job_watcher: ThreadedKubernetesObjectsWatcher,
+        namespace_watcher: ThreadedKubernetesNamespaceObjectsWatcher,
+    ):
         if job_watcher.status == "Failed":
-            self.log.error(job_watcher.yaml["status"])
-            self.log.error("Job Failed.")
+            pod_count = len(
+                list(
+                    filter(
+                        lambda ow: ow.kind == "Pod",
+                        namespace_watcher.object_watchers.values(),
+                    )
+                )
+            )
+            self.log.error(f"Job Failed ({pod_count} pods), last pod/job status:")
+
+            # log proper object error
+            def log_object_error(object_watcher: ThreadedKubernetesObjectsWatcher):
+                log_method = (
+                    self.log.error
+                    if object_watcher.status == "Failed"
+                    else self.log.info
+                )
+                log_method(
+                    "FINAL STATUS: "
+                    + object_watcher.id
+                    + f" ({object_watcher.status})\n"
+                    + yaml.dump(object_watcher.yaml["status"])
+                )
+
+            for object_watcher in namespace_watcher.object_watchers.values():
+                log_object_error(object_watcher)
         else:
             self.log.info("Job complete.")
 
@@ -108,9 +138,9 @@ class KubernetesBaseJobOperator(BaseOperator):
         self.log.info("Starting job...")
 
         # Executing the job
-        (job_watcher, watcher) = self.job_runner.execute_job(self.job_yaml)
+        (job_watcher, namespace_watcher) = self.job_runner.execute_job(self.job_yaml)
 
-        self.log_final_result(job_watcher)
+        self.log_final_result(job_watcher, namespace_watcher)
 
         # Check delete policy.
         delete_policy = self.delete_policy.lower()
@@ -120,7 +150,7 @@ class KubernetesBaseJobOperator(BaseOperator):
             self.log.info("Deleting job leftovers")
             self.job_runner.delete_job(job_watcher)
         else:
-            self.log.info("Job object left in namespace")
+            self.log.warning("Job object(s) left in namespace")
 
         if job_watcher.status != "Succeeded":
             raise AirflowException("Job failed")

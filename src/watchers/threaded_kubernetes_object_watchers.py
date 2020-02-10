@@ -163,6 +163,10 @@ class ThreadedKubernetesNamespaceObjectsWatcher(EventHandler):
         self._object_watchers = dict()
         self._namespace_watchers = dict()
 
+    @property
+    def object_watchers(self):
+        return self._object_watchers
+
     def watch_namespace(
         self, namespace: str, label_selector: str = None, field_selector: str = None
     ):
