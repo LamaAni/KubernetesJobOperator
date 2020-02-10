@@ -16,19 +16,13 @@ current_namespace = active_context["context"]["namespace"]
 client = kubernetes.client.CoreV1Api()
 
 
-def list_namespace_pods():
-    info = client.read_namespaced_pod_log_with_http_info(
-        name="tester",
-        namespace=current_namespace,
-        follow=True,
-        _preload_content=False,
-        _request_timeout=5,
-    )
+def list_namespace_pods(*args, **kwargs):
+    info = client.read_namespaced_pod_log_with_http_info(*args, **kwargs)
     return info[0]
 
 
 watcher = ThreadedKubernetesWatch(list_namespace_pods, read_as_object=False)
 
-for event in watcher.stream():
+for event in watcher.stream(name="tester", namespace=current_namespace, follow=True):
     logging.info(yaml.dump(event))
     # watcher.stop()

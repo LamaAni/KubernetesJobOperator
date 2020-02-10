@@ -31,20 +31,45 @@ class ThreadedKubernetesWatch(EventHandler):
     allow_reconnect: bool = True
     reconnect_max_retries: int = 20
     reconnect_wait_timeout: int = 5
+    response_wait_timeout: int = 5
+    add_default_stream_params: bool = True
+    ignore_errors_if_removed: bool = True
 
     def __init__(self, create_response_stream: callable, read_as_object: bool = True):
+        """Creates a kubernetes threaded watcher that allows
+        streaming events from kubernetes. The watcher implements a reconnect
+        specifications.
+        
+        Arguments:
+            create_response_stream {callable} -- The query create command
+        
+        Keyword Arguments:
+            read_as_object {bool} -- If true, the response value is a dictionary (as json), and should be parsed. (default: {True})
+        """
         super().__init__()
         self.create_response_stream = create_response_stream
         self.read_as_object = read_as_object
 
     def read_event(self, data):
+        """Parses the event data.
+        
+        Arguments:
+            data {str} -- The event data.
+        
+        Returns:
+            dict/str -- Returns the parsed data, depending on read_as_object.
+        """
         if self.read_as_object:
             return json.loads(data)
         else:
             return data
 
     def _reader_thread(self, *args, **kwargs):
-
+        """Private - The reader thread.
+        
+        Yields:
+            str -- data line.
+        """
         # define a line reader.
         def read_lines():
             prev = ""
@@ -65,13 +90,18 @@ class ThreadedKubernetesWatch(EventHandler):
         was_started = False
         reconnect_attempts = 0
 
-        def invoke_reconnect_attempt(e: Exception):
+        def reconnect_attempt(e: Exception):
             nonlocal reconnect_attempts
             reconnect_attempts += 1
             if reconnect_attempts == self.reconnect_max_retries:
                 raise e
             self._stream_queue.put(ThreadedKubernetesWatchThreadEvent("warning", e))
             sleep(self.reconnect_wait_timeout)
+
+        if self.add_default_stream_params:
+            # adding required streaming query values.
+            kwargs["_preload_content"] = False
+            kwargs["_request_timeout"] = self.response_wait_timeout
 
         # always read until stopped or object dose not exist.
         try:
@@ -102,16 +132,16 @@ class ThreadedKubernetesWatch(EventHandler):
                 except ApiException as e:
                     # exception_body = json.loads(e.body)
                     if e.reason == "Not Found" or e.reason == "Bad Request":
-                        if was_started:
+                        if was_started and self.ignore_errors_if_removed:
                             break
                         else:
                             raise e
                 except MaxRetryError as e:
-                    invoke_reconnect_attempt(e)
+                    reconnect_attempt(e)
                 except ReadTimeoutError as e:
-                    invoke_reconnect_attempt(e)
+                    reconnect_attempt(e)
                 except TimeoutError as e:
-                    invoke_reconnect_attempt(e)
+                    reconnect_attempt(e)
                 except Exception as e:
                     raise e
 
@@ -125,6 +155,14 @@ class ThreadedKubernetesWatch(EventHandler):
         self.stop()
 
     def stream(self, *args, **kwargs):
+        """Stream the events from the kubernetes cluster, using yield.
+        
+        NOTE: Any arguments provided to this function will passed to the callable
+        method provided in the constructor. (create_response_stream)
+
+        Yields:
+            any -- The event object/str
+        """
         if self._stream_queue is not None:
             raise Exception("Already streaming, cannot start multiple streams")
 
@@ -176,6 +214,8 @@ class ThreadedKubernetesWatch(EventHandler):
         self.emit("watcher_stopped")
 
     def _abort_thread(self):
+        """Call to abort the current running thread.
+        """
         if self._streaming_thread is not None:
             if self._streaming_thread.is_alive():
                 # FIXME: Find a better way to stop the thread.
@@ -183,6 +223,11 @@ class ThreadedKubernetesWatch(EventHandler):
                 self._streaming_thread._stop()
 
     def _close_response_stream(self, throw_errors=True):
+        """Stop the current response, if any
+        
+        Keyword Arguments:
+            throw_errors {bool} -- If true, throw errors from the stop process. (default: {True})
+        """
         if self._reader_response is not None and not self._reader_response.isclosed():
             try:
                 self._reader_response.close()
@@ -193,5 +238,15 @@ class ThreadedKubernetesWatch(EventHandler):
                 self.emit("response_error", e)
 
     def stop(self):
+        """Stop the read stream cleanly.
+        """
         if self._stream_queue is not None:
             self._stream_queue.put(ThreadedKubernetesWatchThreadEvent("stop"))
+
+    def abort(self):
+        """Force abort the response stream and thread.
+        """
+        self._abort_thread()
+        self._close_response_stream(False)
+        self._streaming_thread = None
+        self._stream_queue = None
