@@ -10,7 +10,7 @@ to allow contribution.
 
 # Why not use the [kubernetes pod operator](https://github.com/apache/airflow/blob/master/airflow/contrib/operators/kubernetes_pod_operator.p)?
 
-The kubernetes Job object allows for more definitions such as retries/timeouts/deadlines/replicas/etc.. which cannot be defined directly on a pod.
+The kubernetes Job allows for more execution options such as retries/timeouts/deadlines/replicas/etc.. which cannot be defined directly on a pod.
 
 Also, the connection between the pod and the worker can be lost, due to communication issues,
 pod deletions or just pod scheduling issues in the cluster. The Kubernetes Job is a definition in kubernetes, we therefore would lose the state of the job only if the job is deliberately deleted.A job will also recover, by itself, from pod manual deletions and pod scheduling errors.
