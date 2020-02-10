@@ -44,7 +44,8 @@ class ThreadedKubernetesWatch(EventHandler):
             create_response_stream {callable} -- The query create command
         
         Keyword Arguments:
-            read_as_object {bool} -- If true, the response value is a dictionary (as json), and should be parsed. (default: {True})
+            read_as_object {bool} -- If true, the response value is a dictionary (as json), and should be parsed. 
+            (default: {True})
         """
         super().__init__()
         self.create_response_stream = create_response_stream
