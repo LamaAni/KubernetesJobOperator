@@ -22,6 +22,3 @@ with open(__file__ + ".yaml", "r", encoding="utf-8") as job_yaml_reader:
 bash_task = BashOperator(bash_command="date", task_id="test-bash", dag=dag)
 
 job_task = KubernetesBaseJobOperator(task_id="test-job", job_yaml=job_yaml, dag=dag)
-
-bash_task >> job_task
-
