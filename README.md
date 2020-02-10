@@ -4,22 +4,26 @@ An airflow job operator, for kubernetes. Given a specific yaml or image and comm
 the operator will execute a Kuberntes Job.
 
 # ALPHA
+
 This repository is in alpha testing, and is published
 to allow contribution.
 
 # Why not use the [kubernetes pod operator](https://github.com/apache/airflow/blob/master/airflow/contrib/operators/kubernetes_pod_operator.p)?
 
-the kubernetes Job object allows for more definitions such as retries/timeouts/deadlines/replicas/etc.. which cannot be defined in directly on a pod. 
+The kubernetes Job object allows for more definitions such as retries/timeouts/deadlines/replicas/etc.. which cannot be defined directly on a pod.
 
 Also, the connection between the pod and the worker can be lost, due to communication issues,
-pod death or just pod scheduling issues while for the a Job (a definition in kubernetes)
-we would lose the state of the job only if the job is deliberately deleted.
+pod deletions or just pod scheduling issues in the cluster. The Kubernetes Job is a definition in kubernetes, we therefore would lose the state of the job only if the job is deliberately deleted.A job will also recover, by itself, from pod manual deletions and pod scheduling errors.
 
-## Open issues for beta
+You can find a description of the kubernetes Job object [here](https://kubernetes.io/docs/concepts/workloads/controllers/jobs-run-to-completion/)
+
+## Open issues for needed for beta release
+
 1. Correction of the kuberntes watcher to allow restart of the watch process
-if connection is lost.
+   if connection is lost.
 
 # Contribution
+
 Feel free to ping me in issues or directly on LinkedIn to contribute.
 
 # Licence
