@@ -2,18 +2,17 @@ import kubernetes
 from typing import Dict, List
 from queue import SimpleQueue
 from .event_handler import EventHandler
-from .threaded_kubernetes_watch import ThreadedKubernetesWatch
-from .threaded_kubernetes_watchers import (
-    ThreadedKubernetesWatcher,
-    ThreadedKuebrnetesLogReader,
-    ThreadedKubernetesNamespaceWatcher,
+from .threaded_kubernetes_watch import (
+    ThreadedKubernetesWatchNamspeace,
+    ThreadedKubernetesWatchPodLog,
+    ThreadedKubernetesWatch,
 )
 
 
 class ThreadedKubernetesObjectsWatcher(EventHandler):
     _object_yaml: str = None
     auto_watch_pod_logs: bool = True
-    _log_reader: ThreadedKuebrnetesLogReader = None
+    _log_reader: ThreadedKubernetesWatchPodLog = None
     _id: str = None
     _has_read_logs = False
     client: kubernetes.client.CoreV1Api = None
@@ -34,7 +33,7 @@ class ThreadedKubernetesObjectsWatcher(EventHandler):
         super().emit(name, *args, **kwargs)
 
     def stop(self):
-        if self._log_reader is not None and not self._log_reader.is_stopped:
+        if self._log_reader is not None and self._log_reader.is_streaming:
             self._log_reader.stop()
 
     @property
@@ -128,20 +127,20 @@ class ThreadedKubernetesObjectsWatcher(EventHandler):
         read_pod_static_logs = self.status != "Running"
 
         if need_read_pod_logs:
-            self._log_reader = ThreadedKuebrnetesLogReader(
-                self.client, self.name, self.namespace
-            )
+            self._log_reader = ThreadedKubernetesWatchPodLog()
             self._log_reader.pipe(self)
             self._has_read_logs = True
             if read_pod_static_logs:
                 # in case where the logs were too fast,
                 # and they need to be read sync.
-                self._log_reader.read_currnet_logs()
+                self._log_reader.read_currnet_logs(
+                    self.client, self.name, self.namespace
+                )
                 self._log_reader = None
                 pass
             else:
                 # async read logs.
-                self._log_reader.start()
+                self._log_reader.start(self.client, self.name, self.namespace)
 
     def update_object_state(self, event_type, object_yaml: dict):
         is_new = self._object_yaml is None
@@ -162,7 +161,7 @@ class ThreadedKubernetesObjectsWatcher(EventHandler):
 
 class ThreadedKubernetesNamespaceObjectsWatcher(EventHandler):
     _object_watchers: Dict[str, ThreadedKubernetesObjectsWatcher] = None
-    _namespace_watchers: Dict[str, List[ThreadedKubernetesWatcher]] = None
+    _namespace_watchers: Dict[str, List[ThreadedKubernetesWatch]] = None
     auto_watch_pod_logs: bool = True
     remove_deleted_kube_objects_from_memory: bool = True
     client: kubernetes.client.CoreV1Api = None
@@ -186,16 +185,16 @@ class ThreadedKubernetesNamespaceObjectsWatcher(EventHandler):
 
         watchers = []
         self._namespace_watchers[namespace] = watchers
-        for watch_type in ["pod", "job", "deployment", "service"]:
-            watcher = ThreadedKubernetesNamespaceWatcher(
-                watch_type,
-                self.client,
-                namespace,
+        for kind in ["Pod", "Job", "Deployment", "Service"]:
+            watcher = ThreadedKubernetesWatchNamspeace()
+            watcher.pipe(self)
+            watcher.start(
+                client=self.client,
+                namespace=namespace,
+                kind=kind,
                 field_selector=field_selector,
                 label_selector=label_selector,
             )
-            watcher.pipe(self)
-            watcher.start()
             watchers.append(watcher)
 
     def emit(self, name, *args, **kwargs):
@@ -240,7 +239,7 @@ class ThreadedKubernetesNamespaceObjectsWatcher(EventHandler):
         predict,
         include_log_events: bool = False,
         timeout: float = None,
-        event: str = "update",
+        event_type: str = "update",
     ) -> ThreadedKubernetesObjectsWatcher:
         class wait_event:
             args: list = None
@@ -256,7 +255,7 @@ class ThreadedKubernetesNamespaceObjectsWatcher(EventHandler):
         def add_queue_event(*args, **kwargs):
             event_queue.put(wait_event(list(args), dict(kwargs)))
 
-        event_handler_idx = self.on(event, add_queue_event)
+        event_handler_idx = self.on(event_type, add_queue_event)
 
         info = None
         while True:
@@ -266,7 +265,7 @@ class ThreadedKubernetesNamespaceObjectsWatcher(EventHandler):
             if predict(*args, **kwargs):
                 break
 
-        self.clear("update", event_handler_idx)
+        self.clear(event_type, event_handler_idx)
         return None if info is None else info.args[-1]
 
     def waitfor_status(

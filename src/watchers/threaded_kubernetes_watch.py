@@ -35,8 +35,14 @@ class ThreadedKubernetesWatch(EventHandler):
     response_wait_timeout: int = 5
     add_default_stream_params: bool = True
     ignore_errors_if_removed: bool = True
+    data_event_name: str = "data"
 
-    def __init__(self, create_response_stream: callable, read_as_object: bool = True):
+    def __init__(
+        self,
+        create_response_stream: callable,
+        read_as_object: bool = True,
+        data_event_name: str = "data",
+    ):
         """Creates a kubernetes threaded watcher that allows
         streaming events from kubernetes. The watcher implements a reconnect
         specifications.
@@ -61,6 +67,7 @@ class ThreadedKubernetesWatch(EventHandler):
         self.response_wait_timeout = 5
         self.add_default_stream_params = True
         self.ignore_errors_if_removed = True
+        self.data_event_name = data_event_name
 
     @property
     def is_streaming(self):
@@ -140,7 +147,9 @@ class ThreadedKubernetesWatch(EventHandler):
                     was_started = True
                     for line in read_lines():
                         kuberentes_event_data = self.read_event(line)
-                        self._invoke_threaded_event("data", kuberentes_event_data)
+                        self._invoke_threaded_event(
+                            self.data_event_name, kuberentes_event_data
+                        )
 
                 except ApiException as e:
 
@@ -209,7 +218,7 @@ class ThreadedKubernetesWatch(EventHandler):
                     raise Exception(
                         "Invalid queue stream object type. Must be an instance of ThreadedKubernetesWatchThreadEvent"
                     )
-                if event.event_type == "data":
+                if event.event_type == self.data_event_name:
                     yield event.event_value
                 elif event.event_type == "stopped":
                     break
@@ -279,6 +288,7 @@ class ThreadedKubernetesWatchPodLog(ThreadedKubernetesWatch):
             lambda *args, **kwargs: self.create_log_reader(*args, **kwargs),
             read_as_object=False,
         )
+        self.data_event_name = "log"
 
     def create_log_reader(
         self,
@@ -292,15 +302,26 @@ class ThreadedKubernetesWatchPodLog(ThreadedKubernetesWatch):
             name, namespace, follow=True, *args, **kwargs
         )[0]
 
-    def stream(self, client: kubernetes.client.CoreV1Api, name, namespace):
+    def stream(self, client: kubernetes.client.CoreV1Api, name: str, namespace: str):
         return ThreadedKubernetesWatch.stream(
             self, client=client, name=name, namespace=namespace
         )
 
-    def start(self, client: kubernetes.client.CoreV1Api, name, namespace):
+    def start(self, client: kubernetes.client.CoreV1Api, name: str, namespace: str):
         return ThreadedKubernetesWatch.start(
             self, client=client, name=name, namespace=namespace
         )
+
+    def read_currnet_logs(
+        self, client: kubernetes.client.CoreV1Api, name: str, namespace: str
+    ):
+        log_lines = client.read_namespaced_pod_log(name, namespace)
+        if not isinstance(log_lines, list):
+            log_lines = log_lines.split("\n")
+
+        for possible_line in log_lines:
+            for line in possible_line.split("\n"):
+                self._invoke_threaded_event("daga", self.read_event(line))
 
 
 class ThreadedKubernetesWatchNamspeace(ThreadedKubernetesWatch):
@@ -309,6 +330,7 @@ class ThreadedKubernetesWatchNamspeace(ThreadedKubernetesWatch):
             lambda *args, **kwargs: self.create_namespace_watcher(*args, **kwargs),
             read_as_object=True,
         )
+        self.data_event_name = "update"
 
     def __kind_to_watch_uri(self, namespace, kind):
         if kind == "Pod":
