@@ -66,7 +66,7 @@ class ThreadedKubernetesObjectsWatcher(EventHandler):
             self._log_reader.stop()
 
     @property
-    def id(self):
+    def id(self) -> str:
         """The watcher id, composed by the current kuberentes
         path and values. May contain chars: a-z0-9/-.
         
@@ -77,7 +77,7 @@ class ThreadedKubernetesObjectsWatcher(EventHandler):
         return self._id
 
     @property
-    def kind(self):
+    def kind(self) -> str:
         """The object kind
         
         Returns:
@@ -111,7 +111,7 @@ class ThreadedKubernetesObjectsWatcher(EventHandler):
         return self.yaml["metadata"]["namespace"]
 
     @staticmethod
-    def compose_object_id_from_yaml(object_yaml: dict):
+    def compose_object_id_from_yaml(object_yaml: dict) -> str:
         """Returns the object composed id from the object yaml
         definition.
         
@@ -130,7 +130,7 @@ class ThreadedKubernetesObjectsWatcher(EventHandler):
         )
 
     @staticmethod
-    def compose_object_id_from_values(kind, namespace, name):
+    def compose_object_id_from_values(kind, namespace, name) -> str:
         """Composes an object id given the specific required values.
         
         Arguments:
@@ -146,7 +146,7 @@ class ThreadedKubernetesObjectsWatcher(EventHandler):
         return "/".join([kind, namespace, name])
 
     @staticmethod
-    def read_job_status_from_yaml(status_yaml: dict, backoffLimit: int = 0):
+    def read_job_status_from_yaml(status_yaml: dict, backoffLimit: int = 0) -> str:
         """Returns a single job status value, after 
         taking into account the description in the status yaml.
         
@@ -174,8 +174,8 @@ class ThreadedKubernetesObjectsWatcher(EventHandler):
         return job_status
 
     @property
-    def status(self):
-        """Returns the status of the current object.
+    def status(self) -> str:
+        """Returns the inferred status of the current object.
         
         Raises:
             Exception: [description]
@@ -254,7 +254,7 @@ class ThreadedKubernetesObjectsWatcher(EventHandler):
                 # async read logs.
                 self._log_reader.start(self.client, self.name, self.namespace)
 
-    def update_object_state(self, event_type:str, object_yaml: dict):
+    def update_object_state(self, event_type: str, object_yaml: dict):
         """Call to update an object state to match the object_yaml
         description. Will trigger reader watchers if needed.
         
@@ -287,18 +287,43 @@ class ThreadedKubernetesNamespaceObjectsWatcher(EventHandler):
     client: kubernetes.client.CoreV1Api = None
 
     def __init__(self, client: kubernetes.client.CoreV1Api):
+        """A namespace object (resource) watcher. Allows for multiple namespaces
+        and multiple filtering values.
+        
+        Arguments:
+
+            client {kubernetes.client.CoreV1Api} -- The kubernetes client.
+        """
         super().__init__()
         self.client = client
         self._object_watchers = dict()
         self._namespace_watchers = dict()
 
     @property
-    def object_watchers(self):
+    def object_watchers(self) -> Dict[str, ThreadedKubernetesObjectsWatcher]:
+        """The collection of object watchers associated
+        with this namespace watcher.
+        
+        Returns:
+
+            Dict[str, ThreadedKubernetesObjectsWatcher]
+        """
         return self._object_watchers
 
     def watch_namespace(
         self, namespace: str, label_selector: str = None, field_selector: str = None
     ):
+        """Add a watch condition on namespace.
+        
+        Arguments:
+
+            namespace {str} -- The namespace
+        
+        Keyword Arguments:
+
+            label_selector {str} -- The label selector to filter objects (default: {None})
+            field_selector {str} -- The field selector to filter objects (default: {None})
+        """
         assert isinstance(namespace, str) and len(namespace) > 0
         if namespace in self._namespace_watchers:
             raise Exception("Namespace already being watched.")
@@ -318,17 +343,36 @@ class ThreadedKubernetesNamespaceObjectsWatcher(EventHandler):
             watchers.append(watcher)
 
     def emit(self, name, *args, **kwargs):
+        """Emits the event to all the event handler
+        callable(s). Any argument sent after name, will
+        be passed to the event handler.
+        
+        Arguments:
+
+            name {str} -- The name of the event to emit.
+        """
+        if len(args) < 2:
+            args = list(args) + [self]
+        super().emit(name, *args, **kwargs)
         if name == "DELETED":
-            self.delete_object(args[0])
+            self._delete_object(args[0])
         elif name == "update":
-            self.update_object(args[0])
+            self._update_object(args[0])
 
         if len(args) < 2:
             args = list(args) + [self]
 
         super().emit(name, *args, **kwargs)
 
-    def update_object(self, event):
+    def _update_object(self, event: dict):
+        """FOR INTERNAL USE ONLY.
+        Updates a matched object watcher with the yaml events.
+        Will create object watchers if needed.
+        
+        Arguments:
+        
+            event {dict} -- The kubernetes event dict.
+        """
         kube_object = event["object"]
         event_type = event["type"]
         oid = ThreadedKubernetesObjectsWatcher.compose_object_id_from_yaml(kube_object)
@@ -342,9 +386,16 @@ class ThreadedKubernetesNamespaceObjectsWatcher(EventHandler):
 
         self._object_watchers[oid].update_object_state(event_type, kube_object)
 
-    def delete_object(self, event):
+    def _delete_object(self, event):
+        """FOR INTERNAL USE ONLY.
+        Deletes a matched object watcher with the yaml events.
+        
+        Arguments:
+
+            event {dict} -- The kubernetes event dict.
+        """
         # first update the current object.
-        self.update_object(event)
+        self._update_object(event)
 
         kube_object = event["object"]
         oid = ThreadedKubernetesObjectsWatcher.compose_object_id_from_yaml(kube_object)
@@ -356,11 +407,34 @@ class ThreadedKubernetesNamespaceObjectsWatcher(EventHandler):
 
     def waitfor(
         self,
-        predict,
+        predict: callable,
         include_log_events: bool = False,
         timeout: float = None,
-        event_type: str = "update",
+        event_name: str = "update",
     ) -> ThreadedKubernetesObjectsWatcher:
+        """A thread blocker method to wait for 
+        a condition. This method will wait until
+        the result of the predict callable is true.
+        
+        Arguments:
+
+            predict {callable(*args,**kwargs)} -- A method to predict
+            when to stop waiting. This method accepts the arguments as
+            they were sent to the event.
+        
+        Keyword Arguments:
+
+            include_log_events {bool} -- [description] (default: {False})
+            timeout {float} -- If specified, the timeout to wait until
+            throwing an error (default: {None})
+            event_name {str} -- The name of the event to wait for (default: {"update"})
+        
+        Returns:
+
+            ThreadedKubernetesObjectsWatcher -- The associated object
+            which fulfilled the wait for event.
+        """
+
         class wait_event:
             args: list = None
             kwargs: dict = None
@@ -375,7 +449,7 @@ class ThreadedKubernetesNamespaceObjectsWatcher(EventHandler):
         def add_queue_event(*args, **kwargs):
             event_queue.put(wait_event(list(args), dict(kwargs)))
 
-        event_handler_idx = self.on(event_type, add_queue_event)
+        event_handler_idx = self.on(event_name, add_queue_event)
 
         info = None
         while True:
@@ -385,7 +459,7 @@ class ThreadedKubernetesNamespaceObjectsWatcher(EventHandler):
             if predict(*args, **kwargs):
                 break
 
-        self.clear(event_type, event_handler_idx)
+        self.clear(event_name, event_handler_idx)
         return None if info is None else info.args[-1]
 
     def waitfor_status(
@@ -395,10 +469,29 @@ class ThreadedKubernetesNamespaceObjectsWatcher(EventHandler):
         namespace: str = None,
         status: str = None,
         status_list: List[str] = None,
-        predict=None,
+        predict: callable = None,
         timeout: float = None,
-        check_past_events: bool = True,
+        check_current_status: bool = True,
     ) -> ThreadedKubernetesObjectsWatcher:
+        """Block the thread and wait for a valid status event.
+        
+        Keyword Arguments:
+
+            kind {str} -- The object kind filter. (default: {None})
+            name {str} -- The object name filter. (default: {None})
+            namespace {str} -- The object namespace filter. (default: {None})
+            status {str} -- A status to wait for (default: {None})
+            status_list {List[str]} -- A list of status values to wait for (default: {None})
+            predict {callable} -- A predict(status,*args,**kwargs) method
+            to determine when the condition has been met. (default: {None})
+            timeout {float} -- Timeout to wait. (default: {None})
+            check_current_status {bool} -- If true, then will also check current status.
+            (default: {True})
+        
+        Returns:
+
+            ThreadedKubernetesObjectsWatcher -- The object watcher.
+        """
         assert (
             status is not None
             or (status_list is not None and len(status_list) > 0)
@@ -426,7 +519,7 @@ class ThreadedKubernetesNamespaceObjectsWatcher(EventHandler):
             return predict(status, sender)
 
         # check if need past events to be loaded.
-        if check_past_events:
+        if check_current_status:
             for sender in self._object_watchers.values():
                 if wait_predict(sender.status, sender):
                     return sender
@@ -434,6 +527,8 @@ class ThreadedKubernetesNamespaceObjectsWatcher(EventHandler):
         return self.waitfor(wait_predict, False, timeout=timeout, event_type="status")
 
     def stop(self):
+        """Stop all executing watchers.
+        """
         for namespace, watchers in self._namespace_watchers.items():
             for watcher in watchers:
                 watcher.stop()
