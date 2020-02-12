@@ -20,9 +20,11 @@ class ThreadedKubernetesWatchThreadEvent:
         """A watch event, called from the reader thread.
         
         Arguments:
+
             event_type {str} -- The type of the event
         
         Keyword Arguments:
+
             value {any} -- The event value (default: {None})
         """
         super().__init__()
@@ -46,16 +48,21 @@ class ThreadedKubernetesWatch(EventHandler):
     data_event_name: str = "data"
 
     def __init__(
-        self, create_response_stream: callable, read_as_object: bool = True, data_event_name: str = "data",
+        self,
+        create_response_stream: callable,
+        read_as_object: bool = True,
+        data_event_name: str = "data",
     ):
-        """Creates a threaded response reader, for the kubernetes api.
+        """Creates a threaded response reader, for the kubernetes API.
         Allows for partial readers, with continue on network disconnect.
         The stop command will kill the reader thread and associated connections.
         
         Arguments:
+
             create_response_stream {callable} -- The query create command
         
         Keyword Arguments:
+
             read_as_object {bool} -- If true, the response value is a dictionary 
             (as json), and should be parsed. (default: {True})
         """
@@ -87,9 +94,11 @@ class ThreadedKubernetesWatch(EventHandler):
         """Parses the event data.
         
         Arguments:
+
             data {str} -- The event data.
         
         Returns:
+
             dict/str -- Returns the parsed data, depending on read_as_object.
         """
         if self.read_as_object:
@@ -101,9 +110,11 @@ class ThreadedKubernetesWatch(EventHandler):
         """Call to emit an event.
         
         Arguments:
+
             event_type {str} -- The type of the event
         
         Keyword Arguments:
+
             event_value {any} -- The event value(default: {None})
         """
         self.emit(event_type, event_value)
@@ -115,6 +126,7 @@ class ThreadedKubernetesWatch(EventHandler):
         The reader thread.
         
         Yields:
+
             str -- data line.
         """
         # define a line reader.
@@ -195,8 +207,9 @@ class ThreadedKubernetesWatch(EventHandler):
         Call to start the streaming thread.
         
         Keyword Arguments:
+
             run_async {bool} -- The final events will be reader
-            async (default: {False})
+            run_async (default: {False})
         """
         if self.is_streaming:
             raise Exception("Already streaming, cannot start multiple streams")
@@ -211,7 +224,7 @@ class ThreadedKubernetesWatch(EventHandler):
 
     def _clear_streaming_thread(self):
         """FOR INTERNAL USE ONLY.
-        Clear the current executing thead, either
+        Clear the current executing thread, either
         by a clean stop (Wait for it) or destroy it.
         """
         if self._thread_cleanly_exiting:
@@ -230,6 +243,7 @@ class ThreadedKubernetesWatch(EventHandler):
         method provided in the constructor. (create_response_stream)
 
         Yields:
+        
             any -- The event object/str
         """
 
@@ -309,20 +323,66 @@ class ThreadedKubernetesWatch(EventHandler):
 
 class ThreadedKubernetesWatchPodLog(ThreadedKubernetesWatch):
     def __init__(self):
+        """Create a threaded pod log reader, that will watch the pods
+        for changes, and emit these as a 'log' event.
+        
+        Events:
+
+            log - called on log.
+            (other events inherited from ThreadedKubernetesWatch)
+        """
         super().__init__(
-            lambda *args, **kwargs: self.create_log_reader(*args, **kwargs), read_as_object=False,
+            lambda *args, **kwargs: self._create_log_reader(*args, **kwargs), read_as_object=False,
         )
         self.data_event_name = "log"
 
-    def create_log_reader(
+    def _create_log_reader(
         self, client: kubernetes.client.CoreV1Api, name: str, namespace: str, *args, **kwargs,
     ):
-        return client.read_namespaced_pod_log_with_http_info(name, namespace, follow=True, *args, **kwargs)[0]
+        """PRIVATE FOR INTERNAL USE ONLY.
+        
+        Arguments:
+
+            client {kubernetes.client.CoreV1Api} -- The client
+            name {str} -- The pod name
+            namespace {str} -- The pod namespace.
+        
+        Returns:
+
+            HTTPResponse -- The http response.
+        """
+        return client.read_namespaced_pod_log_with_http_info(
+            name, namespace, follow=True, *args, **kwargs
+        )[0]
 
     def stream(self, client: kubernetes.client.CoreV1Api, name: str, namespace: str):
+        """Call to stream log events from a specific pod. Returns iterator.
+        
+        Arguments:
+
+            client {kubernetes.client.CoreV1Api} -- The kubernetes client
+            name {str} -- The pod
+            namespace {str} -- The pod namespace.
+        
+        Returns:
+
+            iterator(str) -- The pod log iterator.
+        """
         return ThreadedKubernetesWatch.stream(self, client=client, name=name, namespace=namespace)
 
     def start(self, client: kubernetes.client.CoreV1Api, name: str, namespace: str):
+        """Starts the pod log reader asynchronically. 
+        
+        Arguments:
+
+            client {kubernetes.client.CoreV1Api} -- [description]
+            name {str} -- [description]
+            namespace {str} -- [description]
+        
+        Returns:
+        
+            [type] -- [description]
+        """
         return ThreadedKubernetesWatch.start(self, client=client, name=name, namespace=namespace)
 
     def read_currnet_logs(self, client: kubernetes.client.CoreV1Api, name: str, namespace: str):
@@ -338,7 +398,8 @@ class ThreadedKubernetesWatchPodLog(ThreadedKubernetesWatch):
 class ThreadedKubernetesWatchNamspeace(ThreadedKubernetesWatch):
     def __init__(self):
         super().__init__(
-            lambda *args, **kwargs: self.create_namespace_watcher(*args, **kwargs), read_as_object=True,
+            lambda *args, **kwargs: self.create_namespace_watcher(*args, **kwargs),
+            read_as_object=True,
         )
         self.data_event_name = "update"
 

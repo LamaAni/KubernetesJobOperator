@@ -18,7 +18,28 @@ class ThreadedKubernetesObjectsWatcher(EventHandler):
     client: kubernetes.client.CoreV1Api = None
     _was_deleted: bool = False
 
-    def __init__(self, client, object_yaml, auto_watch_pod_logs: bool = True):
+    def __init__(
+        self,
+        client: kubernetes.client.CoreV1Api,
+        object_yaml: dict,
+        auto_watch_pod_logs: bool = True,
+    ):
+        """A namespace object state holder, with an internal
+        log reader for pods.
+        
+        Do not create this object directly, use the 
+        ThreadedKubernetesNamespaceObjectsWatcher to watch for object
+        changes in the namespace.
+        
+        Arguments:
+
+            client {kubernetes.client.CoreV1Api} -- The api client.
+            object_yaml {dict} -- The object yaml description.
+        
+        Keyword Arguments:
+        
+            auto_watch_pod_logs {bool} -- [description] (default: {True})
+        """
         super().__init__()
         self.client = client
         self._id = ThreadedKubernetesObjectsWatcher.compose_object_id_from_yaml(object_yaml)
@@ -26,20 +47,44 @@ class ThreadedKubernetesObjectsWatcher(EventHandler):
         self._was_deleted = False
 
     def emit(self, name, *args, **kwargs):
+        """Emits the event to all the event handler
+        callable(s). Any argument sent after name, will
+        be passed to the event handler.
+        
+        Arguments:
+
+            name {str} -- The name of the event to emit.
+        """
         if len(args) < 2:
             args = list(args) + [self]
         super().emit(name, *args, **kwargs)
 
     def stop(self):
+        """Stop all executing internal watchers.
+        """
         if self._log_reader is not None and self._log_reader.is_streaming:
             self._log_reader.stop()
 
     @property
     def id(self):
+        """The watcher id, composed by the current kuberentes
+        path and values. May contain chars: a-z0-9/-.
+        
+        Returns:
+
+            str
+        """
         return self._id
 
     @property
     def kind(self):
+        """The object kind
+        
+        Returns:
+
+            str -- May be any of the kubernetes resources, 
+            i.e. "Pod, Deployment, Job, Service ..."
+        """
         return self.yaml["kind"]
 
     @property
@@ -57,7 +102,9 @@ class ThreadedKubernetesObjectsWatcher(EventHandler):
     @staticmethod
     def compose_object_id_from_yaml(object_yaml):
         return ThreadedKubernetesObjectsWatcher.compose_object_id_from_values(
-            object_yaml["kind"], object_yaml["metadata"]["namespace"], object_yaml["metadata"]["name"],
+            object_yaml["kind"],
+            object_yaml["metadata"]["namespace"],
+            object_yaml["metadata"]["name"],
         )
 
     @staticmethod
@@ -167,7 +214,9 @@ class ThreadedKubernetesNamespaceObjectsWatcher(EventHandler):
     def object_watchers(self):
         return self._object_watchers
 
-    def watch_namespace(self, namespace: str, label_selector: str = None, field_selector: str = None):
+    def watch_namespace(
+        self, namespace: str, label_selector: str = None, field_selector: str = None
+    ):
         assert isinstance(namespace, str) and len(namespace) > 0
         if namespace in self._namespace_watchers:
             raise Exception("Namespace already being watched.")
@@ -224,7 +273,11 @@ class ThreadedKubernetesNamespaceObjectsWatcher(EventHandler):
                 del self._object_watchers[oid]
 
     def waitfor(
-        self, predict, include_log_events: bool = False, timeout: float = None, event_type: str = "update",
+        self,
+        predict,
+        include_log_events: bool = False,
+        timeout: float = None,
+        event_type: str = "update",
     ) -> ThreadedKubernetesObjectsWatcher:
         class wait_event:
             args: list = None
@@ -264,7 +317,11 @@ class ThreadedKubernetesNamespaceObjectsWatcher(EventHandler):
         timeout: float = None,
         check_past_events: bool = True,
     ) -> ThreadedKubernetesObjectsWatcher:
-        assert status is not None or (status_list is not None and len(status_list) > 0) or predict is not None
+        assert (
+            status is not None
+            or (status_list is not None and len(status_list) > 0)
+            or predict is not None
+        )
 
         def default_predict(match_status: str, sender: ThreadedKubernetesObjectsWatcher):
             if status is not None and status == match_status:

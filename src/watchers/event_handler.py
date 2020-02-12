@@ -20,7 +20,7 @@ class EventHandler:
         
         Arguments:
             name {str} -- The event name
-            handler {callable} -- The mmethod/other to
+            handler {callable} -- The method/other to
             be called when the event is triggered.
         
         Returns:
@@ -72,7 +72,7 @@ class EventHandler:
 
     def emit(self, name: str, *args, **kwargs):
         """Emits the event to all the event handler
-        callables. Any arguments sent after name, will
+        callable(s). Any arguments sent after name, will
         be passed to the event handler.
         
         Arguments:
@@ -86,8 +86,8 @@ class EventHandler:
             evnet_handler.emit(name, *args, **kwargs)
 
     def pipe(self, other):
-        """Pipe all events emitted from this hanlder
-        to anohter handler. This action cannot be reverted.
+        """Pipe all events emitted from this handler
+        to another handler. This action cannot be reverted.
         
         Arguments:
             other {EventHandler} -- The event handler to pipe to.
