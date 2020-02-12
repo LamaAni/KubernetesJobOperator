@@ -37,7 +37,7 @@ class ThreadedKubernetesObjectsWatcher(EventHandler):
             object_yaml {dict} -- The object yaml description.
         
         Keyword Arguments:
-        
+
             auto_watch_pod_logs {bool} -- [description] (default: {True})
         """
         super().__init__()
@@ -89,18 +89,40 @@ class ThreadedKubernetesObjectsWatcher(EventHandler):
 
     @property
     def yaml(self) -> dict:
+        """The full object yaml as dictionary.
+        This property updates on cluster changes.
+        
+        Returns:
+
+            dict -- The yaml as dict
+        """
         return self._object_yaml
 
     @property
     def name(self) -> str:
+        """The object name
+        """
         return self.yaml["metadata"]["name"]
 
     @property
     def namespace(self) -> str:
+        """The object namespace.
+        """
         return self.yaml["metadata"]["namespace"]
 
     @staticmethod
-    def compose_object_id_from_yaml(object_yaml):
+    def compose_object_id_from_yaml(object_yaml: dict):
+        """Returns the object composed id from the object yaml
+        definition.
+        
+        Arguments:
+
+            object_yaml {dict} -- The object yaml
+        
+        Returns:
+
+            str -- The object id.
+        """
         return ThreadedKubernetesObjectsWatcher.compose_object_id_from_values(
             object_yaml["kind"],
             object_yaml["metadata"]["namespace"],
@@ -109,10 +131,38 @@ class ThreadedKubernetesObjectsWatcher(EventHandler):
 
     @staticmethod
     def compose_object_id_from_values(kind, namespace, name):
+        """Composes an object id given the specific required values.
+        
+        Arguments:
+
+            kind {str} -- The object kind
+            namespace {str} -- The object namespace
+            name {str} -- The object name
+        
+        Returns:
+
+            str -- The object id.
+        """
         return "/".join([kind, namespace, name])
 
     @staticmethod
-    def read_job_status_from_yaml(status_yaml, backoffLimit: int = 0):
+    def read_job_status_from_yaml(status_yaml: dict, backoffLimit: int = 0):
+        """Returns a single job status value, after 
+        taking into account the description in the status yaml.
+        
+        Arguments:
+
+            status_yaml {dict} -- The job status yaml dict.
+        
+        Keyword Arguments:
+
+            backoffLimit {int} -- The job backoff limit (can be read
+            from the job yaml) (default: {0})
+        
+        Returns:
+
+            str -- The inferred job status. Can be any of: Pending, Succeeded, Failed, Running
+        """
         job_status = "Pending"
         if "startTime" in status_yaml:
             if "completionTime" in status_yaml:
@@ -125,6 +175,21 @@ class ThreadedKubernetesObjectsWatcher(EventHandler):
 
     @property
     def status(self):
+        """Returns the status of the current object.
+        
+        Raises:
+            Exception: [description]
+        
+        Returns:
+        
+            str -- The object status. Can be any of: 
+                Pending - The object task has not started yet.
+                Running - The task is currently running.
+                Succeeded - The object completed its task successfully
+                Failed - The object received an error and is considered Failed.
+                Deleted - Was deleted (not is terminating)
+                Active - (in case the object is definition "like", for example Service)
+        """
         if self.kind == "Service":
             return "Deleted" if self._was_deleted else "Active"
         elif self.kind == "Job":
@@ -159,7 +224,16 @@ class ThreadedKubernetesObjectsWatcher(EventHandler):
         else:
             raise Exception("Not implemented for kind: " + self.kind)
 
-    def update_pod_state(self, event_type, old_status):
+    def _update_pod_state(self, event_type: str, old_status: str):
+        """FOR INTERNAL USE ONLY. Called to update 
+        in the case of a kind=Pod. Will trigger log reading if 
+        that is possible.
+        
+        Arguments:
+
+            event_type {str} -- The update event type
+            old_status {str} -- The previous pod status, or None.
+        """
         # Called to update a current pod state.
         # may start/read pod logs.
         cur_status = self.status
@@ -180,7 +254,15 @@ class ThreadedKubernetesObjectsWatcher(EventHandler):
                 # async read logs.
                 self._log_reader.start(self.client, self.name, self.namespace)
 
-    def update_object_state(self, event_type, object_yaml: dict):
+    def update_object_state(self, event_type:str, object_yaml: dict):
+        """Call to update an object state to match the object_yaml
+        description. Will trigger reader watchers if needed.
+        
+        Arguments:
+        
+            event_type {str} -- The event type.
+            object_yaml {dict} -- The object yaml description.
+        """
         is_new = self._object_yaml is None
         old_status = None if is_new else self.status
 
@@ -191,7 +273,7 @@ class ThreadedKubernetesObjectsWatcher(EventHandler):
             self._was_deleted = event_type == "DELETED"
 
         if self.kind == "Pod":
-            self.update_pod_state(event_type, old_status)
+            self._update_pod_state(event_type, old_status)
 
         if old_status != self.status:
             self.emit("status", self.status, self)
