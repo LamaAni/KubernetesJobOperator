@@ -50,9 +50,7 @@ class EventHandler:
             bool -- True if event exists.
         """
         if index is not None:
-            return (
-                name in self.message_handlers and index in self.message_handlers[name]
-            )
+            return name in self.message_handlers and index in self.message_handlers[name]
         return name in self.message_handlers
 
     def clear(self, name: str, idx: int = None):

@@ -17,6 +17,14 @@ class ThreadedKubernetesWatchThreadEvent:
     event_value = None
 
     def __init__(self, event_type, value=None):
+        """A watch event, called from the reader thread.
+        
+        Arguments:
+            event_type {str} -- The type of the event
+        
+        Keyword Arguments:
+            value {any} -- The event value (default: {None})
+        """
         super().__init__()
         self.event_type = event_type
         self.event_value = value
@@ -38,21 +46,18 @@ class ThreadedKubernetesWatch(EventHandler):
     data_event_name: str = "data"
 
     def __init__(
-        self,
-        create_response_stream: callable,
-        read_as_object: bool = True,
-        data_event_name: str = "data",
+        self, create_response_stream: callable, read_as_object: bool = True, data_event_name: str = "data",
     ):
-        """Creates a kubernetes threaded watcher that allows
-        streaming events from kubernetes. The watcher implements a reconnect
-        specifications.
+        """Creates a threaded response reader, for the kubernetes api.
+        Allows for partial readers, with continue on network disconnect.
+        The stop command will kill the reader thread and associated connections.
         
         Arguments:
             create_response_stream {callable} -- The query create command
         
         Keyword Arguments:
-            read_as_object {bool} -- If true, the response value is a dictionary (as json), and should be parsed.
-            (default: {True})
+            read_as_object {bool} -- If true, the response value is a dictionary 
+            (as json), and should be parsed. (default: {True})
         """
         super().__init__()
         self._streaming_thread = None
@@ -71,6 +76,11 @@ class ThreadedKubernetesWatch(EventHandler):
 
     @property
     def is_streaming(self):
+        """True if currently reading events from the kubernetes cluster.
+        
+        Returns:
+            bool -- True if streaming.
+        """
         return self._streaming_thread is not None and self._streaming_thread.is_alive()
 
     def read_event(self, data):
@@ -87,15 +97,22 @@ class ThreadedKubernetesWatch(EventHandler):
         else:
             return data
 
-    def _invoke_threaded_event(self, event_type, event_value=None):
+    def _invoke_threaded_event(self, event_type: str, event_value=None):
+        """Call to emit an event.
+        
+        Arguments:
+            event_type {str} -- The type of the event
+        
+        Keyword Arguments:
+            event_value {any} -- The event value(default: {None})
+        """
         self.emit(event_type, event_value)
         if self._stream_queue is not None:
-            self._stream_queue.put(
-                ThreadedKubernetesWatchThreadEvent(event_type, event_value)
-            )
+            self._stream_queue.put(ThreadedKubernetesWatchThreadEvent(event_type, event_value))
 
     def _reader_thread(self, *args, **kwargs):
-        """Private - The reader thread.
+        """ FOR INTERNAL USE ONLY.
+        The reader thread.
         
         Yields:
             str -- data line.
@@ -147,9 +164,7 @@ class ThreadedKubernetesWatch(EventHandler):
                     was_started = True
                     for line in read_lines():
                         kuberentes_event_data = self.read_event(line)
-                        self._invoke_threaded_event(
-                            self.data_event_name, kuberentes_event_data
-                        )
+                        self._invoke_threaded_event(self.data_event_name, kuberentes_event_data)
 
                 except ApiException as e:
 
@@ -176,19 +191,29 @@ class ThreadedKubernetesWatch(EventHandler):
             self._invoke_threaded_event("stopped")
 
     def _start_streaming_thread(self, run_async=False, *args, **kwargs):
+        """ FOR INTERNAL USE ONLY.
+        Call to start the streaming thread.
+        
+        Keyword Arguments:
+            run_async {bool} -- The final events will be reader
+            async (default: {False})
+        """
         if self.is_streaming:
             raise Exception("Already streaming, cannot start multiple streams")
 
         self._thread_cleanly_exiting = False
         self._stream_queue = SimpleQueue() if not run_async else None
         self._streaming_thread = threading.Thread(
-            target=lambda args, kwargs: self._reader_thread(*args, **kwargs),
-            args=(args, kwargs),
+            target=lambda args, kwargs: self._reader_thread(*args, **kwargs), args=(args, kwargs),
         )
 
         self._streaming_thread.start()
 
     def _clear_streaming_thread(self):
+        """FOR INTERNAL USE ONLY.
+        Clear the current executing thead, either
+        by a clean stop (Wait for it) or destroy it.
+        """
         if self._thread_cleanly_exiting:
             if self._streaming_thread.isAlive():
                 self._streaming_thread.join()
@@ -285,36 +310,22 @@ class ThreadedKubernetesWatch(EventHandler):
 class ThreadedKubernetesWatchPodLog(ThreadedKubernetesWatch):
     def __init__(self):
         super().__init__(
-            lambda *args, **kwargs: self.create_log_reader(*args, **kwargs),
-            read_as_object=False,
+            lambda *args, **kwargs: self.create_log_reader(*args, **kwargs), read_as_object=False,
         )
         self.data_event_name = "log"
 
     def create_log_reader(
-        self,
-        client: kubernetes.client.CoreV1Api,
-        name: str,
-        namespace: str,
-        *args,
-        **kwargs,
+        self, client: kubernetes.client.CoreV1Api, name: str, namespace: str, *args, **kwargs,
     ):
-        return client.read_namespaced_pod_log_with_http_info(
-            name, namespace, follow=True, *args, **kwargs
-        )[0]
+        return client.read_namespaced_pod_log_with_http_info(name, namespace, follow=True, *args, **kwargs)[0]
 
     def stream(self, client: kubernetes.client.CoreV1Api, name: str, namespace: str):
-        return ThreadedKubernetesWatch.stream(
-            self, client=client, name=name, namespace=namespace
-        )
+        return ThreadedKubernetesWatch.stream(self, client=client, name=name, namespace=namespace)
 
     def start(self, client: kubernetes.client.CoreV1Api, name: str, namespace: str):
-        return ThreadedKubernetesWatch.start(
-            self, client=client, name=name, namespace=namespace
-        )
+        return ThreadedKubernetesWatch.start(self, client=client, name=name, namespace=namespace)
 
-    def read_currnet_logs(
-        self, client: kubernetes.client.CoreV1Api, name: str, namespace: str
-    ):
+    def read_currnet_logs(self, client: kubernetes.client.CoreV1Api, name: str, namespace: str):
         log_lines = client.read_namespaced_pod_log(name, namespace)
         if not isinstance(log_lines, list):
             log_lines = log_lines.split("\n")
@@ -327,8 +338,7 @@ class ThreadedKubernetesWatchPodLog(ThreadedKubernetesWatch):
 class ThreadedKubernetesWatchNamspeace(ThreadedKubernetesWatch):
     def __init__(self):
         super().__init__(
-            lambda *args, **kwargs: self.create_namespace_watcher(*args, **kwargs),
-            read_as_object=True,
+            lambda *args, **kwargs: self.create_namespace_watcher(*args, **kwargs), read_as_object=True,
         )
         self.data_event_name = "update"
 
@@ -381,9 +391,7 @@ class ThreadedKubernetesWatchNamspeace(ThreadedKubernetesWatch):
                 "application/vnd.kubernetes.protobuf;stream=watch",
             ]
         )
-        header_params["Content-Type"] = client.api_client.select_header_content_type(
-            ["*/*"]
-        )
+        header_params["Content-Type"] = client.api_client.select_header_content_type(["*/*"])
 
         # Authentication
         auth_settings = ["BearerToken"]

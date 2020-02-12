@@ -21,9 +21,7 @@ class ThreadedKubernetesObjectsWatcher(EventHandler):
     def __init__(self, client, object_yaml, auto_watch_pod_logs: bool = True):
         super().__init__()
         self.client = client
-        self._id = ThreadedKubernetesObjectsWatcher.compose_object_id_from_yaml(
-            object_yaml
-        )
+        self._id = ThreadedKubernetesObjectsWatcher.compose_object_id_from_yaml(object_yaml)
         self.auto_watch_pod_logs = auto_watch_pod_logs
         self._was_deleted = False
 
@@ -59,9 +57,7 @@ class ThreadedKubernetesObjectsWatcher(EventHandler):
     @staticmethod
     def compose_object_id_from_yaml(object_yaml):
         return ThreadedKubernetesObjectsWatcher.compose_object_id_from_values(
-            object_yaml["kind"],
-            object_yaml["metadata"]["namespace"],
-            object_yaml["metadata"]["name"],
+            object_yaml["kind"], object_yaml["metadata"]["namespace"], object_yaml["metadata"]["name"],
         )
 
     @staticmethod
@@ -106,8 +102,7 @@ class ThreadedKubernetesObjectsWatcher(EventHandler):
                         if (
                             "waiting" in container_status["state"]
                             and "reason" in container_status["state"]["waiting"]
-                            and "BackOff"
-                            in container_status["state"]["waiting"]["reason"]
+                            and "BackOff" in container_status["state"]["waiting"]["reason"]
                         ):
                             return "Failed"
                         if "error" in container_status["state"]:
@@ -121,9 +116,7 @@ class ThreadedKubernetesObjectsWatcher(EventHandler):
         # Called to update a current pod state.
         # may start/read pod logs.
         cur_status = self.status
-        need_read_pod_logs = (
-            cur_status and cur_status != "Pending" and not self._has_read_logs
-        )
+        need_read_pod_logs = cur_status and cur_status != "Pending" and not self._has_read_logs
         read_pod_static_logs = self.status != "Running"
 
         if need_read_pod_logs:
@@ -133,9 +126,7 @@ class ThreadedKubernetesObjectsWatcher(EventHandler):
             if read_pod_static_logs:
                 # in case where the logs were too fast,
                 # and they need to be read sync.
-                self._log_reader.read_currnet_logs(
-                    self.client, self.name, self.namespace
-                )
+                self._log_reader.read_currnet_logs(self.client, self.name, self.namespace)
                 self._log_reader = None
                 pass
             else:
@@ -176,9 +167,7 @@ class ThreadedKubernetesNamespaceObjectsWatcher(EventHandler):
     def object_watchers(self):
         return self._object_watchers
 
-    def watch_namespace(
-        self, namespace: str, label_selector: str = None, field_selector: str = None
-    ):
+    def watch_namespace(self, namespace: str, label_selector: str = None, field_selector: str = None):
         assert isinstance(namespace, str) and len(namespace) > 0
         if namespace in self._namespace_watchers:
             raise Exception("Namespace already being watched.")
@@ -235,11 +224,7 @@ class ThreadedKubernetesNamespaceObjectsWatcher(EventHandler):
                 del self._object_watchers[oid]
 
     def waitfor(
-        self,
-        predict,
-        include_log_events: bool = False,
-        timeout: float = None,
-        event_type: str = "update",
+        self, predict, include_log_events: bool = False, timeout: float = None, event_type: str = "update",
     ) -> ThreadedKubernetesObjectsWatcher:
         class wait_event:
             args: list = None
@@ -279,15 +264,9 @@ class ThreadedKubernetesNamespaceObjectsWatcher(EventHandler):
         timeout: float = None,
         check_past_events: bool = True,
     ) -> ThreadedKubernetesObjectsWatcher:
-        assert (
-            status is not None
-            or (status_list is not None and len(status_list) > 0)
-            or predict is not None
-        )
+        assert status is not None or (status_list is not None and len(status_list) > 0) or predict is not None
 
-        def default_predict(
-            match_status: str, sender: ThreadedKubernetesObjectsWatcher
-        ):
+        def default_predict(match_status: str, sender: ThreadedKubernetesObjectsWatcher):
             if status is not None and status == match_status:
                 return True
             if status_list is not None:
