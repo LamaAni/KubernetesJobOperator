@@ -1,7 +1,7 @@
 import kubernetes
 import os
 import yaml
-from .utils import logging, load_raw_formatted_file
+from utils import logging, load_raw_formatted_file
 from datetime import datetime
 from src.job_runner import JobRunner
 

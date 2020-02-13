@@ -1,5 +1,7 @@
 import threading
 import json
+import re
+from datetime import datetime
 from time import sleep
 from queue import SimpleQueue
 from .event_handler import EventHandler
@@ -7,9 +9,6 @@ from urllib3.connectionpool import MaxRetryError, ReadTimeoutError, TimeoutError
 from urllib3.response import HTTPResponse
 import kubernetes
 from kubernetes.stream.ws_client import ApiException
-
-# implements a continues watch stream for a specific
-# request.
 
 
 class ThreadedKubernetesWatchThreadEvent:
@@ -44,14 +43,18 @@ class ThreadedKubernetesWatch(EventHandler):
     reconnect_wait_timeout: int = 5
     response_wait_timeout: int = 5
     add_default_stream_params: bool = True
+    add_timing_stream_params: bool = True
     ignore_errors_if_removed: bool = True
     data_event_name: str = "data"
+    _last_read_start: datetime = None
+    thread_name: str = None
 
     def __init__(
         self,
         create_response_stream: callable,
         read_as_dict: bool = True,
         data_event_name: str = "data",
+        watcher_thread_name: str = None,
     ):
         """Creates a threaded response reader, for the kubernetes API.
         Allows for partial readers, with continue on network disconnect.
@@ -78,8 +81,14 @@ class ThreadedKubernetesWatch(EventHandler):
         self.reconnect_wait_timeout = 5
         self.response_wait_timeout = 5
         self.add_default_stream_params = True
+        self.add_timing_stream_params = True
         self.ignore_errors_if_removed = True
         self.data_event_name = data_event_name
+        self._last_read_start = None
+
+        watcher_thread_name = watcher_thread_name or data_event_name
+
+        self.thread_name = re.sub(r"[^a-z0-9_]", "_", watcher_thread_name.lower())
 
     @property
     def is_streaming(self):
@@ -168,6 +177,10 @@ class ThreadedKubernetesWatch(EventHandler):
         try:
             while True:
                 try:
+                    if self.add_timing_stream_params and self._last_read_start is not None:
+                        offset_read_seconds = (datetime.now() - self._last_read_start).seconds
+                        kwargs["since_seconds"] = str(offset_read_seconds)
+
                     # closing any current response streams.
                     self._close_response_stream(False)
 
@@ -177,6 +190,9 @@ class ThreadedKubernetesWatch(EventHandler):
                     for line in read_lines():
                         kuberentes_event_data = self.read_event(line)
                         self._invoke_threaded_event(self.data_event_name, kuberentes_event_data)
+
+                    # clean exit.
+                    self._close_response_stream(False)
 
                 except ApiException as e:
 
@@ -217,7 +233,9 @@ class ThreadedKubernetesWatch(EventHandler):
         self._thread_cleanly_exiting = False
         self._stream_queue = SimpleQueue() if not run_async else None
         self._streaming_thread = threading.Thread(
-            target=lambda args, kwargs: self._reader_thread(*args, **kwargs), args=(args, kwargs),
+            target=lambda args, kwargs: self._reader_thread(*args, **kwargs),
+            args=(args, kwargs),
+            name=f"kube_watcher_{self.thread_name}",
         )
 
         self._streaming_thread.start()
@@ -368,6 +386,7 @@ class ThreadedKubernetesWatchPodLog(ThreadedKubernetesWatch):
 
             iterator(str) -- The pod log iterator.
         """
+        self.thread_name = f"{namespace}_Pod_{name}"
         return ThreadedKubernetesWatch.stream(self, client=client, name=name, namespace=namespace)
 
     def start(self, client: kubernetes.client.CoreV1Api, name: str, namespace: str):
@@ -383,9 +402,18 @@ class ThreadedKubernetesWatchPodLog(ThreadedKubernetesWatch):
         
             [type] -- [description]
         """
+        self.thread_name = f"{namespace}_Pod_{name}"
         return ThreadedKubernetesWatch.start(self, client=client, name=name, namespace=namespace)
 
     def read_currnet_logs(self, client: kubernetes.client.CoreV1Api, name: str, namespace: str):
+        """Read all of the current logs from the resource. Helper method.
+        
+        Arguments:
+
+            client {kubernetes.client.CoreV1Api} -- The kube client
+            name {str} -- The pod name
+            namespace {str} -- The namespace
+        """
         log_lines = client.read_namespaced_pod_log(name, namespace)
         if not isinstance(log_lines, list):
             log_lines = log_lines.split("\n")
@@ -484,6 +512,7 @@ class ThreadedKubernetesWatchNamspeace(ThreadedKubernetesWatch):
         field_selector: str = None,
         label_selector: str = None,
     ):
+        self.thread_name = f"{namespace}__list_{kind}"
         return ThreadedKubernetesWatch.stream(
             self,
             client=client,
@@ -501,6 +530,7 @@ class ThreadedKubernetesWatchNamspeace(ThreadedKubernetesWatch):
         field_selector: str = None,
         label_selector: str = None,
     ):
+        self.thread_name = f"{namespace}_list_{kind}"
         return ThreadedKubernetesWatch.start(
             self,
             client=client,

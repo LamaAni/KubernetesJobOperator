@@ -1,4 +1,5 @@
 import kubernetes
+import threading
 from typing import Dict, List
 from queue import SimpleQueue
 from .event_handler import EventHandler
@@ -255,7 +256,7 @@ class ThreadedKubernetesResourcesWatcher(EventHandler):
                 self._log_reader.start(self.client, self.name, self.namespace)
 
     def update_resource_state(self, event_type: str, resource_yaml: dict):
-        """Call to update an resource state to match the resource_yaml
+        """Call to update a resource state to match the resource_yaml
         description. Will trigger reader watchers if needed.
         
         Arguments:
@@ -263,20 +264,28 @@ class ThreadedKubernetesResourcesWatcher(EventHandler):
             event_type {str} -- The event type.
             resource_yaml {dict} -- The resource yaml description.
         """
-        is_new = self._resource_yaml is None
-        old_status = None if is_new else self.status
 
-        # update the current yaml.
-        self._resource_yaml = resource_yaml
+        # can me multi threaded.
+        lock = threading.Lock()
+        try:
+            lock.acquire()
 
-        if not self._was_deleted:
-            self._was_deleted = event_type == "DELETED"
+            is_new = self._resource_yaml is None
+            old_status = None if is_new else self.status
 
-        if self.kind == "Pod":
-            self._update_pod_state(event_type, old_status)
+            # update the current yaml.
+            self._resource_yaml = resource_yaml
 
-        if old_status != self.status:
-            self.emit("status", self.status, self)
+            if not self._was_deleted:
+                self._was_deleted = event_type == "DELETED"
+
+            if self.kind == "Pod":
+                self._update_pod_state(event_type, old_status)
+
+            if old_status != self.status:
+                self.emit("status", self.status, self)
+        finally:
+            lock.release()
 
 
 class ThreadedKubernetesNamespaceResourcesWatcher(EventHandler):
@@ -311,7 +320,11 @@ class ThreadedKubernetesNamespaceResourcesWatcher(EventHandler):
         return self._resource_watchers
 
     def watch_namespace(
-        self, namespace: str, label_selector: str = None, field_selector: str = None
+        self,
+        namespace: str,
+        label_selector: str = None,
+        field_selector: str = None,
+        watch_for_kinds: List[str] = ["Pod", "Job", "Deployment", "Service"],
     ):
         """Add a watch condition on namespace.
         
@@ -324,23 +337,26 @@ class ThreadedKubernetesNamespaceResourcesWatcher(EventHandler):
             label_selector {str} -- The label selector to filter resources (default: {None})
             field_selector {str} -- The field selector to filter resources (default: {None})
         """
-        assert isinstance(namespace, str) and len(namespace) > 0
+        assert (
+            isinstance(namespace, str) and len(namespace) > 0
+        ), "Namespace must be a non empty string"
+
         if namespace in self._namespace_watchers:
             raise Exception("Namespace already being watched.")
 
         watchers = []
         self._namespace_watchers[namespace] = watchers
-        for kind in ["Pod", "Job", "Deployment", "Service"]:
-            watcher = ThreadedKubernetesWatchNamspeace()
-            watcher.pipe(self)
-            watcher.start(
+        for kind in watch_for_kinds:
+            namespace_watcher = ThreadedKubernetesWatchNamspeace()
+            namespace_watcher.pipe(self)
+            namespace_watcher.start(
                 client=self.client,
                 namespace=namespace,
                 kind=kind,
                 field_selector=field_selector,
                 label_selector=label_selector,
             )
-            watchers.append(watcher)
+            watchers.append(namespace_watcher)
 
     def emit(self, name, *args, **kwargs):
         """Emits the event to all the event handler
@@ -351,13 +367,12 @@ class ThreadedKubernetesNamespaceResourcesWatcher(EventHandler):
 
             name {str} -- The name of the event to emit.
         """
-        if len(args) < 2:
-            args = list(args) + [self]
-        super().emit(name, *args, **kwargs)
-        if name == "DELETED":
-            self._delete_resource(args[0])
-        elif name == "update":
-            self._update_resource(args[0])
+        if name == "update":
+            event = args[0]
+            if event["type"] == "DELETED":
+                self._delete_resource(event)
+            else:
+                self._update_resource(event)
 
         if len(args) < 2:
             args = list(args) + [self]
@@ -373,12 +388,12 @@ class ThreadedKubernetesNamespaceResourcesWatcher(EventHandler):
         
             event {dict} -- The kubernetes event dict.
         """
-        kube_resource = event["object"] # defined by kube response.
+
+        kube_resource = event["object"]  # defined by kube response.
         event_type = event["type"]
+
         oid = ThreadedKubernetesResourcesWatcher.compose_resource_id_from_yaml(kube_resource)
         if oid not in self._resource_watchers:
-            if event_type == "DELETED":
-                return
             self._resource_watchers[oid] = ThreadedKubernetesResourcesWatcher(
                 self.client, kube_resource, self.auto_watch_pod_logs
             )
@@ -398,6 +413,10 @@ class ThreadedKubernetesNamespaceResourcesWatcher(EventHandler):
         self._update_resource(event)
 
         kube_resource = event["object"]
+        event_type = event["type"]
+
+        assert event_type == "DELETED", "When deleting a resource, the event type must be DELETED."
+
         oid = ThreadedKubernetesResourcesWatcher.compose_resource_id_from_yaml(kube_resource)
         if oid in self._resource_watchers:
             watcher = self._resource_watchers[oid]
@@ -496,7 +515,7 @@ class ThreadedKubernetesNamespaceResourcesWatcher(EventHandler):
             status is not None
             or (status_list is not None and len(status_list) > 0)
             or predict is not None
-        )
+        ), "Either status, status_list or predict callable must be defined"
 
         def default_predict(match_status: str, sender: ThreadedKubernetesResourcesWatcher):
             if status is not None and status == match_status:
@@ -524,7 +543,7 @@ class ThreadedKubernetesNamespaceResourcesWatcher(EventHandler):
                 if wait_predict(sender.status, sender):
                     return sender
 
-        return self.waitfor(wait_predict, False, timeout=timeout, event_type="status")
+        return self.waitfor(wait_predict, False, timeout=timeout, event_name="status")
 
     def stop(self):
         """Stop all executing watchers.

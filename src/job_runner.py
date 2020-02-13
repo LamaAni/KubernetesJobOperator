@@ -219,15 +219,18 @@ class JobRunner(EventHandler):
         # starting the watcher.
         watcher = ThreadedKubernetesNamespaceResourcesWatcher(coreClient)
         watcher.remove_deleted_kube_resources_from_memory = False
-        watcher.watch_namespace(
-            namespace, label_selector=f"{JOB_RUNNER_INSTANCE_ID_LABEL}={instance_id}"
-        )
         watcher.pipe(self)
+        watcher.watch_namespace(
+            namespace,
+            label_selector=f"{JOB_RUNNER_INSTANCE_ID_LABEL}={instance_id}",
+            watch_for_kinds=["Job", "Pod"],
+        )
 
         # starting the job
         batchClient.create_namespaced_job(namespace, job_yaml)
-        job_watcher = watcher.waitfor_status("Job", name, namespace, status="Running")
 
+        # wait for job to start
+        job_watcher = watcher.waitfor_status("Job", name, namespace, status="Running")
         self.emit("job_started", job_watcher, self)
 
         # waiting for the job to completed.

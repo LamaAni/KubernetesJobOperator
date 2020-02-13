@@ -92,5 +92,5 @@ class EventHandler:
         Arguments:
             other {EventHandler} -- The event handler to pipe to.
         """
-        assert isinstance(other, EventHandler)
+        assert isinstance(other, EventHandler), "other must be an instance of EventHandler."
         self._pipeto.append(other)
