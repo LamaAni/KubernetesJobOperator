@@ -21,7 +21,7 @@ def list_namespace_pods(*args, **kwargs):
     return info[0]
 
 
-watcher = ThreadedKubernetesWatch(list_namespace_pods, read_as_object=False)
+watcher = ThreadedKubernetesWatch(list_namespace_pods, read_as_dict=False)
 
 for event in watcher.stream(name="tester", namespace=current_namespace, follow=True):
     logging.info(yaml.dump(event))

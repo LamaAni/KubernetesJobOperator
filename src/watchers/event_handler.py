@@ -2,12 +2,12 @@ from typing import Dict
 
 
 class EventHandler:
-    message_handlers: Dict[str, Dict[int, object]] = None
+    message_handlers: Dict[str, Dict[int, callable]] = None
     _pipeto: [] = None
     _handler_last_idx = 0
 
     def __init__(self):
-        """An event handler object, that can
+        """An event handler instance, that can
         collect/pipe/emit events by name, with arguments.
         """
         super().__init__()

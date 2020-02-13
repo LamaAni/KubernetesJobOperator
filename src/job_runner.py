@@ -2,9 +2,9 @@ import kubernetes
 import yaml
 import copy
 import os
-from .watchers.threaded_kubernetes_object_watchers import (
-    ThreadedKubernetesNamespaceObjectsWatcher,
-    ThreadedKubernetesObjectsWatcher,
+from .watchers.threaded_kubernetes_resource_watchers import (
+    ThreadedKubernetesNamespaceResourcesWatcher,
+    ThreadedKubernetesResourcesWatcher,
 )
 from .watchers.event_handler import EventHandler
 from .utils import randomString, get_from_dictionary_path
@@ -97,7 +97,7 @@ class JobRunner(EventHandler):
             # already initialized.
             return
 
-        # make sure the yaml is an object.
+        # make sure the yaml is an dict.
         job_yaml = (
             copy.deepcopy(job_yaml) if isinstance(job_yaml, dict) else yaml.safe_load(job_yaml)
         )
@@ -116,8 +116,8 @@ class JobRunner(EventHandler):
                 get(path_names) is not None
             ), f"job {def_name or path_names[-1]} must be defined @ {path_string}"
 
-        assert get(["kind"]) == "Job", "job_yaml object 'kind' must be of kind job, recived " + get(
-            ["kind"], "[null]"
+        assert get(["kind"]) == "Job", "job_yaml resource must be of 'kind' 'Job', recived " + get(
+            ["kind"], "[unknown]"
         )
 
         assert_defined(["metadata", "name"])
@@ -168,7 +168,7 @@ class JobRunner(EventHandler):
 
     def execute_job(
         self, job_yaml: dict
-    ) -> (ThreadedKubernetesObjectsWatcher, ThreadedKubernetesNamespaceObjectsWatcher):
+    ) -> (ThreadedKubernetesResourcesWatcher, ThreadedKubernetesNamespaceResourcesWatcher):
         """Executes a job with a pre-prepared job yaml,
         to prepare the job yaml please call JobRunner.prepare_job_yaml
 
@@ -183,9 +183,9 @@ class JobRunner(EventHandler):
 
         Returns:
 
-            ThreadedKubernetesObjectsWatcher -- The run result
-            as a watch object, holds the final yaml information
-            and the object status.
+            ThreadedKubernetesResourcesWatcher -- The run result
+            as a watch dict, holds the final yaml information
+            and the resource status.
         """
 
         assert (
@@ -217,8 +217,8 @@ class JobRunner(EventHandler):
             raise Exception(f"Job {name} already exists in namespace {namespace}, cannot exec.")
 
         # starting the watcher.
-        watcher = ThreadedKubernetesNamespaceObjectsWatcher(coreClient)
-        watcher.remove_deleted_kube_objects_from_memory = False
+        watcher = ThreadedKubernetesNamespaceResourcesWatcher(coreClient)
+        watcher.remove_deleted_kube_resources_from_memory = False
         watcher.watch_namespace(
             namespace, label_selector=f"{JOB_RUNNER_INSTANCE_ID_LABEL}={instance_id}"
         )
@@ -226,22 +226,22 @@ class JobRunner(EventHandler):
 
         # starting the job
         batchClient.create_namespaced_job(namespace, job_yaml)
-        job_watch_object = watcher.waitfor_status("Job", name, namespace, status="Running")
+        job_watcher = watcher.waitfor_status("Job", name, namespace, status="Running")
 
-        self.emit("job_started", job_watch_object, self)
+        self.emit("job_started", job_watcher, self)
 
         # waiting for the job to completed.
-        job_watch_object = watcher.waitfor_status(
+        job_watcher = watcher.waitfor_status(
             "Job", name, namespace, status_list=["Failed", "Succeeded", "Deleted"]
         )
 
         # not need to read status and logs anymore.
         watcher.stop()
 
-        if job_watch_object.status == "Failed":
-            self.emit("job_failed", job_watch_object, self)
+        if job_watcher.status == "Failed":
+            self.emit("job_failed", job_watcher, self)
 
-        return job_watch_object, watcher
+        return job_watcher, watcher
 
     def delete_job(self, job_yaml: dict):
         """Using a pre-prepared job yaml, deletes a currently executing job.

@@ -9,9 +9,9 @@ from .utils import to_kubernetes_valid_name
 # from airflow.contrib.operators.kubernetes_pod_operator import KubernetesPodOperator
 # from airflow.contrib.kubernetes import kube_client
 from .job_runner import JobRunner
-from .watchers.threaded_kubernetes_object_watchers import (
-    ThreadedKubernetesObjectsWatcher,
-    ThreadedKubernetesNamespaceObjectsWatcher,
+from .watchers.threaded_kubernetes_resource_watchers import (
+    ThreadedKubernetesResourcesWatcher,
+    ThreadedKubernetesNamespaceResourcesWatcher,
 )
 
 # FIXME: To be moved to airflow config.
@@ -82,7 +82,7 @@ class KubernetesBaseJobOperator(BaseOperator):
 
         assert job_yaml is not None and (
             isinstance(job_yaml, (dict, str))
-        ), "job_yaml must either be a string yaml or a dict object"
+        ), "job_yaml must either be a string in yaml format or a dict"
 
         assert delete_policy is not None and delete_policy.lower() in [
             "never",
@@ -100,50 +100,89 @@ class KubernetesBaseJobOperator(BaseOperator):
         self.job_runner = JobRunner()
         self.job_runner.on("log", lambda msg, sender: self.on_job_log(msg, sender))
         self.job_runner.on(
-            "status", lambda status, sender: self.on_job_object_status_changed(status, sender),
+            "status", lambda status, sender: self.on_job_status_changed(status, sender),
         )
 
         if validate_yaml_on_init:
             self.job_runner.prepare_job_yaml(self.job_yaml)
 
     def create_job_name(self):
+        """Create a name for the job, to be replaced with
+        the name provided in the yaml. This method internally uses
+        the method 'to_kubernetes_valid_name' in utils.
+
+        Override this method to create or augment your own name.
+        
+        Returns:
+            str -- The job name
+        """
         return to_kubernetes_valid_name(self.task_id, max_length=MAX_JOB_NAME_LENGTH)
 
-    def on_job_log(self, msg, sender: ThreadedKubernetesObjectsWatcher):
+    def on_job_log(self, msg: str, sender: ThreadedKubernetesResourcesWatcher):
+        """Write a job log to the airflow logger. Override this method
+        to handle the log format.
+        
+        Arguments:
+
+            msg {str} -- The log message
+            sender {ThreadedKubernetesResourcesWatcher} -- The kubernetes resource.
+        """
         self.log.info(f"{sender.id}: {msg}")
 
-    def on_job_object_status_changed(self, status, sender: ThreadedKubernetesObjectsWatcher):
+    def on_job_status_changed(self, status, sender: ThreadedKubernetesResourcesWatcher):
+        """Log the status changes of the kubernetes resources.
+        
+        Arguments:
+
+            status {str} -- The status
+            sender {ThreadedKubernetesResourcesWatcher} -- The kubernetes resource.
+        """
         self.log.info(f"{sender.id} ({status})")
 
-    def log_final_result(
+    def log_job_result(
         self,
-        job_watcher: ThreadedKubernetesObjectsWatcher,
-        namespace_watcher: ThreadedKubernetesNamespaceObjectsWatcher,
+        job_watcher: ThreadedKubernetesResourcesWatcher,
+        namespace_watcher: ThreadedKubernetesNamespaceResourcesWatcher,
     ):
+        """Log the results of the job to kubernetes.
+        
+        Arguments:
+
+            job_watcher {ThreadedKubernetesResourcesWatcher} -- The kubernetes resource.
+            namespace_watcher {ThreadedKubernetesNamespaceResourcesWatcher} -- The kubernetes
+                namespace resources watcher, which holds all the job resources used.
+        """
         if job_watcher.status in ["Failed", "Deleted"]:
             pod_count = len(
                 list(
-                    filter(lambda ow: ow.kind == "Pod", namespace_watcher.object_watchers.values(),)
+                    filter(lambda ow: ow.kind == "Pod", namespace_watcher.resource_watchers.tchers.values(),)
                 )
             )
             self.log.error(f"Job Failed ({pod_count} pods), last pod/job status:")
 
-            # log proper object error
-            def log_object_error(object_watcher: ThreadedKubernetesObjectsWatcher):
-                log_method = self.log.error if object_watcher.status == "Failed" else self.log.info
+            # log proper resource error
+            def log_resource_error(resource_watcher: ThreadedKubernetesResourcesWatcher):
+                log_method = self.log.error if resource_watcher.status == "Failed" else self.log.info
                 log_method(
                     "FINAL STATUS: "
-                    + object_watcher.id
-                    + f" ({object_watcher.status})\n"
-                    + yaml.dump(object_watcher.yaml["status"])
+                    + resource_watcher.id
+                    + f" ({resource_watcher.status})\n"
+                    + yaml.dump(resource_watcher.yaml["status"])
                 )
 
-            for object_watcher in namespace_watcher.object_watchers.values():
-                log_object_error(object_watcher)
+            for resource_watcher in namespace_watcher.resource_watchers.values():
+                log_resource_error(resource_watcher)
         else:
             self.log.info("Job complete.")
 
     def pre_execute(self, context):
+        """Called before execution by the airflow system.
+        Overriding this method without calling its super() will
+        break the job operator.
+        
+        Arguments:
+            context -- The airflow context
+        """
         # Load the configuration. NOTE: the configuration
         # should be only loaded while executing since
         # the executing enivroment can and will be different
@@ -169,6 +208,14 @@ class KubernetesBaseJobOperator(BaseOperator):
         return super().pre_execute(context)
 
     def execute(self, context):
+        """Call to execute the kubernetes job.
+        
+        Arguments:
+            context -- The airflow job.
+        
+        Raises:
+            AirflowException: Error in execution.
+        """
         self.log.info("Starting job...")
         self.__waiting_for_job_execution = True
 
@@ -176,7 +223,7 @@ class KubernetesBaseJobOperator(BaseOperator):
         (job_watcher, namespace_watcher) = self.job_runner.execute_job(self.job_yaml)
 
         self.__waiting_for_job_execution = False
-        self.log_final_result(job_watcher, namespace_watcher)
+        self.log_job_result(job_watcher, namespace_watcher)
 
         # Check delete policy.
         delete_policy = self.delete_policy.lower()
@@ -186,12 +233,15 @@ class KubernetesBaseJobOperator(BaseOperator):
             self.log.info("Deleting job leftovers")
             self.job_runner.delete_job(job_watcher.yaml)
         else:
-            self.log.warning("Job object(s) left in namespace")
+            self.log.warning("Job resource(s) left in namespace")
 
         if job_watcher.status != "Succeeded":
             raise AirflowException(f"Job {job_watcher.status}")
 
     def on_kill(self):
+        """Called when the task is killed, either by 
+        making it as failed or when the operator finishes.
+        """
         if self.__waiting_for_job_execution:
             self.log.info(
                 f"Job killed/aborted while waiting for execution to complete. Deleting job..."

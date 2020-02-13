@@ -37,7 +37,7 @@ class ThreadedKubernetesWatch(EventHandler):
     _stream_queue: SimpleQueue = None
     _reader_response: HTTPResponse = None
     create_response_stream: callable = None
-    read_as_object: bool = True
+    read_as_dict: bool = True
     _thread_cleanly_exiting = False
     allow_reconnect: bool = True
     reconnect_max_retries: int = 20
@@ -50,7 +50,7 @@ class ThreadedKubernetesWatch(EventHandler):
     def __init__(
         self,
         create_response_stream: callable,
-        read_as_object: bool = True,
+        read_as_dict: bool = True,
         data_event_name: str = "data",
     ):
         """Creates a threaded response reader, for the kubernetes API.
@@ -63,7 +63,7 @@ class ThreadedKubernetesWatch(EventHandler):
         
         Keyword Arguments:
 
-            read_as_object {bool} -- If true, the response value is a dictionary 
+            read_as_dict {bool} -- If true, the response value is a dictionary 
             (as json), and should be parsed. (default: {True})
         """
         super().__init__()
@@ -71,7 +71,7 @@ class ThreadedKubernetesWatch(EventHandler):
         self._stream_queue = None
         self._reader_response = None
         self.create_response_stream = create_response_stream
-        self.read_as_object = read_as_object
+        self.read_as_dict = read_as_dict
         self._thread_cleanly_exiting = False
         self.allow_reconnect = True
         self.reconnect_max_retries = 20
@@ -99,9 +99,9 @@ class ThreadedKubernetesWatch(EventHandler):
         
         Returns:
 
-            dict/str -- Returns the parsed data, depending on read_as_object.
+            dict/str -- Returns the parsed data, depending on read_as_dict.
         """
-        if self.read_as_object:
+        if self.read_as_dict:
             return json.loads(data)
         else:
             return data
@@ -164,7 +164,7 @@ class ThreadedKubernetesWatch(EventHandler):
 
         self._invoke_threaded_event("started")
 
-        # always read until stopped or object dose not exist.
+        # always read until stopped or resource dose not exist.
         try:
             while True:
                 try:
@@ -244,7 +244,7 @@ class ThreadedKubernetesWatch(EventHandler):
 
         Yields:
         
-            any -- The event object/str
+            any -- The event resource/str
         """
 
         # start the thread.
@@ -255,7 +255,7 @@ class ThreadedKubernetesWatch(EventHandler):
                 event = self._stream_queue.get()
                 if not isinstance(event, ThreadedKubernetesWatchThreadEvent):
                     raise Exception(
-                        "Invalid queue stream object type. Must be an instance of ThreadedKubernetesWatchThreadEvent"
+                        "Invalid queue stream value type. Must be an instance of ThreadedKubernetesWatchThreadEvent"
                     )
                 if event.event_type == self.data_event_name:
                     yield event.event_value
@@ -332,7 +332,7 @@ class ThreadedKubernetesWatchPodLog(ThreadedKubernetesWatch):
             (other events inherited from ThreadedKubernetesWatch)
         """
         super().__init__(
-            lambda *args, **kwargs: self._create_log_reader(*args, **kwargs), read_as_object=False,
+            lambda *args, **kwargs: self._create_log_reader(*args, **kwargs), read_as_dict=False,
         )
         self.data_event_name = "log"
 
@@ -399,7 +399,7 @@ class ThreadedKubernetesWatchNamspeace(ThreadedKubernetesWatch):
     def __init__(self):
         super().__init__(
             lambda *args, **kwargs: self.create_namespace_watcher(*args, **kwargs),
-            read_as_object=True,
+            read_as_dict=True,
         )
         self.data_event_name = "update"
 
