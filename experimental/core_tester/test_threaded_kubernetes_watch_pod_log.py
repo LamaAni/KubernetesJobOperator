@@ -1,6 +1,6 @@
 import kubernetes
 import os
-from utils import logging
+from .utils import logging
 from src.watchers.threaded_kubernetes_watch import (
     ThreadedKubernetesWatchPodLog,
     ThreadedKubernetesWatchNamspeace,
