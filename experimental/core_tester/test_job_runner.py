@@ -1,7 +1,7 @@
 import kubernetes
 import os
 import yaml
-from utils import logging, load_raw_formatted_file
+from .utils import logging, load_raw_formatted_file
 from datetime import datetime
 from src.job_runner import JobRunner
 
@@ -29,7 +29,7 @@ def read_pod_log(msg: str, sender):
             logging.info(f"log: {msg_part}")
 
 
-def object_status_changed(status, sender):
+def resource_status_changed(status, sender):
     logging.info(sender.id + ":" + status)
     pass
 
@@ -42,7 +42,7 @@ current_namespace = active_context["context"]["namespace"]
 # prepare the runner.
 runner = JobRunner()
 runner.on("log", read_pod_log)
-runner.on("status", object_status_changed)
+runner.on("status", resource_status_changed)
 
 # prepare the job to execute.
 bash_script = load_raw_formatted_file(os.path.join(CUR_DIRECTORY, "pod_script.sh"))
