@@ -29,9 +29,7 @@ watcher.on("error", lambda err: logging.warning(err))
 watcher.on("warning", lambda warning: logging.warning(warning))
 
 try:
-    for msg in watcher.stream(
-        client=client, name="tester", namespace=current_namespace
-    ):
+    for msg in watcher.stream(client=client, name="tester", namespace=current_namespace):
         logging.info(msg)
 finally:
     logging.info("Stopping the namespace reader...")

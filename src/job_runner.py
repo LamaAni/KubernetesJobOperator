@@ -13,11 +13,8 @@ JOB_RUNNER_INSTANCE_ID_LABEL = "job-runner-instance-id"
 
 
 class JobRunner(EventHandler):
-    _id: str = None
-
     def __init__(self):
-        """Creates a job runner object that can be used
-        to execute a job.
+        """Holds methods for executing jobs on a cluster.
 
         Example:
 
@@ -34,8 +31,20 @@ class JobRunner(EventHandler):
         super().__init__()
 
     def load_kuberntes_configuration(
-        self, in_cluster=False, config_file=None, context=None
+        self, in_cluster: bool = False, config_file: str = None, context: str = None
     ):
+        """Loads the appropriate kubernetes configuration into the global
+        context.
+        
+        Keyword Arguments:
+
+            in_cluster {bool} -- If true, load the configuration from the cluster
+                (default: {False})
+            config_file {str} -- the path to the file to load from,
+                if None, loads the kubernetes default ~/.kube. (default: {None})
+            context {str} -- The context to load. If None loads the current
+                context (default: {None})
+        """
         # loading the current config to use.
         if in_cluster:
             kubernetes.config.load_incluster_config()
@@ -54,16 +63,29 @@ class JobRunner(EventHandler):
         can also accept a string input.
 
         Arguments:
+
             job_yaml {dict|str} -- The job yaml, either a string
                 or a dictionary.
 
         Keyword Arguments:
+
             random_name_postfix_length {int} -- The number of random
                 characters to add to job name, if 0 then do not add.
                 allow for the rapid generation of random jobs. (default: {0})
             force_job_name {str} -- If exist will replace the job name.
 
+        Auto completed yaml values (if missing):
+
+            metadata.namespace - current namespace
+            spec.backOffLimit - 0
+            spec.template.spec.restartPolicy - Never
+
+        Added yaml values:
+
+            metadata.finalizers += foregroundDeletion
+
         Returns:
+
             dict -- The prepared job yaml dictionary.
         """
         if (
@@ -77,9 +99,7 @@ class JobRunner(EventHandler):
 
         # make sure the yaml is an object.
         job_yaml = (
-            copy.deepcopy(job_yaml)
-            if isinstance(job_yaml, dict)
-            else yaml.safe_load(job_yaml)
+            copy.deepcopy(job_yaml) if isinstance(job_yaml, dict) else yaml.safe_load(job_yaml)
         )
 
         def get(path_names, default=None):
@@ -96,9 +116,8 @@ class JobRunner(EventHandler):
                 get(path_names) is not None
             ), f"job {def_name or path_names[-1]} must be defined @ {path_string}"
 
-        assert get(["kind"]) == "Job", (
-            "job_yaml object 'kind' must be of kind job, recived "
-            + get(["kind"], "[null]")
+        assert get(["kind"]) == "Job", "job_yaml object 'kind' must be of kind job, recived " + get(
+            ["kind"], "[null]"
         )
 
         assert_defined(["metadata", "name"])
@@ -109,9 +128,7 @@ class JobRunner(EventHandler):
             job_yaml["metadata"]["name"] = force_job_name
 
         if random_name_postfix_length > 0:
-            job_yaml["metadata"]["name"] += "-" + randomString(
-                random_name_postfix_length
-            )
+            job_yaml["metadata"]["name"] += "-" + randomString(random_name_postfix_length)
 
         # assign current namespace if one is not defined.
         if "namespace" not in job_yaml["metadata"]:
@@ -156,13 +173,16 @@ class JobRunner(EventHandler):
         to prepare the job yaml please call JobRunner.prepare_job_yaml
 
         Arguments:
+
             job_yaml {dict} -- The dictionary of the job body.
             Can only have one kubernetes element.
 
         Raises:
+
             Exception: [description]
 
         Returns:
+
             ThreadedKubernetesObjectsWatcher -- The run result
             as a watch object, holds the final yaml information
             and the object status.
@@ -194,9 +214,7 @@ class JobRunner(EventHandler):
             pass
 
         if status is not None:
-            raise Exception(
-                f"Job {name} already exists in namespace {namespace}, cannot exec."
-            )
+            raise Exception(f"Job {name} already exists in namespace {namespace}, cannot exec.")
 
         # starting the watcher.
         watcher = ThreadedKubernetesNamespaceObjectsWatcher(coreClient)
@@ -208,9 +226,7 @@ class JobRunner(EventHandler):
 
         # starting the job
         batchClient.create_namespaced_job(namespace, job_yaml)
-        job_watch_object = watcher.waitfor_status(
-            "Job", name, namespace, status="Running"
-        )
+        job_watch_object = watcher.waitfor_status("Job", name, namespace, status="Running")
 
         self.emit("job_started", job_watch_object, self)
 
@@ -227,7 +243,13 @@ class JobRunner(EventHandler):
 
         return job_watch_object, watcher
 
-    def delete_job(self, job_yaml):
+    def delete_job(self, job_yaml: dict):
+        """Using a pre-prepared job yaml, deletes a currently executing job.
+        
+        Arguments:
+        
+            job_yaml {dict} -- The job description yaml.
+        """
         metadata = job_yaml["metadata"]
         name = metadata["name"]
         namespace = metadata["namespace"]

@@ -1,7 +1,7 @@
 import kubernetes
 import os
 import yaml
-from utils import logging
+from .utils import logging
 from src.watchers.threaded_kubernetes_watch import ThreadedKubernetesWatch
 
 logging.basicConfig(level="INFO")

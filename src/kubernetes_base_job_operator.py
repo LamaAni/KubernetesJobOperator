@@ -16,14 +16,11 @@ from .watchers.threaded_kubernetes_object_watchers import (
 
 # FIXME: To be moved to airflow config.
 DEFAULT_VALIDATE_YAML_ON_INIT = (
-    os.environ.get("AIRFLOW__KUBE_JOB_OPERATOR__VALIDATE_YAML_ON_INIT", "false").lower()
-    == "true"
+    os.environ.get("AIRFLOW__KUBE_JOB_OPERATOR__VALIDATE_YAML_ON_INIT", "false").lower() == "true"
 )
 
 # FIXME: To be moved to airflow config.
-MAX_JOB_NAME_LENGTH = int(
-    os.environ.get("AIRFLOW__KUBE_JOB_OPERATOR__MAX_JOB_NAME_LENGTH", "50")
-)
+MAX_JOB_NAME_LENGTH = int(os.environ.get("AIRFLOW__KUBE_JOB_OPERATOR__MAX_JOB_NAME_LENGTH", "50"))
 
 
 class KubernetesBaseJobOperator(BaseOperator):
@@ -51,6 +48,36 @@ class KubernetesBaseJobOperator(BaseOperator):
         *args,
         **kwargs,
     ):
+        """A operator that executes a kubernetes Job, in a namespace.
+        See: https://kubernetes.io/docs/concepts/workloads/controllers/jobs-run-to-completion/
+        for notes about a kubernetes job.
+
+        Arguments:
+            job_yaml {dict|string} -- The job to execute as a yaml description.
+        
+        Keyword Arguments:
+
+            delete_policy {str} -- Any of: Never, Always, IfSucceeded (default: {"IfSucceeded"})
+            in_cluster {bool} -- True if running inside a cluster (on a pod) (default: {False})
+            config_file {str} -- The kubernetes configuration file to load, if 
+                None use default config. (default: {None})
+            cluster_context {str} -- The context to run in, if None, use current context
+                (default: {None})
+            validate_yaml_on_init {bool} -- If true, validates the yaml in the constructor,
+                setting this to True, will slow down dag creation.
+                (default: {from env: AIRFLOW__KUBE_JOB_OPERATOR__MAX_JOB_NAME_LENGTH})
+
+        Auto completed yaml values (if missing):
+
+            metadata.namespace - current namespace
+            spec.backOffLimit - 0
+            spec.template.spec.restartPolicy - Never
+
+        Added yaml values:
+
+            metadata.finalizers += foregroundDeletion
+        
+        """
         super(KubernetesBaseJobOperator, self).__init__(*args, **kwargs)
 
         assert job_yaml is not None and (
@@ -73,8 +100,7 @@ class KubernetesBaseJobOperator(BaseOperator):
         self.job_runner = JobRunner()
         self.job_runner.on("log", lambda msg, sender: self.on_job_log(msg, sender))
         self.job_runner.on(
-            "status",
-            lambda status, sender: self.on_job_object_status_changed(status, sender),
+            "status", lambda status, sender: self.on_job_object_status_changed(status, sender),
         )
 
         if validate_yaml_on_init:
@@ -86,9 +112,7 @@ class KubernetesBaseJobOperator(BaseOperator):
     def on_job_log(self, msg, sender: ThreadedKubernetesObjectsWatcher):
         self.log.info(f"{sender.id}: {msg}")
 
-    def on_job_object_status_changed(
-        self, status, sender: ThreadedKubernetesObjectsWatcher
-    ):
+    def on_job_object_status_changed(self, status, sender: ThreadedKubernetesObjectsWatcher):
         self.log.info(f"{sender.id} ({status})")
 
     def log_final_result(
@@ -99,21 +123,14 @@ class KubernetesBaseJobOperator(BaseOperator):
         if job_watcher.status in ["Failed", "Deleted"]:
             pod_count = len(
                 list(
-                    filter(
-                        lambda ow: ow.kind == "Pod",
-                        namespace_watcher.object_watchers.values(),
-                    )
+                    filter(lambda ow: ow.kind == "Pod", namespace_watcher.object_watchers.values(),)
                 )
             )
             self.log.error(f"Job Failed ({pod_count} pods), last pod/job status:")
 
             # log proper object error
             def log_object_error(object_watcher: ThreadedKubernetesObjectsWatcher):
-                log_method = (
-                    self.log.error
-                    if object_watcher.status == "Failed"
-                    else self.log.info
-                )
+                log_method = self.log.error if object_watcher.status == "Failed" else self.log.info
                 log_method(
                     "FINAL STATUS: "
                     + object_watcher.id
@@ -184,8 +201,7 @@ class KubernetesBaseJobOperator(BaseOperator):
                 self.log.info("Job deleted.")
             except Exception:
                 self.log.error(
-                    "Failed to delete an aborted/killed"
-                    + " job! The job may still be executing."
+                    "Failed to delete an aborted/killed" + " job! The job may still be executing."
                 )
 
         return super().on_kill()
