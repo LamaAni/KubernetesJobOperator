@@ -155,7 +155,7 @@ class KubernetesBaseJobOperator(BaseOperator):
         if job_watcher.status in ["Failed", "Deleted"]:
             pod_count = len(
                 list(
-                    filter(lambda ow: ow.kind == "Pod", namespace_watcher.resource_watchers.tchers.values(),)
+                    filter(lambda ow: ow.kind == "Pod", namespace_watcher.resource_watchers.values(),)
                 )
             )
             self.log.error(f"Job Failed ({pod_count} pods), last pod/job status:")
