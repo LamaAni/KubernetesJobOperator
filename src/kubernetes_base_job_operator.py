@@ -64,8 +64,8 @@ class KubernetesBaseJobOperator(BaseOperator):
             cluster_context {str} -- The context to run in, if None, use current context
                 (default: {None})
             validate_yaml_on_init {bool} -- If true, validates the yaml in the constructor,
-                setting this to True, will slow down dag creation.
-                (default: {from env: AIRFLOW__KUBE_JOB_OPERATOR__MAX_JOB_NAME_LENGTH})
+                setting this to True, will slow dag creation.
+                (default: {from env: AIRFLOW__KUBE_JOB_OPERATOR__MAX_JOB_NAME_LENGTH or False})
 
         Auto completed yaml values (if missing):
 
