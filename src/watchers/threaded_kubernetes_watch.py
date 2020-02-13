@@ -46,7 +46,7 @@ class ThreadedKubernetesWatch(EventHandler):
     add_timing_stream_params: bool = True
     ignore_errors_if_removed: bool = True
     data_event_name: str = "data"
-    _last_read_start: datetime = None
+    _last_read_time: datetime = None
     thread_name: str = None
 
     def __init__(
@@ -84,7 +84,7 @@ class ThreadedKubernetesWatch(EventHandler):
         self.add_timing_stream_params = True
         self.ignore_errors_if_removed = True
         self.data_event_name = data_event_name
-        self._last_read_start = None
+        self._last_read_time = None
 
         watcher_thread_name = watcher_thread_name or data_event_name
 
@@ -177,8 +177,8 @@ class ThreadedKubernetesWatch(EventHandler):
         try:
             while True:
                 try:
-                    if self.add_timing_stream_params and self._last_read_start is not None:
-                        offset_read_seconds = (datetime.now() - self._last_read_start).seconds
+                    if self.add_timing_stream_params and self._last_read_time is not None:
+                        offset_read_seconds = (datetime.now() - self._last_read_time).seconds
                         kwargs["since_seconds"] = str(offset_read_seconds)
 
                     # closing any current response streams.
@@ -187,7 +187,10 @@ class ThreadedKubernetesWatch(EventHandler):
                     self._reader_response = self.create_response_stream(*args, **kwargs)
                     reconnect_attempts = 0
                     was_started = True
+                    # self._last_read_time = datetime.now()
+
                     for line in read_lines():
+                        self._last_read_time = datetime.now()
                         kuberentes_event_data = self.read_event(line)
                         self._invoke_threaded_event(self.data_event_name, kuberentes_event_data)
 
@@ -416,11 +419,11 @@ class ThreadedKubernetesWatchPodLog(ThreadedKubernetesWatch):
         """
         log_lines = client.read_namespaced_pod_log(name, namespace)
         if not isinstance(log_lines, list):
-            log_lines = log_lines.split("\n")
+            log_lines = log_lines.strip().split("\n")
 
         for possible_line in log_lines:
             for line in possible_line.split("\n"):
-                self._invoke_threaded_event("daga", self.read_event(line))
+                self._invoke_threaded_event(self.data_event_name, self.read_event(line))
 
 
 class ThreadedKubernetesWatchNamspeace(ThreadedKubernetesWatch):

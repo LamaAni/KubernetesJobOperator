@@ -60,6 +60,13 @@ class ThreadedKubernetesResourcesWatcher(EventHandler):
             args = list(args) + [self]
         super().emit(name, *args, **kwargs)
 
+    def finalize(self):
+        """Call to clean up any leftover state changes of the current watcher
+        like reading missed loggs and clearing threads.
+        """
+        if self.kind == "Pod" and not self._has_read_logs:
+            self._read_pod_log(False)
+
     def stop(self):
         """Stop all executing internal watchers.
         """
@@ -239,21 +246,35 @@ class ThreadedKubernetesResourcesWatcher(EventHandler):
         # may start/read pod logs.
         cur_status = self.status
         need_read_pod_logs = cur_status and cur_status != "Pending" and not self._has_read_logs
-        read_pod_static_logs = self.status != "Running"
 
         if need_read_pod_logs:
-            self._log_reader = ThreadedKubernetesWatchPodLog()
-            self._log_reader.pipe(self)
             self._has_read_logs = True
-            if read_pod_static_logs:
-                # in case where the logs were too fast,
-                # and they need to be read sync.
-                self._log_reader.read_currnet_logs(self.client, self.name, self.namespace)
-                self._log_reader = None
-                pass
-            else:
-                # async read logs.
+            self._read_pod_log(self.status == "Running")
+
+    def _read_pod_log(self, run_async: bool):
+        """Call to read the pod logs, or start stream reading.
+        
+        Arguments:
+            run_async {bool} -- If true do async stream reading.
+        """
+        # may be called my multiple threads.
+        pod_log_read_lock = threading.Lock()
+        try:
+            pod_log_read_lock.acquire()
+
+            if self._log_reader is None:
+                self._log_reader = ThreadedKubernetesWatchPodLog()
+                self._log_reader.pipe(self)
+
+            if self._log_reader.is_streaming:
+                return
+
+            if run_async:
                 self._log_reader.start(self.client, self.name, self.namespace)
+            else:
+                self._log_reader.read_currnet_logs(self.client, self.name, self.namespace)
+        finally:
+            pod_log_read_lock.release()
 
     def update_resource_state(self, event_type: str, resource_yaml: dict):
         """Call to update a resource state to match the resource_yaml
@@ -394,6 +415,10 @@ class ThreadedKubernetesNamespaceResourcesWatcher(EventHandler):
 
         oid = ThreadedKubernetesResourcesWatcher.compose_resource_id_from_yaml(kube_resource)
         if oid not in self._resource_watchers:
+            # no need to create in order to delete.
+            if event_type == "DELETED":
+                return
+
             self._resource_watchers[oid] = ThreadedKubernetesResourcesWatcher(
                 self.client, kube_resource, self.auto_watch_pod_logs
             )
@@ -418,8 +443,10 @@ class ThreadedKubernetesNamespaceResourcesWatcher(EventHandler):
         assert event_type == "DELETED", "When deleting a resource, the event type must be DELETED."
 
         oid = ThreadedKubernetesResourcesWatcher.compose_resource_id_from_yaml(kube_resource)
+
         if oid in self._resource_watchers:
             watcher = self._resource_watchers[oid]
+            watcher.finalize()
             watcher.stop()
             if self.remove_deleted_kube_resources_from_memory:
                 del self._resource_watchers[oid]
@@ -553,4 +580,5 @@ class ThreadedKubernetesNamespaceResourcesWatcher(EventHandler):
                 watcher.stop()
 
         for oid, owatch in self._resource_watchers.items():
+            owatch.finalize()
             owatch.stop()

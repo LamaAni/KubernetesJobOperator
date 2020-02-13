@@ -16,21 +16,13 @@ def create_job(name, namespace, image, command) -> kubernetes.client.V1Pod:
     pod["spec"]["template"]["spec"]["containers"][0]["command"] = command
     return pod
 
-
+5
 def read_pod_log(msg: str, sender):
-    for msg_part in msg.split("\n"):
-        msg_part = msg_part.strip()
-        if len(msg_part) == 0:
-            continue
-        try:
-            dt = datetime.utcfromtimestamp(int(msg_part) / 1000)
-            logging.info(f"Read timestamp: {dt}")
-        except Exception:
-            logging.info(f"log: {msg_part}")
+    logging.info(f"{sender.id}: {msg}")
 
 
 def resource_status_changed(status, sender):
-    logging.info(sender.id + ":" + status)
+    logging.info(f"{sender.id} ({status})")
     pass
 
 

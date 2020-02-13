@@ -1,14 +1,14 @@
 #/usr/bin/env bash
 echo "Starting"
-TIC_COUNT=10
+TIC_COUNT=0
 cur_count=0
 while true; do
-    cur_count=$((cur_count + 1))
     if [ "$cur_count" -ge "$TIC_COUNT" ]; then
         break
     fi
-    echo "$(($(date +%s) * 1000 + $(date +%-N) / 1000000))"
+    date
     sleep 1
+    cur_count=$((cur_count + 1))
 done
 
 echo "Complete"
