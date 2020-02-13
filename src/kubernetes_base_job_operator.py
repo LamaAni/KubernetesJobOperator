@@ -155,14 +155,19 @@ class KubernetesBaseJobOperator(BaseOperator):
         if job_watcher.status in ["Failed", "Deleted"]:
             pod_count = len(
                 list(
-                    filter(lambda ow: ow.kind == "Pod", namespace_watcher.resource_watchers.values(),)
+                    filter(
+                        lambda resource_watcher: resource_watcher.kind == "Pod",
+                        namespace_watcher.resource_watchers.values(),
+                    )
                 )
             )
             self.log.error(f"Job Failed ({pod_count} pods), last pod/job status:")
 
             # log proper resource error
             def log_resource_error(resource_watcher: ThreadedKubernetesResourcesWatcher):
-                log_method = self.log.error if resource_watcher.status == "Failed" else self.log.info
+                log_method = (
+                    self.log.error if resource_watcher.status == "Failed" else self.log.info
+                )
                 log_method(
                     "FINAL STATUS: "
                     + resource_watcher.id

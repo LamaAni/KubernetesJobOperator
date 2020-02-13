@@ -429,12 +429,12 @@ class ThreadedKubernetesWatchPodLog(ThreadedKubernetesWatch):
 class ThreadedKubernetesWatchNamspeace(ThreadedKubernetesWatch):
     def __init__(self):
         super().__init__(
-            lambda *args, **kwargs: self.create_namespace_watcher(*args, **kwargs),
+            lambda *args, **kwargs: self._create_namespace_watcher(*args, **kwargs),
             read_as_dict=True,
         )
         self.data_event_name = "update"
 
-    def __kind_to_watch_uri(self, namespace, kind):
+    def _kind_to_watch_uri(self, namespace, kind):
         if kind == "Pod":
             return f"/api/v1/namespaces/{namespace}/pods"
         elif kind == "Job":
@@ -447,7 +447,7 @@ class ThreadedKubernetesWatchNamspeace(ThreadedKubernetesWatch):
             return f"/api/v1/namespaces/{namespace}/events"
         raise Exception("Watch type not found: " + kind)
 
-    def create_namespace_watcher(
+    def _create_namespace_watcher(
         self,
         client: kubernetes.client.CoreV1Api,
         namespace: str,
@@ -489,7 +489,7 @@ class ThreadedKubernetesWatchNamspeace(ThreadedKubernetesWatch):
         auth_settings = ["BearerToken"]
 
         api_call = client.api_client.call_api(
-            self.__kind_to_watch_uri(namespace, kind),
+            self._kind_to_watch_uri(namespace, kind),
             "GET",
             path_params,
             query_params,
@@ -511,10 +511,27 @@ class ThreadedKubernetesWatchNamspeace(ThreadedKubernetesWatch):
         self,
         client: kubernetes.client.CoreV1Api,
         kind: str,
-        namespace,
+        namespace: str,
         field_selector: str = None,
         label_selector: str = None,
     ):
+        """Streams events from the kubernetes namespace
+        
+        Arguments:
+
+            client {kubernetes.client.CoreV1Api} -- client
+            kind {str} -- The resources events to watch
+            namespace {str} -- The namespace
+        
+        Keyword Arguments:
+
+            field_selector {str} -- The field select to filter the resources (default: {None})
+            label_selector {str} -- The label selector to filter the resource (default: {None})
+        
+        Yields:
+
+            dict - the event yaml dictionary.
+        """
         self.thread_name = f"{namespace}__list_{kind}"
         return ThreadedKubernetesWatch.stream(
             self,
@@ -528,13 +545,26 @@ class ThreadedKubernetesWatchNamspeace(ThreadedKubernetesWatch):
     def start(
         self,
         client: kubernetes.client.CoreV1Api,
-        namespace,
         kind: str,
+        namespace: str,
         field_selector: str = None,
         label_selector: str = None,
     ):
+        """Starts the namespace watcher asnyc
+        
+        Arguments:
+
+            client {kubernetes.client.CoreV1Api} -- The kube client
+            namespace {str} -- The namespace
+            kind {str} -- The resource kind to watch ("Pod","Job"...)
+        
+        Keyword Arguments:
+
+            field_selector {str} -- The field select to filter the resources (default: {None})
+            label_selector {str} -- The label selector to filter the resource (default: {None})
+        """
         self.thread_name = f"{namespace}_list_{kind}"
-        return ThreadedKubernetesWatch.start(
+        ThreadedKubernetesWatch.start(
             self,
             client=client,
             namespace=namespace,

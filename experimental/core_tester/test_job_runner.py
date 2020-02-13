@@ -16,7 +16,7 @@ def create_job(name, namespace, image, command) -> kubernetes.client.V1Pod:
     pod["spec"]["template"]["spec"]["containers"][0]["command"] = command
     return pod
 
-5
+
 def read_pod_log(msg: str, sender):
     logging.info(f"{sender.id}: {msg}")
 
