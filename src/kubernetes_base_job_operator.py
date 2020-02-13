@@ -1,13 +1,11 @@
 import os
 import yaml
+
 from airflow.utils.decorators import apply_defaults
 from airflow.exceptions import AirflowException
 from airflow.operators import BaseOperator
-from .utils import to_kubernetes_valid_name
 
-# from airflow.operators.bash_operator import BashOperator
-# from airflow.contrib.operators.kubernetes_pod_operator import KubernetesPodOperator
-# from airflow.contrib.kubernetes import kube_client
+from .utils import to_kubernetes_valid_name
 from .job_runner import JobRunner
 from .watchers.threaded_kubernetes_resource_watchers import (
     ThreadedKubernetesResourcesWatcher,
