@@ -14,6 +14,10 @@ a job yaml configuration or an image uri.
 1. XCom
 1. Examples (other than TL;DR)
 
+### Next steps
+
+1. Create a python installation for pip.
+
 # BETA
 
 This repository is in beta testing. Any contributions are welcome.
