@@ -29,9 +29,17 @@ dag = DAG("bjo", default_args=default_args, description="Test base job operator"
 
 job_yaml=... # loaded from file.
 
-job_task = KubernetesJobOperator(task_id="test-job", job_yaml=job_yaml, dag=dag)
+job_task=KubernetesJobOperator(
+    task_id="test-job",
+    dag=dag,
+    image="ubuntu",
+    command=["bash", "-c", 'echo "all ok"'],
+)
 
-# when using image and commands notation
+job_task_from_yaml = KubernetesJobOperator(task_id="test-job-from-yaml", job_yaml=job_yaml, dag=dag)
+
+
+# Legacy compatibility to KubernetesPodOperator
 legacy_job_task = KubernetesLegacyJobOperator(
     task_id="legacy-test-job",
     image="ubuntu",
