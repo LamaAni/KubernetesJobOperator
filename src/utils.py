@@ -2,22 +2,40 @@ import random
 import re
 
 
-def get_from_dictionary_path(dictionary, path_names):
-    val = None
-    col = dictionary
+def get_yaml_path_value(yaml: dict, path_names):
+    value = yaml
     cur_path = []
     for name in path_names:
         cur_path.append(name)
         path_string = ".".join(map(lambda v: str(v), path_names))
-        if isinstance(col, dict):
-            assert name in col, "Missing path:" + path_string
-        elif isinstance(col, list):
-            assert len(col) > name, "Missing path:" + path_string
+
+        if isinstance(value, dict):
+            assert name in value, "Missing path:" + path_string
+        elif isinstance(value, list):
+            assert len(value) > name, "Missing path:" + path_string
         else:
             raise Exception("Expected path " + path_string + " to be a list or a dictionary")
-        val = col[name]
-        col = val
-    return val
+
+        value = value[name]
+    return value
+
+
+def set_yaml_path_value(yaml: dict, path_names: list, value, if_not_exists=False):
+    name_to_set = path_names[-1]
+    col = get_yaml_path_value(yaml, path_names[:-1])
+
+    if isinstance(col, list):
+        assert isinstance(name_to_set, int), "To set a list value you must have an integer key."
+        if name_to_set > -1 and len(col) > name_to_set:
+            if if_not_exists:
+                return
+            col[name_to_set] = value
+        else:
+            col.append(value)
+    else:
+        if if_not_exists and name_to_set in col:
+            return
+        col[name_to_set] = value
 
 
 def randomString(stringLength=10):

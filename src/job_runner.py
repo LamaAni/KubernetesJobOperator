@@ -7,7 +7,7 @@ from .watchers.threaded_kubernetes_resource_watchers import (
     ThreadedKubernetesResourcesWatcher,
 )
 from .watchers.event_handler import EventHandler
-from .utils import randomString, get_from_dictionary_path
+from .utils import randomString, get_yaml_path_value
 
 JOB_RUNNER_INSTANCE_ID_LABEL = "job-runner-instance-id"
 
@@ -104,7 +104,7 @@ class JobRunner(EventHandler):
 
         def get(path_names, default=None):
             try:
-                return get_from_dictionary_path(job_yaml, path_names)
+                return get_yaml_path_value(job_yaml, path_names)
             except Exception as e:
                 if default:
                     return default
@@ -167,7 +167,7 @@ class JobRunner(EventHandler):
         return job_yaml
 
     def execute_job(
-        self, job_yaml: dict
+        self, job_yaml: dict, start_timeout: int = None
     ) -> (ThreadedKubernetesResourcesWatcher, ThreadedKubernetesNamespaceResourcesWatcher):
         """Executes a job with a pre-prepared job yaml,
         to prepare the job yaml please call JobRunner.prepare_job_yaml
@@ -230,7 +230,9 @@ class JobRunner(EventHandler):
         batchClient.create_namespaced_job(namespace, job_yaml)
 
         # wait for job to start
-        job_watcher = watcher.waitfor_status("Job", name, namespace, status="Running")
+        job_watcher = watcher.waitfor_status(
+            "Job", name, namespace, status="Running", timeout=start_timeout
+        )
         self.emit("job_started", job_watcher, self)
 
         # waiting for the job to completed.

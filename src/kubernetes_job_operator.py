@@ -1,26 +1,30 @@
 import os
 import yaml
+from typing import List
 
 from airflow import configuration
 from airflow.exceptions import AirflowException
 from airflow.utils.decorators import apply_defaults
 from airflow.operators import BaseOperator
 
-from .utils import to_kubernetes_valid_name
+from .utils import to_kubernetes_valid_name, set_yaml_path_value
 from .job_runner import JobRunner
 from .watchers.threaded_kubernetes_resource_watchers import (
     ThreadedKubernetesResourcesWatcher,
     ThreadedKubernetesNamespaceResourcesWatcher,
 )
 
+JOB_YAML_DEFAULT_FILE = os.path.abspath(f"{__file__}.default.yaml")
 
-class KubernetesBaseJobOperator(BaseOperator):
+
+class KubernetesJobOperator(BaseOperator):
     job_yaml: dict = None
     job_runner: JobRunner = None
     in_cluster: bool = False
     config_file: str = None
     cluster_context: str = None
     job_name_random_postfix_length: int = 5
+    startup_timeout_seconds: int = None
     autogenerate_job_id_from_task_id: bool = True
     __waiting_for_job_execution: bool = False
 
@@ -30,11 +34,18 @@ class KubernetesBaseJobOperator(BaseOperator):
     @apply_defaults
     def __init__(
         self,
-        job_yaml,
+        command: List[str] = None,
+        arguments: List[str] = None,
+        image: str = None,
+        namespace: str = None,
+        name: str = None,
+        job_yaml=None,
+        job_yaml_filepath=None,
         delete_policy: str = "IfSucceeded",
         in_cluster: bool = False,
         config_file: str = None,
         cluster_context: str = None,
+        startup_timeout_seconds: int = None,
         validate_yaml_on_init: bool = configuration.conf.getboolean(
             "kube_job_operator", "VALIDATE_YAML_ON_INIT", fallback=False
         )
@@ -50,7 +61,6 @@ class KubernetesBaseJobOperator(BaseOperator):
             job_yaml {dict|string} -- The job to execute as a yaml description.
         
         Keyword Arguments:
-
             delete_policy {str} -- Any of: Never, Always, IfSucceeded (default: {"IfSucceeded"})
             in_cluster {bool} -- True if running inside a cluster (on a pod) (default: {False})
             config_file {str} -- The kubernetes configuration file to load, if 
@@ -72,7 +82,10 @@ class KubernetesBaseJobOperator(BaseOperator):
             metadata.finalizers += foregroundDeletion
         
         """
-        super(KubernetesBaseJobOperator, self).__init__(*args, **kwargs)
+        super(KubernetesJobOperator, self).__init__(*args, **kwargs)
+
+        # use or load
+        job_yaml = job_yaml or self.read_job_yaml(job_yaml_filepath or JOB_YAML_DEFAULT_FILE)
 
         assert job_yaml is not None and (
             isinstance(job_yaml, (dict, str))
@@ -84,10 +97,21 @@ class KubernetesBaseJobOperator(BaseOperator):
             "ifsucceeded",
         ], "the delete_policy must be one of: Never, Always, IfSucceeded"
 
+        # override/replace properties
+        self.name = name
+        self.namespace = namespace
+        self.command = command
+        self.arguments = arguments
+        self.image = image
+
+        # kubernetes config properties.
         self.job_yaml = job_yaml
         self.config_file = config_file
         self.cluster_context = cluster_context
         self.in_cluster = in_cluster
+
+        # operation properties
+        self.startup_timeout_seconds = startup_timeout_seconds
         self.delete_policy = delete_policy
 
         # create the job runner.
@@ -99,6 +123,13 @@ class KubernetesBaseJobOperator(BaseOperator):
 
         if validate_yaml_on_init:
             self.job_runner.prepare_job_yaml(self.job_yaml)
+
+    @staticmethod
+    def read_job_yaml(filepath):
+        job_yaml = ""
+        with open(filepath, "r", encoding="utf-8") as reader:
+            job_yaml = reader.read()
+        return job_yaml
 
     def create_job_name(self):
         """Create a name for the job, to be replaced with
@@ -206,8 +237,20 @@ class KubernetesBaseJobOperator(BaseOperator):
         self.job_yaml = self.job_runner.prepare_job_yaml(
             self.job_yaml,
             random_name_postfix_length=self.job_name_random_postfix_length,
-            force_job_name=job_name,
+            force_job_name=self.name or job_name,
         )
+
+        # updating override parameters (allow use default job yaml)
+        def set_if_not_none(path_names: list, value):
+            if value is None:
+                return
+            set_yaml_path_value(self.job_yaml, path_names, value)
+
+        set_if_not_none(["metadata", "name"], self.name)
+        set_if_not_none(["metadata", "namespace"], self.namespace)
+        set_if_not_none(["spec", "template", "spec", "containers", 0, "command"], self.command)
+        set_if_not_none(["spec", "template", "spec", "containers", 0, "args"], self.arguments)
+        set_if_not_none(["spec", "template", "spec", "containers", 0, "image"], self.image)
 
         # call parent.
         return super().pre_execute(context)
@@ -225,7 +268,9 @@ class KubernetesBaseJobOperator(BaseOperator):
         self.__waiting_for_job_execution = True
 
         # Executing the job
-        (job_watcher, namespace_watcher) = self.job_runner.execute_job(self.job_yaml)
+        (job_watcher, namespace_watcher) = self.job_runner.execute_job(
+            self.job_yaml, start_timeout=self.startup_timeout_seconds
+        )
 
         self.__waiting_for_job_execution = False
         self.log_job_result(job_watcher, namespace_watcher)

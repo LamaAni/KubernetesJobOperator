@@ -1,0 +1,19 @@
+# the code in this file is augmented by an ejs template
+# and by loading the yaml into memory.
+# some of these values will be replaced.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: default-job
+  finalizers:
+    - foregroundDeletion
+spec:
+  template:
+    # The spec will be replaced by the legacy pod
+    # generator.
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: task-executor
+          image: alpine
+  backoffLimit: 0

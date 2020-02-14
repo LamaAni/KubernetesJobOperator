@@ -1,5 +1,5 @@
 from airflow import DAG
-from src.kubernetes_base_job_operator import KubernetesBaseJobOperator
+from src.kubernetes_job_operator import KubernetesJobOperator
 
 # from airflow.operators.bash_operator import BashOperator
 from airflow.utils.dates import days_ago
@@ -9,10 +9,7 @@ from airflow.utils.dates import days_ago
 default_args = {"owner": "tester", "start_date": days_ago(2), "retries": 0}
 
 dag = DAG(
-    "bjo",
-    default_args=default_args,
-    description="Test base job operator",
-    schedule_interval=None,
+    "bjo", default_args=default_args, description="Test base job operator", schedule_interval=None,
 )
 
 
@@ -28,9 +25,12 @@ fail_job_yaml = read_job_yaml(__file__ + ".fail.yaml")
 
 # BashOperator(bash_command="date", task_id="test-bash", dag=dag)
 
-KubernetesBaseJobOperator(
-    task_id="test-job-success", job_yaml=success_job_yaml, dag=dag
+KubernetesJobOperator(task_id="test-job-success", job_yaml=success_job_yaml, dag=dag)
+KubernetesJobOperator(task_id="test-job-fail", job_yaml=fail_job_yaml, dag=dag)
+KubernetesJobOperator(
+    task_id="test-job-overrides",
+    dag=dag,
+    image="ubuntu",
+    command=["bash", "-c", "echo start; sleep 10; echo end"],
 )
-
-KubernetesBaseJobOperator(task_id="test-job-fail", job_yaml=fail_job_yaml, dag=dag)
 
