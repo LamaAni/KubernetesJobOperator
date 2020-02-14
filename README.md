@@ -31,7 +31,7 @@ from [lib_path].kubernetes_legacy_job_operator import KubernetesLegacyJobOperato
 from airflow.utils.dates import days_ago
 
 default_args = {"owner": "tester", "start_date": days_ago(2), "retries": 0}
-dag = DAG("bjo", default_args=default_args, description="Test base job operator", schedule_interval=None)
+dag = DAG("job-tester", default_args=default_args, description="Test base job operator", schedule_interval=None)
 
 job_yaml=... # loaded from file.
 
