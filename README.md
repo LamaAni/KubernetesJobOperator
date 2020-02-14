@@ -21,7 +21,8 @@ This repository is in alpha testing, and is published to allow contribution.
 
 ```python
 from airflow import DAG
-from src.kubernetes_job_operator import KubernetesJobOperator
+from [lib_path].kubernetes_job_operator import KubernetesJobOperator
+from [lib_path].kubernetes_legacy_job_operator import KubernetesLegacyJobOperator
 from airflow.utils.dates import days_ago
 
 default_args = {"owner": "tester", "start_date": days_ago(2), "retries": 0}
