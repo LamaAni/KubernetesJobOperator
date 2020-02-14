@@ -44,6 +44,7 @@ class KubernetesJobOperator(BaseOperator):
         delete_policy: str = "IfSucceeded",
         in_cluster: bool = False,
         config_file: str = None,
+        get_logs: bool = True,
         cluster_context: str = None,
         startup_timeout_seconds: int = None,
         validate_yaml_on_init: bool = configuration.conf.getboolean(
@@ -53,14 +54,22 @@ class KubernetesJobOperator(BaseOperator):
         *args,
         **kwargs,
     ):
-        """A operator that executes a kubernetes Job, in a namespace.
+        """A operator that executes an airflow task as a kubernetes Job.
         See: https://kubernetes.io/docs/concepts/workloads/controllers/jobs-run-to-completion/
         for notes about a kubernetes job.
 
-        Arguments:
-            job_yaml {dict|string} -- The job to execute as a yaml description.
-        
         Keyword Arguments:
+        
+            command {List[str]} -- The pod main container command (default: None)
+            arguments {List[str]} -- the pod main container arguments. (default: None)
+            image {str} -- The image to use in the pod. (default: None)
+            namespace {str} -- The namespace to execute in. (default: None)
+            name {str} -- Override automatic name creation for the job. (default: None)
+            job_yaml {dict|string} -- The job to execute as a yaml description. (default: None)
+                If None, will use a default job yaml command. In this case you must provide an
+                image.
+            job_yaml_filepath {str} -- The path to the file to read the yaml from, overridden by 
+                job_yaml. (default: None)
             delete_policy {str} -- Any of: Never, Always, IfSucceeded (default: {"IfSucceeded"})
             in_cluster {bool} -- True if running inside a cluster (on a pod) (default: {False})
             config_file {str} -- The kubernetes configuration file to load, if 
@@ -83,6 +92,10 @@ class KubernetesJobOperator(BaseOperator):
         
         """
         super(KubernetesJobOperator, self).__init__(*args, **kwargs)
+
+        assert (
+            job_yaml is not None or image is not None
+        ), "job_yaml is None, and an image was not defined. Unknown image to execute."
 
         # use or load
         job_yaml = job_yaml or self.read_job_yaml(job_yaml_filepath or JOB_YAML_DEFAULT_FILE)
@@ -113,6 +126,7 @@ class KubernetesJobOperator(BaseOperator):
         # operation properties
         self.startup_timeout_seconds = startup_timeout_seconds
         self.delete_policy = delete_policy
+        self.get_logs = get_logs
 
         # create the job runner.
         self.job_runner = JobRunner()
@@ -269,7 +283,7 @@ class KubernetesJobOperator(BaseOperator):
 
         # Executing the job
         (job_watcher, namespace_watcher) = self.job_runner.execute_job(
-            self.job_yaml, start_timeout=self.startup_timeout_seconds
+            self.job_yaml, start_timeout=self.startup_timeout_seconds, read_logs=self.get_logs
         )
 
         self.__waiting_for_job_execution = False

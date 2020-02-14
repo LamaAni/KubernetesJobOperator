@@ -167,7 +167,7 @@ class JobRunner(EventHandler):
         return job_yaml
 
     def execute_job(
-        self, job_yaml: dict, start_timeout: int = None
+        self, job_yaml: dict, start_timeout: int = None, read_logs: bool = True
     ) -> (ThreadedKubernetesResourcesWatcher, ThreadedKubernetesNamespaceResourcesWatcher):
         """Executes a job with a pre-prepared job yaml,
         to prepare the job yaml please call JobRunner.prepare_job_yaml
@@ -218,6 +218,7 @@ class JobRunner(EventHandler):
 
         # starting the watcher.
         watcher = ThreadedKubernetesNamespaceResourcesWatcher(coreClient)
+        watcher.auto_watch_pod_logs = read_logs
         watcher.remove_deleted_kube_resources_from_memory = False
         watcher.pipe(self)
         watcher.watch_namespace(

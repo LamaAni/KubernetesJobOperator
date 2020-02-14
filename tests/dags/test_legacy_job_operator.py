@@ -34,7 +34,11 @@ echo "Complete"
 # BashOperator(bash_command="date", task_id="test-bash", dag=dag)
 
 KubernetesLegacyJobOperator(
-    task_id="legacy-test-job-success", image="ubuntu", cmds=["bash", "-c", bash_script], dag=dag,
+    task_id="legacy-test-job-success",
+    image="ubuntu",
+    cmds=["bash", "-c", bash_script],
+    dag=dag,
+    is_delete_operator_pod=True,
 )
 
 KubernetesLegacyJobOperator(
@@ -42,5 +46,6 @@ KubernetesLegacyJobOperator(
     image="ubuntu",
     cmds=["bash", "-c", bash_script + "\nexit 99"],
     dag=dag,
+    is_delete_operator_pod=True,
 )
 
