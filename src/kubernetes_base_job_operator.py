@@ -1,8 +1,9 @@
 import os
 import yaml
 
-from airflow.utils.decorators import apply_defaults
+from airflow import configuration
 from airflow.exceptions import AirflowException
+from airflow.utils.decorators import apply_defaults
 from airflow.operators import BaseOperator
 
 from .utils import to_kubernetes_valid_name
@@ -11,14 +12,6 @@ from .watchers.threaded_kubernetes_resource_watchers import (
     ThreadedKubernetesResourcesWatcher,
     ThreadedKubernetesNamespaceResourcesWatcher,
 )
-
-# FIXME: To be moved to airflow config.
-DEFAULT_VALIDATE_YAML_ON_INIT = (
-    os.environ.get("AIRFLOW__KUBE_JOB_OPERATOR__VALIDATE_YAML_ON_INIT", "false").lower() == "true"
-)
-
-# FIXME: To be moved to airflow config.
-MAX_JOB_NAME_LENGTH = int(os.environ.get("AIRFLOW__KUBE_JOB_OPERATOR__MAX_JOB_NAME_LENGTH", "50"))
 
 
 class KubernetesBaseJobOperator(BaseOperator):
@@ -42,7 +35,10 @@ class KubernetesBaseJobOperator(BaseOperator):
         in_cluster: bool = False,
         config_file: str = None,
         cluster_context: str = None,
-        validate_yaml_on_init: bool = DEFAULT_VALIDATE_YAML_ON_INIT,
+        validate_yaml_on_init: bool = configuration.conf.getboolean(
+            "kube_job_operator", "VALIDATE_YAML_ON_INIT", fallback=False
+        )
+        or False,
         *args,
         **kwargs,
     ):
@@ -63,7 +59,7 @@ class KubernetesBaseJobOperator(BaseOperator):
                 (default: {None})
             validate_yaml_on_init {bool} -- If true, validates the yaml in the constructor,
                 setting this to True, will slow dag creation.
-                (default: {from env: AIRFLOW__KUBE_JOB_OPERATOR__MAX_JOB_NAME_LENGTH or False})
+                (default: {from env/airflow config: AIRFLOW__KUBE_JOB_OPERATOR__VALIDATE_YAML_ON_INIT or False})
 
         Auto completed yaml values (if missing):
 
@@ -114,7 +110,13 @@ class KubernetesBaseJobOperator(BaseOperator):
         Returns:
             str -- The job name
         """
-        return to_kubernetes_valid_name(self.task_id, max_length=MAX_JOB_NAME_LENGTH)
+        return to_kubernetes_valid_name(
+            self.task_id,
+            max_length=configuration.conf.getboolean(
+                "kube_job_operator", "MAX_JOB_NAME_LENGTH", fallback=False
+            )
+            or 50,
+        )
 
     def on_job_log(self, msg: str, sender: ThreadedKubernetesResourcesWatcher):
         """Write a job log to the airflow logger. Override this method
