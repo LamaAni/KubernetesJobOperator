@@ -33,8 +33,6 @@ from airflow.utils.dates import days_ago
 default_args = {"owner": "tester", "start_date": days_ago(2), "retries": 0}
 dag = DAG("job-tester", default_args=default_args, description="Test base job operator", schedule_interval=None)
 
-job_yaml=... # loaded from file.
-
 job_task=KubernetesJobOperator(
     task_id="test-job",
     dag=dag,
@@ -42,6 +40,7 @@ job_task=KubernetesJobOperator(
     command=["bash", "-c", 'echo "all ok"'],
 )
 
+job_yaml=... # loaded from file.
 job_task_from_yaml = KubernetesJobOperator(task_id="test-job-from-yaml", job_yaml=job_yaml, dag=dag)
 
 
