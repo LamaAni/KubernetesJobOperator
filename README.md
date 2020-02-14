@@ -1,7 +1,15 @@
 # Airflow KubernetesJobOperator
 
-An airflow job operator, for kubernetes. Given a specific yaml or image and command,
-the operator will execute a Kuberntes Job.
+An airflow job operator that executes a task as a Kubernetes job on a cluster, given
+a job yaml configuration or an image uri.
+
+Two operators are available:
+1. KubernetesJobOperator - The main kubernetes job operator.
+1. KubernetesLegacyJobOperator - A operator that accepts the same parameters as
+the KubernetesPodOperator and allows seamless integration between old and new.
+
+Still missing (on both):
+1. XCom
 
 # ALPHA
 
