@@ -1,15 +1,10 @@
 from airflow import DAG
 from src.kubernetes_job_operator import KubernetesJobOperator
-
-# from airflow.operators.bash_operator import BashOperator
 from airflow.utils.dates import days_ago
 
-# These args will get passed on to each operator
-# You can override them on a per-task basis during operator initialization
 default_args = {"owner": "tester", "start_date": days_ago(2), "retries": 0}
-
 dag = DAG(
-    "bjo", default_args=default_args, description="Test base job operator", schedule_interval=None,
+    "bjo", default_args=default_args, description="Test base job operator", schedule_interval=None
 )
 
 
