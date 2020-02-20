@@ -19,28 +19,11 @@ from setuptools import setup
 
 here = os.path.abspath(os.path.dirname(__file__))
 
-
-def read(*parts):
-    """Taken from pypa pip setup.py:
-    intentionally *not* adding an encoding option to open, See:
-       https://github.com/pypa/virtualenv/issues/201#issuecomment-3145690
-    """
-    return codecs.open(os.path.join(here, *partss), "r").read()
-
-
-def find_version(*file_paths):
-    version_file = read(*file_paths)
-    version_match = re.search(r"^__version__ = ['\"]([^'\"]*)['\"]", version_file, re.M)
-    if version_match:
-        return version_match.group(1)
-    raise RuntimeError("Unable to find version string.")
-
-
 setup(
     name="airflow_kubernetes_job_operator",
-    version=find_version("airflow_kubernetes_job_operator", "__init__.py"),
+    version="0.1.0",
     description="An airflow job operator that executes a task as a Kubernetes job on a cluster, given a job yaml configuration or an image uri.",
-    long_description=read("README.md"),
+    long_description="Please see readme.md",
     classifiers=[],
     author="Zav Shotan",
     author_email="",
@@ -48,5 +31,6 @@ setup(
     packages=["airflow_kubernetes_job_operator"],
     platforms="any",
     license="LICENSE",
-    install_requires=["apache-airflow>=1.10.3",],
+    install_requires=["PyYAML>=5.0", "kubernetes>=9.0.0", "urllib3>=1.25.0"],
+    python_requires=">=3.6",
 )
