@@ -22,6 +22,20 @@ a job yaml configuration or an image uri.
 
 This repository is in beta testing. Any contributions are welcome.
 
+# Install (for now, directly from the git repo)
+
+To install from master branch,
+
+```shell
+pip install git+https://github.com/LamaAni/KubernetesJobOperator.git@master
+```
+
+To install from a release (tag)
+
+```shell
+pip install git+https://github.com/LamaAni/KubernetesJobOperator.git@[tag]
+```
+
 # TL;DR
 
 ```python
