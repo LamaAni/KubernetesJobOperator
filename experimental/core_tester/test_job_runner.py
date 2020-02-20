@@ -3,7 +3,7 @@ import os
 import yaml
 from utils import logging, load_raw_formatted_file
 from datetime import datetime
-from src.job_runner import JobRunner
+from airflow_kubernetes_job_operator.job_runner import JobRunner
 
 logging.basicConfig(level="INFO")
 CUR_DIRECTORY = os.path.abspath(os.path.dirname(__file__))

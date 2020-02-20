@@ -2,7 +2,7 @@ import kubernetes
 import os
 import yaml
 from utils import logging
-from src.watchers.threaded_kubernetes_resource_watchers import (
+from airflow_kubernetes_job_operator.watchers.threaded_kubernetes_resource_watchers import (
     ThreadedKubernetesNamespaceResourcesWatcher,
 )
 
