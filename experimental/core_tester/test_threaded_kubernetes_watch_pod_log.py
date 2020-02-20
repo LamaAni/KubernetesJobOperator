@@ -1,7 +1,7 @@
 import kubernetes
 import os
 from .utils import logging
-from src.watchers.threaded_kubernetes_watch import (
+from airflow_kubernetes_job_operator.watchers.threaded_kubernetes_watch import (
     ThreadedKubernetesWatchPodLog,
     ThreadedKubernetesWatchNamspeace,
 )

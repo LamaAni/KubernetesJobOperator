@@ -1,7 +1,6 @@
 # Airflow KubernetesJobOperator
 
-An airflow job operator that executes a task as a Kubernetes job on a cluster, given
-a job yaml configuration or an image uri.
+An airflow job operator that executes a task as a Kubernetes job on a cluster, given a job yaml configuration or an image uri.
 
 ### Two operators are available:
 
