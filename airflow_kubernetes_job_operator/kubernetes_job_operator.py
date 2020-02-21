@@ -42,7 +42,7 @@ class KubernetesJobOperator(BaseOperator):
         job_yaml=None,
         job_yaml_filepath=None,
         delete_policy: str = "IfSucceeded",
-        in_cluster: bool = False,
+        in_cluster: bool = None,
         config_file: str = None,
         get_logs: bool = True,
         cluster_context: str = None,

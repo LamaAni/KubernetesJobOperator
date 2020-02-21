@@ -31,7 +31,7 @@ class JobRunner(EventHandler):
         super().__init__()
 
     def load_kuberntes_configuration(
-        self, in_cluster: bool = False, config_file: str = None, context: str = None
+        self, in_cluster: bool = None, config_file: str = None, context: str = None
     ):
         """Loads the appropriate kubernetes configuration into the global
         context.
@@ -39,12 +39,16 @@ class JobRunner(EventHandler):
         Keyword Arguments:
 
             in_cluster {bool} -- If true, load the configuration from the cluster
-                (default: {False})
+                (default: {None}, will try and autodetect)
             config_file {str} -- the path to the file to load from,
                 if None, loads the kubernetes default ~/.kube. (default: {None})
             context {str} -- The context to load. If None loads the current
                 context (default: {None})
         """
+        in_cluster = (
+            in_cluster or os.environ.get("KUBERNETES_SERVICE_HOST", None) is not None
+        )
+
         # loading the current config to use.
         if in_cluster:
             kubernetes.config.load_incluster_config()

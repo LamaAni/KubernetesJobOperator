@@ -27,7 +27,7 @@ class KubernetesLegacyJobOperator(KubernetesJobOperator):
         volumes: List[Volume] = None,
         env_vars: dict = None,
         secrets: List[Secret] = None,
-        in_cluster: bool = False,
+        in_cluster: bool = None,
         cluster_context: str = None,
         labels: dict = None,
         startup_timeout_seconds: float = 120,
@@ -100,7 +100,7 @@ class KubernetesLegacyJobOperator(KubernetesJobOperator):
         :param secrets: Kubernetes secrets to inject in the container,
             They can be exposed as environment vars or files in a volume.
         :type secrets: list[airflow.contrib.kubernetes.secret.Secret]
-        :param in_cluster: run kubernetes client with in_cluster configuration
+        :param in_cluster: run kubernetes client with in_cluster configuration (if None autodetect)
         :type in_cluster: bool
         :param cluster_context: context that points to kubernetes cluster.
             Ignored when in_cluster is True. If None, current-context is used.
