@@ -98,7 +98,9 @@ class KubernetesJobOperator(BaseOperator):
         ), "job_yaml is None, and an image was not defined. Unknown image to execute."
 
         # use or load
-        job_yaml = job_yaml or self.read_job_yaml(job_yaml_filepath or JOB_YAML_DEFAULT_FILE)
+        job_yaml = job_yaml or self.read_job_yaml(
+            job_yaml_filepath or JOB_YAML_DEFAULT_FILE
+        )
 
         assert job_yaml is not None and (
             isinstance(job_yaml, (dict, str))
@@ -209,9 +211,13 @@ class KubernetesJobOperator(BaseOperator):
             self.log.error(f"Job Failed ({pod_count} pods), last pod/job status:")
 
             # log proper resource error
-            def log_resource_error(resource_watcher: ThreadedKubernetesResourcesWatcher):
+            def log_resource_error(
+                resource_watcher: ThreadedKubernetesResourcesWatcher,
+            ):
                 log_method = (
-                    self.log.error if resource_watcher.status == "Failed" else self.log.info
+                    self.log.error
+                    if resource_watcher.status == "Failed"
+                    else self.log.info
                 )
                 log_method(
                     "FINAL STATUS: "
@@ -262,9 +268,15 @@ class KubernetesJobOperator(BaseOperator):
 
         set_if_not_none(["metadata", "name"], self.name)
         set_if_not_none(["metadata", "namespace"], self.namespace)
-        set_if_not_none(["spec", "template", "spec", "containers", 0, "command"], self.command)
-        set_if_not_none(["spec", "template", "spec", "containers", 0, "args"], self.arguments)
-        set_if_not_none(["spec", "template", "spec", "containers", 0, "image"], self.image)
+        set_if_not_none(
+            ["spec", "template", "spec", "containers", 0, "command"], self.command
+        )
+        set_if_not_none(
+            ["spec", "template", "spec", "containers", 0, "args"], self.arguments
+        )
+        set_if_not_none(
+            ["spec", "template", "spec", "containers", 0, "image"], self.image
+        )
 
         # call parent.
         return super().pre_execute(context)
@@ -283,11 +295,17 @@ class KubernetesJobOperator(BaseOperator):
 
         # Executing the job
         (job_watcher, namespace_watcher) = self.job_runner.execute_job(
-            self.job_yaml, start_timeout=self.startup_timeout_seconds, read_logs=self.get_logs
+            self.job_yaml,
+            start_timeout=self.startup_timeout_seconds,
+            read_logs=self.get_logs,
         )
 
         self.__waiting_for_job_execution = False
         self.log_job_result(job_watcher, namespace_watcher)
+
+        result_error = None
+        if job_watcher.status != "Succeeded":
+            result_error = AirflowException(f"Job {job_watcher.status}")
 
         # Check delete policy.
         delete_policy = self.delete_policy.lower()
@@ -299,8 +317,8 @@ class KubernetesJobOperator(BaseOperator):
         else:
             self.log.warning("Job resource(s) left in namespace")
 
-        if job_watcher.status != "Succeeded":
-            raise AirflowException(f"Job {job_watcher.status}")
+        if result_error:
+            raise result_error
 
     def on_kill(self):
         """Called when the task is killed, either by 
@@ -315,7 +333,8 @@ class KubernetesJobOperator(BaseOperator):
                 self.log.info("Job deleted.")
             except Exception:
                 self.log.error(
-                    "Failed to delete an aborted/killed" + " job! The job may still be executing."
+                    "Failed to delete an aborted/killed"
+                    + " job! The job may still be executing."
                 )
 
         return super().on_kill()
