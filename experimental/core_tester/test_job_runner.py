@@ -28,8 +28,7 @@ def resource_status_changed(status, sender):
 
 # load kubernetes configuration.
 kubernetes.config.load_kube_config()
-contexts, active_context = kubernetes.config.list_kube_config_contexts()
-current_namespace = active_context["context"]["namespace"]
+current_namespace = JobRunner.get_current_namespace()
 
 # prepare the runner.
 runner = JobRunner()

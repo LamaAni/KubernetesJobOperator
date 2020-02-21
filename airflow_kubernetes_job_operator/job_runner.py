@@ -10,6 +10,9 @@ from .event_handler import EventHandler
 from .utils import randomString, get_yaml_path_value
 
 JOB_RUNNER_INSTANCE_ID_LABEL = "job-runner-instance-id"
+KUBERNETES_IN_CLUSTER_SERVICE_ACCOUNT_PATH = (
+    "/var/run/secrets/kubernetes.io/serviceaccount"
+)
 
 
 class JobRunner(EventHandler):
@@ -59,6 +62,34 @@ class JobRunner(EventHandler):
             ), f"Cannot find kubernetes configuration file @ {config_file}"
 
             kubernetes.config.load_kube_config(config_file=config_file, context=context)
+
+    @staticmethod
+    def get_current_namespace():
+        """Returns the current namespace.
+        Returns:
+            str
+        """
+        namespace = ""
+        try:
+            in_cluster_namespace_fpath = os.path.join(
+                KUBERNETES_IN_CLUSTER_SERVICE_ACCOUNT_PATH, "namespace"
+            )
+            if os.path.exists(in_cluster_namespace_fpath):
+                with open(in_cluster_namespace_fpath, "r", encoding="utf-8") as nsfile:
+                    namespace = nsfile.read()
+            else:
+                contexts, active_context = kubernetes.config.list_kube_config_contexts()
+                namespace = (
+                    active_context["context"]["namespace"]
+                    if "namespace" in active_context["context"]
+                    else "default"
+                )
+        except Exception as e:
+            raise Exception(
+                "Could not resolve current namespace, you must provide a namespace or a context file",
+                e,
+            )
+        return namespace
 
     def prepare_job_yaml(
         self, job_yaml, random_name_postfix_length: int = 0, force_job_name: str = None
@@ -141,9 +172,13 @@ class JobRunner(EventHandler):
 
         # assign current namespace if one is not defined.
         if "namespace" not in job_yaml["metadata"]:
-            contexts, active_context = kubernetes.config.list_kube_config_contexts()
-            current_namespace = active_context["context"]["namespace"]
-            job_yaml["metadata"]["namespace"] = current_namespace
+            try:
+                job_yaml["metadata"]["namespace"] = self.get_current_namespace()
+            except Exception as ex:
+                raise Exception(
+                    "Namespace was not provided in yaml and auto namespace resolution failed.",
+                    ex,
+                )
 
         # FIXME: Should be a better way to add missing values.
         if "labels" not in job_yaml["metadata"]:
