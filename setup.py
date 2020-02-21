@@ -21,7 +21,7 @@ here = os.path.abspath(os.path.dirname(__file__))
 
 setup(
     name="airflow_kubernetes_job_operator",
-    version="0.2.4",
+    version="0.2.5",
     description="An airflow job operator that executes a task as a Kubernetes job on a cluster, given a job yaml configuration or an image uri.",
     long_description="Please see readme.md",
     classifiers=[],
