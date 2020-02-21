@@ -9,7 +9,7 @@ from airflow.operators import BaseOperator
 
 from .utils import to_kubernetes_valid_name, set_yaml_path_value
 from .job_runner import JobRunner
-from .watchers.threaded_kubernetes_resource_watchers import (
+from .threaded_kubernetes_resource_watchers import (
     ThreadedKubernetesResourcesWatcher,
     ThreadedKubernetesNamespaceResourcesWatcher,
 )

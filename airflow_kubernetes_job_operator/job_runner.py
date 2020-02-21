@@ -2,11 +2,11 @@ import kubernetes
 import yaml
 import copy
 import os
-from .watchers.threaded_kubernetes_resource_watchers import (
+from .threaded_kubernetes_resource_watchers import (
     ThreadedKubernetesNamespaceResourcesWatcher,
     ThreadedKubernetesResourcesWatcher,
 )
-from .watchers.event_handler import EventHandler
+from .event_handler import EventHandler
 from .utils import randomString, get_yaml_path_value
 
 JOB_RUNNER_INSTANCE_ID_LABEL = "job-runner-instance-id"
@@ -99,7 +99,9 @@ class JobRunner(EventHandler):
 
         # make sure the yaml is an dict.
         job_yaml = (
-            copy.deepcopy(job_yaml) if isinstance(job_yaml, dict) else yaml.safe_load(job_yaml)
+            copy.deepcopy(job_yaml)
+            if isinstance(job_yaml, dict)
+            else yaml.safe_load(job_yaml)
         )
 
         def get(path_names, default=None):
@@ -116,8 +118,9 @@ class JobRunner(EventHandler):
                 get(path_names) is not None
             ), f"job {def_name or path_names[-1]} must be defined @ {path_string}"
 
-        assert get(["kind"]) == "Job", "job_yaml resource must be of 'kind' 'Job', recived " + get(
-            ["kind"], "[unknown]"
+        assert get(["kind"]) == "Job", (
+            "job_yaml resource must be of 'kind' 'Job', recived "
+            + get(["kind"], "[unknown]")
         )
 
         assert_defined(["metadata", "name"])
@@ -128,7 +131,9 @@ class JobRunner(EventHandler):
             job_yaml["metadata"]["name"] = force_job_name
 
         if random_name_postfix_length > 0:
-            job_yaml["metadata"]["name"] += "-" + randomString(random_name_postfix_length)
+            job_yaml["metadata"]["name"] += "-" + randomString(
+                random_name_postfix_length
+            )
 
         # assign current namespace if one is not defined.
         if "namespace" not in job_yaml["metadata"]:
@@ -168,7 +173,10 @@ class JobRunner(EventHandler):
 
     def execute_job(
         self, job_yaml: dict, start_timeout: int = None, read_logs: bool = True
-    ) -> (ThreadedKubernetesResourcesWatcher, ThreadedKubernetesNamespaceResourcesWatcher):
+    ) -> (
+        ThreadedKubernetesResourcesWatcher,
+        ThreadedKubernetesNamespaceResourcesWatcher,
+    ):
         """Executes a job with a pre-prepared job yaml,
         to prepare the job yaml please call JobRunner.prepare_job_yaml
 
@@ -214,7 +222,9 @@ class JobRunner(EventHandler):
             pass
 
         if status is not None:
-            raise Exception(f"Job {name} already exists in namespace {namespace}, cannot exec.")
+            raise Exception(
+                f"Job {name} already exists in namespace {namespace}, cannot exec."
+            )
 
         # starting the watcher.
         watcher = ThreadedKubernetesNamespaceResourcesWatcher(coreClient)
