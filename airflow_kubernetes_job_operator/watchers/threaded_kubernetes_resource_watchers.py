@@ -43,7 +43,9 @@ class ThreadedKubernetesResourcesWatcher(EventHandler):
         """
         super().__init__()
         self.client = client
-        self._id = ThreadedKubernetesResourcesWatcher.compose_resource_id_from_yaml(resource_yaml)
+        self._id = ThreadedKubernetesResourcesWatcher.compose_resource_id_from_yaml(
+            resource_yaml
+        )
         self.auto_watch_pod_logs = auto_watch_pod_logs
         self._was_deleted = False
 
@@ -222,7 +224,8 @@ class ThreadedKubernetesResourcesWatcher(EventHandler):
                         if (
                             "waiting" in container_status["state"]
                             and "reason" in container_status["state"]["waiting"]
-                            and "BackOff" in container_status["state"]["waiting"]["reason"]
+                            and "BackOff"
+                            in container_status["state"]["waiting"]["reason"]
                         ):
                             return "Failed"
                         if "error" in container_status["state"]:
@@ -245,7 +248,9 @@ class ThreadedKubernetesResourcesWatcher(EventHandler):
         # Called to update a current pod state.
         # may start/read pod logs.
         cur_status = self.status
-        need_read_pod_logs = cur_status and cur_status != "Pending" and not self._has_read_logs
+        need_read_pod_logs = (
+            cur_status and cur_status != "Pending" and not self._has_read_logs
+        )
 
         if need_read_pod_logs:
             self._has_read_logs = True
@@ -272,7 +277,9 @@ class ThreadedKubernetesResourcesWatcher(EventHandler):
             if run_async:
                 self._log_reader.start(self.client, self.name, self.namespace)
             else:
-                self._log_reader.read_currnet_logs(self.client, self.name, self.namespace)
+                self._log_reader.read_currnet_logs(
+                    self.client, self.name, self.namespace
+                )
         finally:
             pod_log_read_lock.release()
 
@@ -413,7 +420,9 @@ class ThreadedKubernetesNamespaceResourcesWatcher(EventHandler):
         kube_resource = event["object"]  # defined by kube response.
         event_type = event["type"]
 
-        oid = ThreadedKubernetesResourcesWatcher.compose_resource_id_from_yaml(kube_resource)
+        oid = ThreadedKubernetesResourcesWatcher.compose_resource_id_from_yaml(
+            kube_resource
+        )
         if oid not in self._resource_watchers:
             # no need to create in order to delete.
             if event_type == "DELETED":
@@ -440,9 +449,13 @@ class ThreadedKubernetesNamespaceResourcesWatcher(EventHandler):
         kube_resource = event["object"]
         event_type = event["type"]
 
-        assert event_type == "DELETED", "When deleting a resource, the event type must be DELETED."
+        assert (
+            event_type == "DELETED"
+        ), "When deleting a resource, the event type must be DELETED."
 
-        oid = ThreadedKubernetesResourcesWatcher.compose_resource_id_from_yaml(kube_resource)
+        oid = ThreadedKubernetesResourcesWatcher.compose_resource_id_from_yaml(
+            kube_resource
+        )
 
         if oid in self._resource_watchers:
             watcher = self._resource_watchers[oid]
@@ -544,7 +557,9 @@ class ThreadedKubernetesNamespaceResourcesWatcher(EventHandler):
             or predict is not None
         ), "Either status, status_list or predict callable must be defined"
 
-        def default_predict(match_status: str, sender: ThreadedKubernetesResourcesWatcher):
+        def default_predict(
+            match_status: str, sender: ThreadedKubernetesResourcesWatcher
+        ):
             if status is not None and status == match_status:
                 return True
             if status_list is not None:
