@@ -81,7 +81,7 @@ class KubernetesLegacyJobOperator(KubernetesJobOperator):
                                 comma separated list: secret_a,secret_b
         :type image_pull_secrets: str
         :param ports: ports for launched pod
-        :type ports: list[airflow.contrib.kubernetes.pod.Port]
+        :type ports: list
         :param volume_mounts: volumeMounts for launched pod
         :type volume_mounts: list[airflow.contrib.kubernetes.volume_mount.VolumeMount]
         :param volumes: volumes for launched pod. Includes ConfigMaps and PersistentVolumes
