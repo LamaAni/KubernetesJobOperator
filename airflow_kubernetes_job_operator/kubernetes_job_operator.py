@@ -7,7 +7,7 @@ from airflow.exceptions import AirflowException
 from airflow.utils.decorators import apply_defaults
 from airflow.operators import BaseOperator
 
-from airflow_kubernetes_job_operator.utils import to_kubernetes_valid_name, set_yaml_path_value
+from airflow_kubernetes_job_operator.utils import to_kubernetes_valid_name, set_yaml_path_value, get_yaml_path_value
 from airflow_kubernetes_job_operator.job_runner import JobRunner
 from airflow_kubernetes_job_operator.threaded_kubernetes_resource_watchers import (
     ThreadedKubernetesResourcesWatcher,
