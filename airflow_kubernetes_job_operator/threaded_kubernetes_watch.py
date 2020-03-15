@@ -4,7 +4,7 @@ import re
 from datetime import datetime
 from time import sleep
 from queue import SimpleQueue
-from .event_handler import EventHandler
+from airflow_kubernetes_job_operator.event_handler import EventHandler
 from urllib3.connectionpool import MaxRetryError, ReadTimeoutError, TimeoutError
 from urllib3.response import HTTPResponse
 import kubernetes
@@ -17,11 +17,11 @@ class ThreadedKubernetesWatchThreadEvent:
 
     def __init__(self, event_type, value=None):
         """A watch event, called from the reader thread.
-        
+
         Arguments:
 
             event_type {str} -- The type of the event
-        
+
         Keyword Arguments:
 
             value {any} -- The event value (default: {None})
@@ -59,14 +59,14 @@ class ThreadedKubernetesWatch(EventHandler):
         """Creates a threaded response reader, for the kubernetes API.
         Allows for partial readers, with continue on network disconnect.
         The stop command will kill the reader thread and associated connections.
-        
+
         Arguments:
 
             create_response_stream {callable} -- The query create command
-        
+
         Keyword Arguments:
 
-            read_as_dict {bool} -- If true, the response value is a dictionary 
+            read_as_dict {bool} -- If true, the response value is a dictionary
             (as json), and should be parsed. (default: {True})
         """
         super().__init__()
@@ -93,7 +93,7 @@ class ThreadedKubernetesWatch(EventHandler):
     @property
     def is_streaming(self):
         """True if currently reading events from the kubernetes cluster.
-        
+
         Returns:
             bool -- True if streaming.
         """
@@ -101,11 +101,11 @@ class ThreadedKubernetesWatch(EventHandler):
 
     def read_event(self, data):
         """Parses the event data.
-        
+
         Arguments:
 
             data {str} -- The event data.
-        
+
         Returns:
 
             dict/str -- Returns the parsed data, depending on read_as_dict.
@@ -117,11 +117,11 @@ class ThreadedKubernetesWatch(EventHandler):
 
     def _invoke_threaded_event(self, event_type: str, event_value=None):
         """Call to emit an event.
-        
+
         Arguments:
 
             event_type {str} -- The type of the event
-        
+
         Keyword Arguments:
 
             event_value {any} -- The event value(default: {None})
@@ -133,7 +133,7 @@ class ThreadedKubernetesWatch(EventHandler):
     def _reader_thread(self, *args, **kwargs):
         """ FOR INTERNAL USE ONLY.
         The reader thread.
-        
+
         Yields:
 
             str -- data line.
@@ -224,7 +224,7 @@ class ThreadedKubernetesWatch(EventHandler):
     def _start_streaming_thread(self, run_async=False, *args, **kwargs):
         """ FOR INTERNAL USE ONLY.
         Call to start the streaming thread.
-        
+
         Keyword Arguments:
 
             run_async {bool} -- The final events will be reader
@@ -259,12 +259,12 @@ class ThreadedKubernetesWatch(EventHandler):
 
     def stream(self, *args, **kwargs):
         """Stream the events from the kubernetes cluster, using yield.
-        
+
         NOTE: Any arguments provided to this function will passed to the callable
         method provided in the constructor. (create_response_stream)
 
         Yields:
-        
+
             any -- The event resource/str
         """
 
@@ -308,7 +308,7 @@ class ThreadedKubernetesWatch(EventHandler):
 
     def _close_response_stream(self, throw_errors=True):
         """Stop the current response, if any
-        
+
         Keyword Arguments:
             throw_errors {bool} -- If true, throw errors from the stop process. (default: {True})
         """
@@ -346,7 +346,7 @@ class ThreadedKubernetesWatchPodLog(ThreadedKubernetesWatch):
     def __init__(self):
         """Create a threaded pod log reader, that will watch the pods
         for changes, and emit these as a 'log' event.
-        
+
         Events:
 
             log - called on log.
@@ -361,13 +361,13 @@ class ThreadedKubernetesWatchPodLog(ThreadedKubernetesWatch):
         self, client: kubernetes.client.CoreV1Api, name: str, namespace: str, *args, **kwargs,
     ):
         """PRIVATE FOR INTERNAL USE ONLY.
-        
+
         Arguments:
 
             client {kubernetes.client.CoreV1Api} -- The client
             name {str} -- The pod name
             namespace {str} -- The pod namespace.
-        
+
         Returns:
 
             HTTPResponse -- The http response.
@@ -378,13 +378,13 @@ class ThreadedKubernetesWatchPodLog(ThreadedKubernetesWatch):
 
     def stream(self, client: kubernetes.client.CoreV1Api, name: str, namespace: str):
         """Call to stream log events from a specific pod. Returns iterator.
-        
+
         Arguments:
 
             client {kubernetes.client.CoreV1Api} -- The kubernetes client
             name {str} -- The pod
             namespace {str} -- The pod namespace.
-        
+
         Returns:
 
             iterator(str) -- The pod log iterator.
@@ -393,16 +393,16 @@ class ThreadedKubernetesWatchPodLog(ThreadedKubernetesWatch):
         return ThreadedKubernetesWatch.stream(self, client=client, name=name, namespace=namespace)
 
     def start(self, client: kubernetes.client.CoreV1Api, name: str, namespace: str):
-        """Starts the pod log reader asynchronically. 
-        
+        """Starts the pod log reader asynchronically.
+
         Arguments:
 
             client {kubernetes.client.CoreV1Api} -- [description]
             name {str} -- [description]
             namespace {str} -- [description]
-        
+
         Returns:
-        
+
             [type] -- [description]
         """
         self.thread_name = f"{namespace}_Pod_{name}"
@@ -410,7 +410,7 @@ class ThreadedKubernetesWatchPodLog(ThreadedKubernetesWatch):
 
     def read_currnet_logs(self, client: kubernetes.client.CoreV1Api, name: str, namespace: str):
         """Read all of the current logs from the resource. Helper method.
-        
+
         Arguments:
 
             client {kubernetes.client.CoreV1Api} -- The kube client
@@ -517,18 +517,18 @@ class ThreadedKubernetesWatchNamspeace(ThreadedKubernetesWatch):
         label_selector: str = None,
     ):
         """Streams events from the kubernetes namespace
-        
+
         Arguments:
 
             client {kubernetes.client.CoreV1Api} -- client
             kind {str} -- The resources events to watch
             namespace {str} -- The namespace
-        
+
         Keyword Arguments:
 
             field_selector {str} -- The field select to filter the resources (default: {None})
             label_selector {str} -- The label selector to filter the resource (default: {None})
-        
+
         Yields:
 
             dict - the event yaml dictionary.
@@ -552,13 +552,13 @@ class ThreadedKubernetesWatchNamspeace(ThreadedKubernetesWatch):
         label_selector: str = None,
     ):
         """Starts the namespace watcher asnyc
-        
+
         Arguments:
 
             client {kubernetes.client.CoreV1Api} -- The kube client
             namespace {str} -- The namespace
             kind {str} -- The resource kind to watch ("Pod","Job"...)
-        
+
         Keyword Arguments:
 
             field_selector {str} -- The field select to filter the resources (default: {None})

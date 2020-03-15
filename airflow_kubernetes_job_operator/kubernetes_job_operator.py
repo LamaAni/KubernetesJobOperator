@@ -7,9 +7,9 @@ from airflow.exceptions import AirflowException
 from airflow.utils.decorators import apply_defaults
 from airflow.operators import BaseOperator
 
-from .utils import to_kubernetes_valid_name, set_yaml_path_value, get_yaml_path_value
-from .job_runner import JobRunner
-from .threaded_kubernetes_resource_watchers import (
+from airflow_kubernetes_job_operator.utils import to_kubernetes_valid_name, set_yaml_path_value
+from airflow_kubernetes_job_operator.job_runner import JobRunner
+from airflow_kubernetes_job_operator.threaded_kubernetes_resource_watchers import (
     ThreadedKubernetesResourcesWatcher,
     ThreadedKubernetesNamespaceResourcesWatcher,
 )
@@ -60,7 +60,7 @@ class KubernetesJobOperator(BaseOperator):
         for notes about a kubernetes job.
 
         Keyword Arguments:
-        
+
             command {List[str]} -- The pod main container command (default: None)
             arguments {List[str]} -- the pod main container arguments. (default: None)
             image {str} -- The image to use in the pod. (default: None)
@@ -71,11 +71,11 @@ class KubernetesJobOperator(BaseOperator):
             job_yaml {dict|string} -- The job to execute as a yaml description. (default: None)
                 If None, will use a default job yaml command. In this case you must provide an
                 image.
-            job_yaml_filepath {str} -- The path to the file to read the yaml from, overridden by 
+            job_yaml_filepath {str} -- The path to the file to read the yaml from, overridden by
                 job_yaml. (default: None)
             delete_policy {str} -- Any of: Never, Always, IfSucceeded (default: {"IfSucceeded"})
             in_cluster {bool} -- True if running inside a cluster (on a pod) (default: {False})
-            config_file {str} -- The kubernetes configuration file to load, if 
+            config_file {str} -- The kubernetes configuration file to load, if
                 None use default config. (default: {None})
             cluster_context {str} -- The context to run in, if None, use current context
                 (default: {None})
@@ -92,7 +92,7 @@ class KubernetesJobOperator(BaseOperator):
         Added yaml values:
 
             metadata.finalizers += foregroundDeletion
-        
+
         """
         super(KubernetesJobOperator, self).__init__(*args, **kwargs)
 
@@ -157,7 +157,7 @@ class KubernetesJobOperator(BaseOperator):
         the method 'to_kubernetes_valid_name' in utils.
 
         Override this method to create or augment your own name.
-        
+
         Returns:
             str -- The job name
         """
@@ -172,7 +172,7 @@ class KubernetesJobOperator(BaseOperator):
     def on_job_log(self, msg: str, sender: ThreadedKubernetesResourcesWatcher):
         """Write a job log to the airflow logger. Override this method
         to handle the log format.
-        
+
         Arguments:
 
             msg {str} -- The log message
@@ -182,7 +182,7 @@ class KubernetesJobOperator(BaseOperator):
 
     def on_job_status_changed(self, status, sender: ThreadedKubernetesResourcesWatcher):
         """Log the status changes of the kubernetes resources.
-        
+
         Arguments:
 
             status {str} -- The status
@@ -196,7 +196,7 @@ class KubernetesJobOperator(BaseOperator):
         namespace_watcher: ThreadedKubernetesNamespaceResourcesWatcher,
     ):
         """Log the results of the job to kubernetes.
-        
+
         Arguments:
 
             job_watcher {ThreadedKubernetesResourcesWatcher} -- The kubernetes resource.
@@ -235,7 +235,7 @@ class KubernetesJobOperator(BaseOperator):
         """Called before execution by the airflow system.
         Overriding this method without calling its super() will
         break the job operator.
-        
+
         Arguments:
             context -- The airflow context
         """
@@ -287,10 +287,10 @@ class KubernetesJobOperator(BaseOperator):
 
     def execute(self, context):
         """Call to execute the kubernetes job.
-        
+
         Arguments:
             context -- The airflow job.
-        
+
         Raises:
             AirflowException: Error in execution.
         """
@@ -323,7 +323,7 @@ class KubernetesJobOperator(BaseOperator):
             raise result_error
 
     def on_kill(self):
-        """Called when the task is killed, either by 
+        """Called when the task is killed, either by
         making it as failed or when the operator finishes.
         """
         if self.__waiting_for_job_execution:

@@ -2,8 +2,8 @@ import kubernetes
 import threading
 from typing import Dict, List
 from queue import SimpleQueue
-from .event_handler import EventHandler
-from .threaded_kubernetes_watch import (
+from airflow_kubernetes_job_operator.event_handler import EventHandler
+from airflow_kubernetes_job_operator.threaded_kubernetes_watch import (
     ThreadedKubernetesWatchNamspeace,
     ThreadedKubernetesWatchPodLog,
     ThreadedKubernetesWatch,
@@ -27,16 +27,16 @@ class ThreadedKubernetesResourcesWatcher(EventHandler):
     ):
         """A namespace resource state holder, with an internal
         log reader for pods.
-        
-        Do not create an instance of this class directly, use the 
+
+        Do not create an instance of this class directly, use the
         ThreadedKubernetesNamespaceResourcesWatcher to watch for resource
         changes in the namespace.
-        
+
         Arguments:
 
             client {kubernetes.client.CoreV1Api} -- The api client.
             resource_yaml {dict} -- The resource yaml description.
-        
+
         Keyword Arguments:
 
             auto_watch_pod_logs {bool} -- [description] (default: {True})
@@ -53,7 +53,7 @@ class ThreadedKubernetesResourcesWatcher(EventHandler):
         """Emits the event to all the event handler
         callable(s). Any argument sent after name, will
         be passed to the event handler.
-        
+
         Arguments:
 
             name {str} -- The name of the event to emit.
@@ -79,7 +79,7 @@ class ThreadedKubernetesResourcesWatcher(EventHandler):
     def id(self) -> str:
         """The watcher id, composed by the current kuberentes
         path and values. May contain chars: a-z0-9/-.
-        
+
         Returns:
 
             str
@@ -89,10 +89,10 @@ class ThreadedKubernetesResourcesWatcher(EventHandler):
     @property
     def kind(self) -> str:
         """The resource kind
-        
+
         Returns:
 
-            str -- May be any of the kubernetes resources, 
+            str -- May be any of the kubernetes resources,
             i.e. "Pod, Deployment, Job, Service ..."
         """
         return self.yaml["kind"]
@@ -101,7 +101,7 @@ class ThreadedKubernetesResourcesWatcher(EventHandler):
     def yaml(self) -> dict:
         """The full resource yaml as dictionary.
         This property updates on cluster changes.
-        
+
         Returns:
 
             dict -- The yaml as dict
@@ -124,11 +124,11 @@ class ThreadedKubernetesResourcesWatcher(EventHandler):
     def compose_resource_id_from_yaml(resource_yaml: dict) -> str:
         """Returns the resource composed id from the resource yaml
         definition.
-        
+
         Arguments:
 
             resource_yaml {dict} -- The resource yaml
-        
+
         Returns:
 
             str -- The resource id.
@@ -142,13 +142,13 @@ class ThreadedKubernetesResourcesWatcher(EventHandler):
     @staticmethod
     def compose_resource_id_from_values(kind, namespace, name) -> str:
         """Composes an resource id given the specific required values.
-        
+
         Arguments:
 
             kind {str} -- The resource kind
             namespace {str} -- The resource namespace
             name {str} -- The resource name
-        
+
         Returns:
 
             str -- The resource id.
@@ -157,18 +157,18 @@ class ThreadedKubernetesResourcesWatcher(EventHandler):
 
     @staticmethod
     def read_job_status_from_yaml(status_yaml: dict, backoffLimit: int = 0) -> str:
-        """Returns a single job status value, after 
+        """Returns a single job status value, after
         taking into account the description in the status yaml.
-        
+
         Arguments:
 
             status_yaml {dict} -- The job status yaml dict.
-        
+
         Keyword Arguments:
 
             backoffLimit {int} -- The job backoff limit (can be read
             from the job yaml) (default: {0})
-        
+
         Returns:
 
             str -- The inferred job status. Can be any of: Pending, Succeeded, Failed, Running
@@ -186,13 +186,13 @@ class ThreadedKubernetesResourcesWatcher(EventHandler):
     @property
     def status(self) -> str:
         """Returns the inferred status of the current resource.
-        
+
         Raises:
             Exception: [description]
-        
+
         Returns:
-        
-            str -- The resource status. Can be any of: 
+
+            str -- The resource status. Can be any of:
                 Pending - The resource task has not started yet.
                 Running - The task is currently running.
                 Succeeded - The resource completed its task successfully
@@ -236,10 +236,10 @@ class ThreadedKubernetesResourcesWatcher(EventHandler):
             raise Exception("Not implemented for kind: " + self.kind)
 
     def _update_pod_state(self, event_type: str, old_status: str):
-        """FOR INTERNAL USE ONLY. Called to update 
-        in the case of a kind=Pod. Will trigger log reading if 
+        """FOR INTERNAL USE ONLY. Called to update
+        in the case of a kind=Pod. Will trigger log reading if
         that is possible.
-        
+
         Arguments:
 
             event_type {str} -- The update event type
@@ -258,7 +258,7 @@ class ThreadedKubernetesResourcesWatcher(EventHandler):
 
     def _read_pod_log(self, run_async: bool):
         """Call to read the pod logs, or start stream reading.
-        
+
         Arguments:
             run_async {bool} -- If true do async stream reading.
         """
@@ -286,9 +286,9 @@ class ThreadedKubernetesResourcesWatcher(EventHandler):
     def update_resource_state(self, event_type: str, resource_yaml: dict):
         """Call to update a resource state to match the resource_yaml
         description. Will trigger reader watchers if needed.
-        
+
         Arguments:
-        
+
             event_type {str} -- The event type.
             resource_yaml {dict} -- The resource yaml description.
         """
@@ -326,7 +326,7 @@ class ThreadedKubernetesNamespaceResourcesWatcher(EventHandler):
     def __init__(self, client: kubernetes.client.CoreV1Api):
         """A namespace resource watcher. Allows for multiple namespaces
         and multiple filtering values.
-        
+
         Arguments:
 
             client {kubernetes.client.CoreV1Api} -- The kubernetes client.
@@ -340,7 +340,7 @@ class ThreadedKubernetesNamespaceResourcesWatcher(EventHandler):
     def resource_watchers(self) -> Dict[str, ThreadedKubernetesResourcesWatcher]:
         """The collection of resource watchers associated
         with this namespace watcher.
-        
+
         Returns:
 
             Dict[str, ThreadedKubernetesResourcesWatcher]
@@ -355,11 +355,11 @@ class ThreadedKubernetesNamespaceResourcesWatcher(EventHandler):
         watch_for_kinds: List[str] = ["Pod", "Job", "Deployment", "Service"],
     ):
         """Add a watch condition on namespace.
-        
+
         Arguments:
 
             namespace {str} -- The namespace
-        
+
         Keyword Arguments:
 
             label_selector {str} -- The label selector to filter resources (default: {None})
@@ -390,7 +390,7 @@ class ThreadedKubernetesNamespaceResourcesWatcher(EventHandler):
         """Emits the event to all the event handler
         callable(s). Any argument sent after name, will
         be passed to the event handler.
-        
+
         Arguments:
 
             name {str} -- The name of the event to emit.
@@ -411,9 +411,9 @@ class ThreadedKubernetesNamespaceResourcesWatcher(EventHandler):
         """FOR INTERNAL USE ONLY.
         Updates a matched resource watcher with the yaml events.
         Will create resource watchers if needed.
-        
+
         Arguments:
-        
+
             event {dict} -- The kubernetes event dict.
         """
 
@@ -438,7 +438,7 @@ class ThreadedKubernetesNamespaceResourcesWatcher(EventHandler):
     def _delete_resource(self, event):
         """FOR INTERNAL USE ONLY.
         Deletes a matched resource watcher with the yaml events.
-        
+
         Arguments:
 
             event {dict} -- The kubernetes event dict.
@@ -471,23 +471,23 @@ class ThreadedKubernetesNamespaceResourcesWatcher(EventHandler):
         timeout: float = None,
         event_name: str = "update",
     ) -> ThreadedKubernetesResourcesWatcher:
-        """A thread blocker method to wait for 
+        """A thread blocker method to wait for
         a condition. This method will wait until
         the result of the predict callable is true.
-        
+
         Arguments:
 
             predict {callable(*args,**kwargs)} -- A method to predict
             when to stop waiting. This method accepts the arguments as
             they were sent to the event.
-        
+
         Keyword Arguments:
 
             include_log_events {bool} -- [description] (default: {False})
             timeout {float} -- If specified, the timeout to wait until
             throwing an error (default: {None})
             event_name {str} -- The name of the event to wait for (default: {"update"})
-        
+
         Returns:
 
             ThreadedKubernetesResourcesWatcher -- The associated resource
@@ -533,7 +533,7 @@ class ThreadedKubernetesNamespaceResourcesWatcher(EventHandler):
         check_current_status: bool = True,
     ) -> ThreadedKubernetesResourcesWatcher:
         """Block the thread and wait for a valid status event.
-        
+
         Keyword Arguments:
 
             kind {str} -- The resource kind filter. (default: {None})
@@ -546,7 +546,7 @@ class ThreadedKubernetesNamespaceResourcesWatcher(EventHandler):
             timeout {float} -- Timeout to wait. (default: {None})
             check_current_status {bool} -- If true, then will also check current status.
             (default: {True})
-        
+
         Returns:
 
             ThreadedKubernetesResourcesWatcher -- The resource watcher.
