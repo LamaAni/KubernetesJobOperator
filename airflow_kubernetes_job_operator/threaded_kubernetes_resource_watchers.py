@@ -1,7 +1,7 @@
 import kubernetes
 import threading
 from typing import Dict, List
-from multiprocessing import SimpleQueue
+from queue import SimpleQueue
 from airflow_kubernetes_job_operator.event_handler import EventHandler
 from airflow_kubernetes_job_operator.threaded_kubernetes_watch import (
     ThreadedKubernetesWatchNamspeace,
