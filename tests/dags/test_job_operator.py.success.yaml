@@ -19,8 +19,8 @@ spec:
             - -c
             - |
                 #/usr/bin/env bash
-                echo "Starting"
-                TIC_COUNT=0
+                echo "Starting $PASS_ARG"
+                TIC_COUNT=5
                 cur_count=0
                 while true; do
                     cur_count=$((cur_count + 1))
