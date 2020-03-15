@@ -258,6 +258,8 @@ class JobRunner(EventHandler):
         try:
             status = batchClient.read_namespaced_job_status(name, namespace)
         except Exception:
+            # FIXME: Specify the exception types. Otherwise but if
+            # lost connection
             pass
 
         if status is not None:

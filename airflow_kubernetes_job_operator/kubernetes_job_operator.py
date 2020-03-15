@@ -39,6 +39,7 @@ class KubernetesJobOperator(BaseOperator):
         image: str = None,
         namespace: str = None,
         name: str = None,
+        envs: dict = None,
         job_yaml=None,
         job_yaml_filepath=None,
         delete_policy: str = "IfSucceeded",
@@ -65,6 +66,8 @@ class KubernetesJobOperator(BaseOperator):
             image {str} -- The image to use in the pod. (default: None)
             namespace {str} -- The namespace to execute in. (default: None)
             name {str} -- Override automatic name creation for the job. (default: None)
+            envs {dict} -= A collection of environment variables that will be added to all
+                containers.
             job_yaml {dict|string} -- The job to execute as a yaml description. (default: None)
                 If None, will use a default job yaml command. In this case you must provide an
                 image.
@@ -98,9 +101,7 @@ class KubernetesJobOperator(BaseOperator):
         ), "job_yaml is None, and an image was not defined. Unknown image to execute."
 
         # use or load
-        job_yaml = job_yaml or self.read_job_yaml(
-            job_yaml_filepath or JOB_YAML_DEFAULT_FILE
-        )
+        job_yaml = job_yaml or self.read_job_yaml(job_yaml_filepath or JOB_YAML_DEFAULT_FILE)
 
         assert job_yaml is not None and (
             isinstance(job_yaml, (dict, str))
@@ -112,12 +113,15 @@ class KubernetesJobOperator(BaseOperator):
             "ifsucceeded",
         ], "the delete_policy must be one of: Never, Always, IfSucceeded"
 
+        assert envs is None or isinstance(envs, dict), "The env collection must be a dict or None"
+
         # override/replace properties
         self.name = name
         self.namespace = namespace
         self.command = command
         self.arguments = arguments
         self.image = image
+        self.envs = envs
 
         # kubernetes config properties.
         self.job_yaml = job_yaml
@@ -211,13 +215,9 @@ class KubernetesJobOperator(BaseOperator):
             self.log.error(f"Job Failed ({pod_count} pods), last pod/job status:")
 
             # log proper resource error
-            def log_resource_error(
-                resource_watcher: ThreadedKubernetesResourcesWatcher,
-            ):
+            def log_resource_error(resource_watcher: ThreadedKubernetesResourcesWatcher,):
                 log_method = (
-                    self.log.error
-                    if resource_watcher.status == "Failed"
-                    else self.log.info
+                    self.log.error if resource_watcher.status == "Failed" else self.log.info
                 )
                 log_method(
                     "FINAL STATUS: "
@@ -268,15 +268,19 @@ class KubernetesJobOperator(BaseOperator):
 
         set_if_not_none(["metadata", "name"], self.name)
         set_if_not_none(["metadata", "namespace"], self.namespace)
-        set_if_not_none(
-            ["spec", "template", "spec", "containers", 0, "command"], self.command
-        )
-        set_if_not_none(
-            ["spec", "template", "spec", "containers", 0, "args"], self.arguments
-        )
-        set_if_not_none(
-            ["spec", "template", "spec", "containers", 0, "image"], self.image
-        )
+        set_if_not_none(["spec", "template", "spec", "containers", 0, "command"], self.command)
+        set_if_not_none(["spec", "template", "spec", "containers", 0, "args"], self.arguments)
+        set_if_not_none(["spec", "template", "spec", "containers", 0, "image"], self.image)
+
+        containers = get_yaml_path_value(self.job_yaml, ["spec", "template", "spec", "containers"])
+
+        if self.envs is not None and len(self.envs.keys()) > 0:
+            for container in containers:
+                if "env" not in container:
+                    container["env"] = []
+
+                for env_name in self.envs.keys():
+                    container["env"].append({"name": env_name, "value": self.envs[env_name]})
 
         # call parent.
         return super().pre_execute(context)
@@ -295,9 +299,7 @@ class KubernetesJobOperator(BaseOperator):
 
         # Executing the job
         (job_watcher, namespace_watcher) = self.job_runner.execute_job(
-            self.job_yaml,
-            start_timeout=self.startup_timeout_seconds,
-            read_logs=self.get_logs,
+            self.job_yaml, start_timeout=self.startup_timeout_seconds, read_logs=self.get_logs,
         )
 
         self.__waiting_for_job_execution = False
@@ -333,8 +335,7 @@ class KubernetesJobOperator(BaseOperator):
                 self.log.info("Job deleted.")
             except Exception:
                 self.log.error(
-                    "Failed to delete an aborted/killed"
-                    + " job! The job may still be executing."
+                    "Failed to delete an aborted/killed" + " job! The job may still be executing."
                 )
 
         return super().on_kill()
