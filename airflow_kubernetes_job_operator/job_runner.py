@@ -2,12 +2,12 @@ import kubernetes
 import yaml
 import copy
 import os
-from .threaded_kubernetes_resource_watchers import (
+from airflow_kubernetes_job_operator.threaded_kubernetes_resource_watchers import (
     ThreadedKubernetesNamespaceResourcesWatcher,
     ThreadedKubernetesResourcesWatcher,
 )
-from .event_handler import EventHandler
-from .utils import randomString, get_yaml_path_value
+from airflow_kubernetes_job_operator.event_handler import EventHandler
+from airflow_kubernetes_job_operator.utils import randomString, get_yaml_path_value
 
 JOB_RUNNER_INSTANCE_ID_LABEL = "job-runner-instance-id"
 KUBERNETES_IN_CLUSTER_SERVICE_ACCOUNT_PATH = (
@@ -38,7 +38,7 @@ class JobRunner(EventHandler):
     ):
         """Loads the appropriate kubernetes configuration into the global
         context.
-        
+
         Keyword Arguments:
 
             in_cluster {bool} -- If true, load the configuration from the cluster
@@ -300,9 +300,9 @@ class JobRunner(EventHandler):
 
     def delete_job(self, job_yaml: dict):
         """Using a pre-prepared job yaml, deletes a currently executing job.
-        
+
         Arguments:
-        
+
             job_yaml {dict} -- The job description yaml.
         """
         metadata = job_yaml["metadata"]

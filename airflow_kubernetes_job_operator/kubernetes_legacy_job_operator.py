@@ -1,4 +1,4 @@
-from .kubernetes_job_operator import KubernetesJobOperator
+from airflow_kubernetes_job_operator.kubernetes_job_operator import KubernetesJobOperator
 from typing import List
 import os
 from airflow import configuration
@@ -137,9 +137,9 @@ class KubernetesLegacyJobOperator(KubernetesJobOperator):
         :type dnspolicy: str
 
         Added arguments:
-        
+
             job_yaml {dict|string} -- The job to execute as a yaml description. (default: None)
-            job_yaml_filepath {str} -- The path to the file to read the yaml from, overridden by 
+            job_yaml_filepath {str} -- The path to the file to read the yaml from, overridden by
                 job_yaml. (default: None)
             delete_policy {str} -- Any of: Never, Always, IfSucceeded (default: {"IfSucceeded"});
                 overrides is_delete_operator_pod.
