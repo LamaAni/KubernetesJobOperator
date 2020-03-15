@@ -38,6 +38,7 @@ KubernetesLegacyJobOperator(
     image="ubuntu",
     cmds=["bash", "-c", bash_script],
     dag=dag,
+    delete_policy='Never',
     is_delete_operator_pod=True,
 )
 
@@ -47,5 +48,7 @@ KubernetesLegacyJobOperator(
     cmds=["bash", "-c", bash_script + "\nexit 99"],
     dag=dag,
     is_delete_operator_pod=True,
+    delete_policy='Never',
+    env_vars={'PROJECT_ID':"tater-tots"}
 )
 
