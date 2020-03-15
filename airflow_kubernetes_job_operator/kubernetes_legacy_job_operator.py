@@ -4,7 +4,7 @@ import os
 from airflow import configuration
 from airflow.contrib.kubernetes.kubernetes_request_factory import pod_request_factory
 from airflow.contrib.kubernetes import pod_generator
-from airflow.contrib.kubernetes.pod import Port, Resources
+from airflow.contrib.kubernetes.pod import Resources
 from airflow.contrib.kubernetes.volume_mount import VolumeMount
 from airflow.contrib.kubernetes.volume import Volume
 from airflow.contrib.kubernetes.secret import Secret
@@ -20,7 +20,7 @@ class KubernetesLegacyJobOperator(KubernetesJobOperator):
         name: str = None,
         cmds: List[str] = None,
         arguments: List[str] = None,
-        ports: List[Port] = None,
+        ports: list = None,
         volume_mounts: List[VolumeMount] = None,
         volumes: List[Volume] = None,
         env_vars: dict = None,
