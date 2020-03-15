@@ -9,8 +9,6 @@ from airflow.contrib.kubernetes.volume_mount import VolumeMount
 from airflow.contrib.kubernetes.volume import Volume
 from airflow.contrib.kubernetes.secret import Secret
 
-from airflow.contrib.operators.kubernetes_pod_operator import KubernetesPodOperator
-
 JOB_YAML_DEFAULT_FILE = os.path.abspath(f"{__file__}.job.yaml")
 
 
