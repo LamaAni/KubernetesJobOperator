@@ -3,7 +3,7 @@ import json
 import re
 from datetime import datetime
 from time import sleep
-from queue import SimpleQueue
+from multiprocessing import SimpleQueue
 from airflow_kubernetes_job_operator.event_handler import EventHandler
 from urllib3.connectionpool import MaxRetryError, ReadTimeoutError, TimeoutError
 from urllib3.response import HTTPResponse
