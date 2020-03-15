@@ -18,14 +18,17 @@ def read_job_yaml(fpath):
 success_job_yaml = read_job_yaml(__file__ + ".success.yaml")
 fail_job_yaml = read_job_yaml(__file__ + ".fail.yaml")
 
+envs = {"PASS_ARG": "a test"}
+
 # BashOperator(bash_command="date", task_id="test-bash", dag=dag)
 
-KubernetesJobOperator(task_id="test-job-success", job_yaml=success_job_yaml, dag=dag)
-KubernetesJobOperator(task_id="test-job-fail", job_yaml=fail_job_yaml, dag=dag)
+KubernetesJobOperator(task_id="test-job-success", job_yaml=success_job_yaml, envs=envs, dag=dag)
+KubernetesJobOperator(task_id="test-job-fail", job_yaml=fail_job_yaml, envs=envs, dag=dag)
 KubernetesJobOperator(
     task_id="test-job-overrides",
     dag=dag,
     image="ubuntu",
-    command=["bash", "-c", "echo start; sleep 10; echo end"],
+    envs=envs,
+    command=["bash", "-c", 'echo "Starting $PASS_ARG"; sleep 10; echo end'],
 )
 
