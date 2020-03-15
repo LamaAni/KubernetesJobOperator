@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
-
 export AIRFLOW_HOME=$PWD
 export PYTHONPATH=$(realpath $PWD/..)
+
+SQLLITE_DB_FILE="$PYTHONPATH/tests/airflow.db"
+export AIRFLOW__CORE__SQL_ALCHEMY_CONN="sqlite:////${SQLLITE_DB_FILE}"
 
 airflow "$@"
