@@ -113,6 +113,8 @@ class KubernetesJobOperator(BaseOperator):
             "ifsucceeded",
         ], "the delete_policy must be one of: Never, Always, IfSucceeded"
 
+        assert envs is None or isinstance(envs, dict), "The env collection must be a dict or None"
+
         # override/replace properties
         self.name = name
         self.namespace = namespace
@@ -270,9 +272,9 @@ class KubernetesJobOperator(BaseOperator):
         set_if_not_none(["spec", "template", "spec", "containers", 0, "args"], self.arguments)
         set_if_not_none(["spec", "template", "spec", "containers", 0, "image"], self.image)
 
-        containers = get_yaml_path_value(["spec", "template", "spec", "containers"])
+        containers = get_yaml_path_value(self.job_yaml, ["spec", "template", "spec", "containers"])
 
-        if self.envs and len(self.envs.keys) > 0:
+        if self.envs is not None and len(self.envs.keys()) > 0:
             for container in containers:
                 if "env" not in container:
                     container["env"] = []
