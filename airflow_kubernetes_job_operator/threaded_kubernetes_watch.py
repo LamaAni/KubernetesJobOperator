@@ -435,6 +435,7 @@ class ThreadedKubernetesWatchNamspeace(ThreadedKubernetesWatch):
         self.data_event_name = "update"
 
     def _kind_to_watch_uri(self, namespace, kind):
+        # FIXME: Change uri (example: /api/v1/namespaces) to a repo values.
         if kind == "Pod":
             return f"/api/v1/namespaces/{namespace}/pods"
         elif kind == "Job":
