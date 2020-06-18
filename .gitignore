@@ -6,6 +6,7 @@ Pipefile.lock
 # ignore the test airflow db.
 tests/airflow.db
 tests/logs/
+tests/airflow-webserver.pid
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
