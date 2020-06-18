@@ -7,12 +7,13 @@ from airflow_kubernetes_job_operator.threaded_kubernetes_resource_watchers impor
     ThreadedKubernetesResourcesWatcher,
 )
 from airflow_kubernetes_job_operator.event_handler import EventHandler
-from airflow_kubernetes_job_operator.utils import randomString, get_yaml_path_value
+from airflow_kubernetes_job_operator.utils import (
+    randomString,
+    get_yaml_path_value,
+)
 
 JOB_RUNNER_INSTANCE_ID_LABEL = "job-runner-instance-id"
-KUBERNETES_IN_CLUSTER_SERVICE_ACCOUNT_PATH = (
-    "/var/run/secrets/kubernetes.io/serviceaccount"
-)
+KUBERNETES_IN_CLUSTER_SERVICE_ACCOUNT_PATH = "/var/run/secrets/kubernetes.io/serviceaccount"
 
 
 class JobRunner(EventHandler):
@@ -35,7 +36,7 @@ class JobRunner(EventHandler):
         super().__init__()
 
     def load_kuberntes_configuration(
-        self, in_cluster: bool = None, config_file: str = None, context: str = None
+        self, in_cluster: bool = None, config_file: str = None, context: str = None,
     ):
         """Loads the appropriate kubernetes configuration into the global
         context.
@@ -49,9 +50,7 @@ class JobRunner(EventHandler):
             context {str} -- The context to load. If None loads the current
                 context (default: {None})
         """
-        in_cluster = (
-            in_cluster or os.environ.get("KUBERNETES_SERVICE_HOST", None) is not None
-        )
+        in_cluster = in_cluster or os.environ.get("KUBERNETES_SERVICE_HOST", None) is not None
 
         # loading the current config to use.
         if in_cluster:
@@ -87,7 +86,7 @@ class JobRunner(EventHandler):
                 with open(in_cluster_namespace_fpath, "r", encoding="utf-8") as nsfile:
                     namespace = nsfile.read()
             else:
-                contexts, active_context = kubernetes.config.list_kube_config_contexts(
+                (contexts, active_context,) = kubernetes.config.list_kube_config_contexts(
                     config_file=self._loaded_config_file
                 )
                 namespace = (
@@ -103,7 +102,7 @@ class JobRunner(EventHandler):
         return namespace
 
     def prepare_job_yaml(
-        self, job_yaml, random_name_postfix_length: int = 0, force_job_name: str = None
+        self, job_yaml, random_name_postfix_length: int = 0, force_job_name: str = None,
     ) -> dict:
         """Pre-prepare the job yaml dictionary for execution,
         can also accept a string input.
@@ -145,9 +144,7 @@ class JobRunner(EventHandler):
 
         # make sure the yaml is an dict.
         job_yaml = (
-            copy.deepcopy(job_yaml)
-            if isinstance(job_yaml, dict)
-            else yaml.safe_load(job_yaml)
+            copy.deepcopy(job_yaml) if isinstance(job_yaml, dict) else yaml.safe_load(job_yaml)
         )
 
         def get(path_names, default=None):
@@ -164,9 +161,8 @@ class JobRunner(EventHandler):
                 get(path_names) is not None
             ), f"job {def_name or path_names[-1]} must be defined @ {path_string}"
 
-        assert get(["kind"]) == "Job", (
-            "job_yaml resource must be of 'kind' 'Job', recived "
-            + get(["kind"], "[unknown]")
+        assert get(["kind"]) == "Job", "job_yaml resource must be of 'kind' 'Job', recived " + get(
+            ["kind"], "[unknown]"
         )
 
         assert_defined(["metadata", "name"])
@@ -177,9 +173,7 @@ class JobRunner(EventHandler):
             job_yaml["metadata"]["name"] = force_job_name
 
         if random_name_postfix_length > 0:
-            job_yaml["metadata"]["name"] += "-" + randomString(
-                random_name_postfix_length
-            )
+            job_yaml["metadata"]["name"] += "-" + randomString(random_name_postfix_length)
 
         # assign current namespace if one is not defined.
         if "namespace" not in job_yaml["metadata"]:
@@ -187,8 +181,7 @@ class JobRunner(EventHandler):
                 job_yaml["metadata"]["namespace"] = self.get_current_namespace()
             except Exception as ex:
                 raise Exception(
-                    "Namespace was not provided in yaml and auto namespace resolution failed.",
-                    ex,
+                    "Namespace was not provided in yaml and auto namespace resolution failed.", ex,
                 )
 
         # FIXME: Should be a better way to add missing values.
@@ -274,9 +267,7 @@ class JobRunner(EventHandler):
             pass
 
         if status is not None:
-            raise Exception(
-                f"Job {name} already exists in namespace {namespace}, cannot exec."
-            )
+            raise Exception(f"Job {name} already exists in namespace {namespace}, cannot exec.")
 
         # starting the watcher.
         watcher = ThreadedKubernetesNamespaceResourcesWatcher(coreClient)
@@ -300,7 +291,7 @@ class JobRunner(EventHandler):
 
         # waiting for the job to completed.
         job_watcher = watcher.waitfor_status(
-            "Job", name, namespace, status_list=["Failed", "Succeeded", "Deleted"]
+            "Job", name, namespace, status_list=["Failed", "Succeeded", "Deleted"],
         )
 
         # not need to read status and logs anymore.
