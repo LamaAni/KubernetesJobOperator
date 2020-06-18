@@ -57,11 +57,11 @@ class JobRunner(EventHandler):
             ), f"Cannot find kubernetes configuration file @ {config_file}"
 
             # NOTE: When loading from a config file there is no way
-            # (as of the current kubernetes packege) to retrive the loaded
+            # (as of the current kubernetes package) to retrieve the loaded
             # configuration. As such, kubernetes.config.list_kube_config_contexts
             # will not provide the last loaded configuration and will revert
             # to the default config. Therefore if a config file is loaded
-            # into the runner it will be used to retrive the default namespace
+            # into the runner it will be used to retrieve the default namespace
             # (or other locations)
             self._loaded_config_file = config_file
 

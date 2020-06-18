@@ -34,7 +34,7 @@ current_context = "docker-desktop"  # Change to test a specific context.
 runner = JobRunner()
 runner.load_kuberntes_configuration(config_file=config_file, context=current_context)
 current_namespace = runner.get_current_namespace()
-print("Current namesapce: " + current_namespace)
+print("Current namespace: " + current_namespace)
 runner.on("log", read_pod_log)
 runner.on("status", resource_status_changed)
 
