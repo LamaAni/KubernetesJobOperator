@@ -1,9 +1,0 @@
-# [sergei, 2019-09-05] I am not sure why this is  being ignored
-graphql/address/addressMatching/src
-
-# ignore output produced by JS tools and TypeScript compiler
-# (we agreed to use `build` for intermediate output by JS tools or
-# TypeScript compiler and use `dist` for output files, such as npm packages,
-# to be published)
-**/build/*
-**/dist/*
