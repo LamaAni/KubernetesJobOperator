@@ -19,11 +19,23 @@ from setuptools import setup
 
 here = os.path.abspath(os.path.dirname(__file__))
 
+
+def get_version():
+    version_file_path = os.path.join(here, "package_version.txt")
+    if not os.path.isfile(version_file_path):
+        return "debug"
+    version = None
+    with open(version_file_path, "r") as raw:
+        version = raw.read()
+
+    return version
+
+
 setup(
     name="airflow_kubernetes_job_operator",
-    version="0.2.10",
+    version=get_version(),
     description="An airflow job operator that executes a task as a Kubernetes job on a cluster, given a job yaml configuration or an image uri.",
-    long_description="Please see readme.md",
+    long_description="Please see readme.md @ https://github.com/LamaAni/KubernetesJobOperator",
     classifiers=[],
     author="Zav Shotan",
     author_email="",

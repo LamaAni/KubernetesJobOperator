@@ -21,7 +21,13 @@ An airflow job operator that executes a task as a Kubernetes job on a cluster, g
 
 This repository is in beta testing. Any contributions are welcome.
 
-# Install (for now, directly from the git repo)
+# Install
+
+To install using pip @ ,
+
+```shell
+pip install airflow_kubernetes_job_operator
+```
 
 To install from master branch,
 
