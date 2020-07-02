@@ -27,11 +27,14 @@ def resource_status_changed(status, sender):
 
 
 # load kubernetes configuration.
-kubernetes.config.load_kube_config()
-current_namespace = JobRunner.get_current_namespace()
+config_file = "/home/zav/.kube/config_special"  # change to test a specific config file
+current_context = "docker-desktop"  # Change to test a specific context.
 
 # prepare the runner.
 runner = JobRunner()
+runner.load_kuberntes_configuration(config_file=config_file, context=current_context)
+current_namespace = runner.get_current_namespace()
+print("Current namespace: " + current_namespace)
 runner.on("log", read_pod_log)
 runner.on("status", resource_status_changed)
 
