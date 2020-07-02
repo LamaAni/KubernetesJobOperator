@@ -23,7 +23,7 @@ This repository is in beta testing. Any contributions are welcome.
 
 # Install
 
-To install using pip @ ,
+To install using pip @ https://pypi.org/project/airflow-kubernetes-job-operator,
 
 ```shell
 pip install airflow_kubernetes_job_operator
@@ -45,8 +45,8 @@ pip install git+https://github.com/LamaAni/KubernetesJobOperator.git@[tag]
 
 ```python
 from airflow import DAG
-from [lib_path].kubernetes_job_operator import KubernetesJobOperator
-from [lib_path].kubernetes_legacy_job_operator import KubernetesLegacyJobOperator
+from airflow_kubernetes_job_operator.kubernetes_job_operator import KubernetesJobOperator
+from airflow_kubernetes_job_operator.kubernetes_legacy_job_operator import KubernetesLegacyJobOperator
 from airflow.utils.dates import days_ago
 
 default_args = {"owner": "tester", "start_date": days_ago(2), "retries": 0}
