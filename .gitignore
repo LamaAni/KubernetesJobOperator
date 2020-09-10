@@ -2,6 +2,7 @@
 local/
 .vscode/
 Pipefile.lock
+.devcontainer/
 
 # ignore the test airflow db.
 tests/airflow.db
