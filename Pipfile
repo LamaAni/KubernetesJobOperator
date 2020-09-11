@@ -1,0 +1,16 @@
+[[source]]
+name = "pypi"
+url = "https://pypi.org/simple"
+verify_ssl = true
+
+[dev-packages]
+pytest = "*"
+
+[packages]
+pyyaml = ">=5.0"
+kubernetes = ">=9.0.0"
+urllib3 = ">=1.25.0"
+zthreading = ">=0.1.3"
+
+[requires]
+python_version = "3.8"
