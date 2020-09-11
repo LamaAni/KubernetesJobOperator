@@ -4,8 +4,8 @@ envs:
 
   # Git auto-sync
   ZAIRFLOW_GIT_AUTOSYNC_URI: "https://github.com/LamaAni/KubernetesJobOperator.git"
-  AIRFLOW__CORE__DAGS_FOLDER: '/app/examples/docker-compose/dags'
-  AIRFLOW__CORE__PLUGINS_FOLDER: '/app/examples/docker-compose/plugins'
+  AIRFLOW__CORE__DAGS_FOLDER: '/app/tests/dags'
+  AIRFLOW__CORE__PLUGINS_FOLDER: '/app/tests/plugins'
 
 image:
   pullPolicy: Always
