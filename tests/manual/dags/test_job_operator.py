@@ -3,9 +3,7 @@ from airflow_kubernetes_job_operator.kubernetes_job_operator import KubernetesJo
 from airflow.utils.dates import days_ago
 
 default_args = {"owner": "tester", "start_date": days_ago(2), "retries": 0}
-dag = DAG(
-    "bjo", default_args=default_args, description="Test base job operator", schedule_interval=None
-)
+dag = DAG("bjo", default_args=default_args, description="Test base job operator", schedule_interval=None)
 
 
 def read_job_yaml(fpath):
@@ -31,4 +29,3 @@ KubernetesJobOperator(
     envs=envs,
     command=["bash", "-c", 'echo "Starting $PASS_ARG"; sleep 10; echo end'],
 )
-

@@ -2,8 +2,8 @@ import kubernetes
 import threading
 from typing import Dict, List
 from queue import SimpleQueue
-from airflow_kubernetes_job_operator.event_handler import EventHandler
-from airflow_kubernetes_job_operator.threaded_kubernetes_watch import (
+from zthreading import EventHandler
+from airflow_kubernetes_job_operator.watchers.threaded_kubernetes_watch import (
     ThreadedKubernetesWatchNamspeace,
     ThreadedKubernetesWatchPodLog,
     ThreadedKubernetesWatch,
@@ -43,9 +43,7 @@ class ThreadedKubernetesResourcesWatcher(EventHandler):
         """
         super().__init__()
         self.client = client
-        self._id = ThreadedKubernetesResourcesWatcher.compose_resource_id_from_yaml(
-            resource_yaml
-        )
+        self._id = ThreadedKubernetesResourcesWatcher.compose_resource_id_from_yaml(resource_yaml)
         self.auto_watch_pod_logs = auto_watch_pod_logs
         self._was_deleted = False
 
@@ -70,8 +68,7 @@ class ThreadedKubernetesResourcesWatcher(EventHandler):
             self._read_pod_log(False)
 
     def stop(self):
-        """Stop all executing internal watchers.
-        """
+        """Stop all executing internal watchers."""
         if self._log_reader is not None and self._log_reader.is_streaming:
             self._log_reader.stop()
 
@@ -110,14 +107,12 @@ class ThreadedKubernetesResourcesWatcher(EventHandler):
 
     @property
     def name(self) -> str:
-        """The resource name
-        """
+        """The resource name"""
         return self.yaml["metadata"]["name"]
 
     @property
     def namespace(self) -> str:
-        """The resource namespace.
-        """
+        """The resource namespace."""
         return self.yaml["metadata"]["namespace"]
 
     @staticmethod
@@ -224,8 +219,7 @@ class ThreadedKubernetesResourcesWatcher(EventHandler):
                         if (
                             "waiting" in container_status["state"]
                             and "reason" in container_status["state"]["waiting"]
-                            and "BackOff"
-                            in container_status["state"]["waiting"]["reason"]
+                            and "BackOff" in container_status["state"]["waiting"]["reason"]
                         ):
                             return "Failed"
                         if "error" in container_status["state"]:
@@ -248,9 +242,7 @@ class ThreadedKubernetesResourcesWatcher(EventHandler):
         # Called to update a current pod state.
         # may start/read pod logs.
         cur_status = self.status
-        need_read_pod_logs = (
-            cur_status and cur_status != "Pending" and not self._has_read_logs
-        )
+        need_read_pod_logs = cur_status and cur_status != "Pending" and not self._has_read_logs
 
         if need_read_pod_logs:
             self._has_read_logs = True
@@ -277,9 +269,7 @@ class ThreadedKubernetesResourcesWatcher(EventHandler):
             if run_async:
                 self._log_reader.start(self.client, self.name, self.namespace)
             else:
-                self._log_reader.read_currnet_logs(
-                    self.client, self.name, self.namespace
-                )
+                self._log_reader.read_currnet_logs(self.client, self.name, self.namespace)
         finally:
             pod_log_read_lock.release()
 
@@ -365,9 +355,7 @@ class ThreadedKubernetesNamespaceResourcesWatcher(EventHandler):
             label_selector {str} -- The label selector to filter resources (default: {None})
             field_selector {str} -- The field selector to filter resources (default: {None})
         """
-        assert (
-            isinstance(namespace, str) and len(namespace) > 0
-        ), "Namespace must be a non empty string"
+        assert isinstance(namespace, str) and len(namespace) > 0, "Namespace must be a non empty string"
 
         if namespace in self._namespace_watchers:
             raise Exception("Namespace already being watched.")
@@ -420,9 +408,7 @@ class ThreadedKubernetesNamespaceResourcesWatcher(EventHandler):
         kube_resource = event["object"]  # defined by kube response.
         event_type = event["type"]
 
-        oid = ThreadedKubernetesResourcesWatcher.compose_resource_id_from_yaml(
-            kube_resource
-        )
+        oid = ThreadedKubernetesResourcesWatcher.compose_resource_id_from_yaml(kube_resource)
         if oid not in self._resource_watchers:
             # no need to create in order to delete.
             if event_type == "DELETED":
@@ -449,13 +435,9 @@ class ThreadedKubernetesNamespaceResourcesWatcher(EventHandler):
         kube_resource = event["object"]
         event_type = event["type"]
 
-        assert (
-            event_type == "DELETED"
-        ), "When deleting a resource, the event type must be DELETED."
+        assert event_type == "DELETED", "When deleting a resource, the event type must be DELETED."
 
-        oid = ThreadedKubernetesResourcesWatcher.compose_resource_id_from_yaml(
-            kube_resource
-        )
+        oid = ThreadedKubernetesResourcesWatcher.compose_resource_id_from_yaml(kube_resource)
 
         if oid in self._resource_watchers:
             watcher = self._resource_watchers[oid]
@@ -552,14 +534,10 @@ class ThreadedKubernetesNamespaceResourcesWatcher(EventHandler):
             ThreadedKubernetesResourcesWatcher -- The resource watcher.
         """
         assert (
-            status is not None
-            or (status_list is not None and len(status_list) > 0)
-            or predict is not None
+            status is not None or (status_list is not None and len(status_list) > 0) or predict is not None
         ), "Either status, status_list or predict callable must be defined"
 
-        def default_predict(
-            match_status: str, sender: ThreadedKubernetesResourcesWatcher
-        ):
+        def default_predict(match_status: str, sender: ThreadedKubernetesResourcesWatcher):
             if status is not None and status == match_status:
                 return True
             if status_list is not None:
@@ -588,8 +566,7 @@ class ThreadedKubernetesNamespaceResourcesWatcher(EventHandler):
         return self.waitfor(wait_predict, False, timeout=timeout, event_name="status")
 
     def stop(self):
-        """Stop all executing watchers.
-        """
+        """Stop all executing watchers."""
         for namespace, watchers in self._namespace_watchers.items():
             for watcher in watchers:
                 watcher.stop()

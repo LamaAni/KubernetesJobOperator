@@ -1,14 +1,17 @@
-import threading
 import json
 import re
+import kubernetes
+
 from datetime import datetime
 from time import sleep
 from queue import SimpleQueue
-from airflow_kubernetes_job_operator.event_handler import EventHandler
 from urllib3.connectionpool import MaxRetryError, ReadTimeoutError, TimeoutError
 from urllib3.response import HTTPResponse
-import kubernetes
+
+from airflow_kubernetes_job_operator.event_handler import EventHandler
 from kubernetes.stream.ws_client import ApiException
+
+import threading
 
 
 class ThreadedKubernetesWatchThreadEvent:
@@ -131,7 +134,7 @@ class ThreadedKubernetesWatch(EventHandler):
             self._stream_queue.put(ThreadedKubernetesWatchThreadEvent(event_type, event_value))
 
     def _reader_thread(self, *args, **kwargs):
-        """ FOR INTERNAL USE ONLY.
+        """FOR INTERNAL USE ONLY.
         The reader thread.
 
         Yields:
@@ -222,7 +225,7 @@ class ThreadedKubernetesWatch(EventHandler):
             self._invoke_threaded_event("stopped")
 
     def _start_streaming_thread(self, run_async=False, *args, **kwargs):
-        """ FOR INTERNAL USE ONLY.
+        """FOR INTERNAL USE ONLY.
         Call to start the streaming thread.
 
         Keyword Arguments:
@@ -298,8 +301,7 @@ class ThreadedKubernetesWatch(EventHandler):
         self._start_streaming_thread(run_async=True, *args, **kwargs)
 
     def _abort_thread(self):
-        """Call to abort the current running thread.
-        """
+        """Call to abort the current running thread."""
         if self._streaming_thread is not None:
             if self._streaming_thread.is_alive():
                 # FIXME: Find a better way to stop the thread.
@@ -322,16 +324,14 @@ class ThreadedKubernetesWatch(EventHandler):
                 self.emit("response_error", e)
 
     def stop(self):
-        """Stop the read stream cleanly.
-        """
+        """Stop the read stream cleanly."""
         if self._stream_queue is not None:
             self._stream_queue.put(ThreadedKubernetesWatchThreadEvent("stop"))
         elif self.is_streaming:
             self.abort()
 
     def abort(self):
-        """Force abort the response stream and thread.
-        """
+        """Force abort the response stream and thread."""
         self._abort_thread()
         self._streaming_thread = None
         self._stream_queue = None
@@ -353,12 +353,18 @@ class ThreadedKubernetesWatchPodLog(ThreadedKubernetesWatch):
             (other events inherited from ThreadedKubernetesWatch)
         """
         super().__init__(
-            lambda *args, **kwargs: self._create_log_reader(*args, **kwargs), read_as_dict=False,
+            lambda *args, **kwargs: self._create_log_reader(*args, **kwargs),
+            read_as_dict=False,
         )
         self.data_event_name = "log"
 
     def _create_log_reader(
-        self, client: kubernetes.client.CoreV1Api, name: str, namespace: str, *args, **kwargs,
+        self,
+        client: kubernetes.client.CoreV1Api,
+        name: str,
+        namespace: str,
+        *args,
+        **kwargs,
     ):
         """PRIVATE FOR INTERNAL USE ONLY.
 
@@ -372,9 +378,7 @@ class ThreadedKubernetesWatchPodLog(ThreadedKubernetesWatch):
 
             HTTPResponse -- The http response.
         """
-        return client.read_namespaced_pod_log_with_http_info(
-            name, namespace, follow=True, *args, **kwargs
-        )[0]
+        return client.read_namespaced_pod_log_with_http_info(name, namespace, follow=True, *args, **kwargs)[0]
 
     def stream(self, client: kubernetes.client.CoreV1Api, name: str, namespace: str):
         """Call to stream log events from a specific pod. Returns iterator.
@@ -573,4 +577,3 @@ class ThreadedKubernetesWatchNamspeace(ThreadedKubernetesWatch):
             field_selector=field_selector,
             label_selector=label_selector,
         )
-

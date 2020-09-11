@@ -1,0 +1,10 @@
+# generate a transient postgres-xl db with username and password. This db will
+# NOT be able to withstand restarts.
+releases:
+  - name: test-zairflow
+    # Use of a specific release.
+    chart: https://github.com/LamaAni/zairflow/releases/download/0.4.0/helm.tar.gz
+    values:
+      - ./airflow_values.yaml
+      - envs:
+          ZAIRFLOW_GIT_AUTOSYNC_URI: 'https://github.com/LamaAni/KubernetesJobOperator.git'
