@@ -45,7 +45,7 @@ setup(
         "PyYAML>=5.0",
         "kubernetes>=9.0.0",
         "urllib3>=1.25.0",
-        "zthreading>=0.1.3",
+        "zthreading>=0.1.5",
     ],
     python_requires=">=3.6",
     include_package_data=True,

@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+echo "Building the docker image.."
+docker build -f ./Dockerfile ../.. -t kube_job_operator_tester
+
+echo "Deploying helm.."
 if [ "$1" != "delete" ] && [ "$1" != "-d" ]; then
     BRANCH="$(git rev-parse --abbrev-ref HEAD)"
     : "${BRANCH:="master"}"
