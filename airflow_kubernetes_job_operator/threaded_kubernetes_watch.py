@@ -369,7 +369,6 @@ class ThreadedKubernetesWatchPodLog(ThreadedKubernetesWatch):
             namespace {str} -- The pod namespace.
 
         Returns:
-
             HTTPResponse -- The http response.
         """
         return client.read_namespaced_pod_log_with_http_info(

@@ -5,7 +5,7 @@ import yaml
 import dateutil.parser
 from datetime import datetime
 from tests.watcher.utils import logging
-from airflow_kubernetes_job_operator.kube_api.watchers import KubeApiNamespaceWatcher, KubeApiNamespaceWatcherKind
+from airflow_kubernetes_job_operator.kube_api.watchers import KubeApiPodLogWatcher, KubeApiNamespaceWatcherKind
 
 logging.basicConfig(level="INFO")
 
@@ -22,15 +22,11 @@ def handle_error(watcher, err):
     watcher.stop()
 
 
-# Timeout for multiple reads is false. The query command show allow ~ 5 mins. Otherwise
-# event updates will be reread.
-
-watcher = KubeApiNamespaceWatcher(current_namespace, kind=KubeApiNamespaceWatcherKind.Event)
+watcher = KubeApiPodLogWatcher(name="tester", namespace=current_namespace)
 
 watcher.on("error", handle_error)
-watcher.on("warning", lambda self, msg: logging.warning(msg))
 watcher.start()
 if watcher.is_running:
     logging.info("Starting watch...")
-    for ev in watcher.stream("api_event"):
-        logging.info(f'[{ev["type"]} {ev["object"]["kind"]}]: {ev["object"]["message"]}')
+    for line in watcher.stream():
+        logging.info(line.__repr__())

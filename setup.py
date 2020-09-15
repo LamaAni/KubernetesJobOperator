@@ -46,6 +46,7 @@ setup(
         "kubernetes>=9.0.0",
         "urllib3>=1.25.0",
         "zthreading>=0.1.5",
+        "python-dateutil>=2.8.1",
     ],
     python_requires=">=3.6",
     include_package_data=True,

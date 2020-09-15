@@ -1,6 +1,7 @@
 import json
 import re
 import kubernetes
+import dateutil.parser
 
 from enum import Enum
 
@@ -42,6 +43,20 @@ def _kube_api_lines_reader(response: HTTPResponse):
                 yield line
 
 
+def _clean_dictionary_nulls(d: dict):
+    for k in list(d.keys()):
+        if d[k] is None:
+            del d[k]
+
+    return d
+
+
+class KubeApiObject(dict):
+    def __init__(self, iterable, event_type=None):
+        super().__init__(iterable)
+        self.event_type = event_type
+
+
 class KubeApiWatchStream(Task):
     """Kubernetes api watcher"""
 
@@ -50,7 +65,6 @@ class KubeApiWatchStream(Task):
         response_factory: Callable,
         reconnect_max_retries: int = 20,
         reconnect_wait_timeout: int = 5,
-        response_wait_timeout: int = 5,
         api_event_name: str = "api_event",
         since: datetime = None,
     ):
@@ -59,14 +73,13 @@ class KubeApiWatchStream(Task):
         self._get_response = response_factory
         self.reconnect_wait_timeout = reconnect_wait_timeout
         self.reconnect_max_retries = reconnect_max_retries
-        self.response_wait_timeout = response_wait_timeout
         self.api_event_name = api_event_name
         self._since = since
 
         # internal
         self._close_response_name_event_name = f"close_response_streams_for_watcher ({id(self)})"
 
-    def read_event(self, data):
+    def parse_data(self, data):
         """Parses the event data.
 
         Arguments:
@@ -83,7 +96,7 @@ class KubeApiWatchStream(Task):
             raise KubeApiWatcherException("Failed to parse kubernetes api event", ex)
 
     @property
-    def read_events_after(self):
+    def parse_datas_after(self):
         return self._since
 
     def _watch_loop(self, *args, **kwargs):
@@ -104,15 +117,15 @@ class KubeApiWatchStream(Task):
             if reconnect_attempts == self.reconnect_max_retries:
                 raise e
             self.emit("warning", self, e)
+            self.emit("reconnect")
             sleep(self.reconnect_wait_timeout)
-
-        # adding required streaming query values.
-        kwargs["_preload_content"] = False
-        kwargs["_request_timeout"] = self.response_wait_timeout
 
         def close_response():
             if response is not None:
                 response.close()
+
+        def advance_since():
+            self._since = datetime.now()
 
         close_response_stream_event_handle = self.on(self._close_response_name_event_name, close_response)
 
@@ -121,7 +134,7 @@ class KubeApiWatchStream(Task):
             while True:
                 try:
                     if self._since is not None:
-                        offset_read_seconds = (datetime.now() - self._last_read_time).seconds
+                        offset_read_seconds = (datetime.now() - self._since).seconds
                         kwargs["since_seconds"] = str(offset_read_seconds)
 
                     # closing any current response streams.
@@ -129,12 +142,15 @@ class KubeApiWatchStream(Task):
 
                     response = self._get_response(*args, **kwargs)
                     was_started = True
+                    advance_since()
 
                     for line in _kube_api_lines_reader(response):
+                        advance_since()
                         # Is actually connected, therefore reading the response stream.
                         reconnect_attempts = 0
-                        self._since = datetime.now()
-                        self.emit(self.api_event_name, self.read_event(line))
+                        data = self.parse_data(line)
+
+                        self.emit(self.api_event_name, data)
 
                     # clean exit.
                     close_response()
@@ -180,6 +196,7 @@ class KubeApiWatchStream(Task):
             Generator|AsyncGenerator of Event | the result of process_event_data, defaults to a json object of the parsed
             kube api event.
         """
+        event_name = event_name or self.api_event_name
         return super().stream(
             event_name=event_name, timeout=timeout, use_async_loop=use_async_loop, process_event_data=process_event_data
         )
@@ -209,32 +226,18 @@ class KubeApiNamespaceWatcherKind(Enum):
     Deployment = "Deployment"
     Event = "Event"
 
-    def crate_watch_url(self, namespace):
-        # FIXME: Change uri (example: /api/v1/namespaces) to a repo values.
-        if self == KubeApiNamespaceWatcherKind.Pod:
-            return f"/api/v1/namespaces/{namespace}/pods"
-        elif self == KubeApiNamespaceWatcherKind.Job:
-            return f"/apis/batch/v1/namespaces/{namespace}/jobs"
-        elif self == KubeApiNamespaceWatcherKind.Service:
-            return f"/api/v1/namespaces/{namespace}/services"
-        elif self == KubeApiNamespaceWatcherKind.Deployment:
-            return f"/apis/apps/v1beta2/namespaces/{namespace}/deployments"
-        elif self == KubeApiNamespaceWatcherKind.Event:
-            return f"/api/v1/namespaces/{namespace}/events"
-        raise Exception("Watch type not found: " + str(self))
-
 
 class KubeApiNamespaceWatcher(KubeApiWatchStream):
     def __init__(
         self,
         namespace: str,
-        kind: KubeApiNamespaceWatcherKind = KubeApiNamespaceWatcherKind.Event,
+        kind: str = KubeApiNamespaceWatcherKind.Event,
         field_selector: str = None,
         label_selector: str = None,
         client: kubernetes.client.CoreV1Api() = None,
         reconnect_max_retries=20,
         reconnect_wait_timeout=5,
-        response_wait_timeout=5,
+        response_wait_timeout=None,
         api_event_name="api_event",
         since=None,
     ):
@@ -242,26 +245,47 @@ class KubeApiNamespaceWatcher(KubeApiWatchStream):
         self.namespace = namespace
         self.field_selector = field_selector
         self.label_selector = label_selector
-        self.client = client or kubernetes.client.CoreV1Api()
+        self.response_wait_timeout = response_wait_timeout
+        self.client: kubernetes.client.CoreV1Api = client or kubernetes.client.CoreV1Api()
 
         super().__init__(
             response_factory=self._create_watch_response_stream_factory,
             reconnect_max_retries=reconnect_max_retries,
             reconnect_wait_timeout=reconnect_wait_timeout,
-            response_wait_timeout=response_wait_timeout,
             api_event_name=api_event_name,
             since=since,
         )
+
+    def parse_data(self, data):
+        return super().parse_data(data)
+
+    @classmethod
+    def crate_watch_url(cls, kind, namespace):
+        # FIXME: Change uri (example: /api/v1/namespaces) to a repo values.
+        if kind == KubeApiNamespaceWatcherKind.Pod:
+            return f"/api/v1/namespaces/{namespace}/pods"
+        elif kind == KubeApiNamespaceWatcherKind.Job:
+            return f"/apis/batch/v1/namespaces/{namespace}/jobs"
+        elif kind == KubeApiNamespaceWatcherKind.Service:
+            return f"/api/v1/namespaces/{namespace}/services"
+        elif kind == KubeApiNamespaceWatcherKind.Deployment:
+            return f"/apis/apps/v1beta2/namespaces/{namespace}/deployments"
+        elif kind == KubeApiNamespaceWatcherKind.Event:
+            return f"/api/v1/namespaces/{namespace}/events"
+        raise Exception("Watch type not found: " + str(kind))
 
     def _create_watch_response_stream_factory(self, *args, **kwargs):
         path_params = {"namespace": self.namespace}
         query_params = {
             "pretty": False,
             "_continue": True,
-            "fieldSelector": self.field_selector or "",
-            "labelSelector": self.label_selector or "",
+            "fieldSelector": self.field_selector,
+            "labelSelector": self.label_selector,
             "watch": True,
         }
+
+        query_params.update(kwargs)
+        _clean_dictionary_nulls(query_params)
 
         # watch request, default values.
         body_params = None
@@ -286,7 +310,7 @@ class KubeApiNamespaceWatcher(KubeApiWatchStream):
         auth_settings = ["BearerToken"]
 
         api_call = self.client.api_client.call_api(
-            self.kind.crate_watch_url(self.namespace),
+            self.crate_watch_url(self.kind, self.namespace),
             "GET",
             path_params,
             query_params,
@@ -296,10 +320,118 @@ class KubeApiNamespaceWatcher(KubeApiWatchStream):
             files=local_var_files,
             response_type="V1EventList",
             auth_settings=auth_settings,
-            async_req=False,
             _return_http_data_only=False,
             _preload_content=False,
+            _request_timeout=self.response_wait_timeout,
             collection_formats=collection_formats,
-        )
+            async_req=True,
+        ).get()
 
         return api_call[0]
+
+
+class KubeApiPodLogWatcherLine:
+    def __init__(self, message: str, timestamp: datetime, namespace: str = None, name: str = None):
+        super().__init__()
+
+        self.message = message
+        self.timestamp = timestamp
+        self.name = name
+        self.namespace = namespace
+
+    def get_log_line(self):
+        return f"[{self.timestamp}][{self.namespace}.{self.name}]: {self.message}"
+
+    def __str__(self):
+        return self.message
+
+    def __repr__(self):
+        return self.get_log_line()
+
+
+class KubeApiPodLogWatcher(KubeApiWatchStream):
+    def __init__(
+        self,
+        name: str,
+        namespace: str,
+        container: str = None,
+        previous: bool = False,
+        tail_lines: int = None,
+        client: kubernetes.client.CoreV1Api() = None,
+        read_current_logs_on_first_start: bool = True,
+        reconnect_max_retries=20,
+        reconnect_wait_timeout=5,
+        api_event_name="log",
+        since=None,
+    ):
+        self.name = name
+        self.namespace = namespace
+        self.client: kubernetes.client.CoreV1Api = client or kubernetes.client.CoreV1Api()
+        self.container = container
+        self.previous = previous
+        self.tail_lines = tail_lines
+        self.read_timestamps = True
+        self._do_read_current_logs = read_current_logs_on_first_start
+        super().__init__(
+            response_factory=self._create_pod_log_response,
+            reconnect_max_retries=reconnect_max_retries,
+            reconnect_wait_timeout=reconnect_wait_timeout,
+            api_event_name=api_event_name,
+            since=since,
+        )
+
+    def _watch_loop(self, *args, **kwargs):
+        if self._do_read_current_logs:
+            self.read_currnet_logs(emit_events=True, collect_events=False)
+            self._do_read_current_logs = False
+        return super()._watch_loop(*args, **kwargs)
+
+    def parse_data(self, data: str):
+        ts = None
+        if self.read_timestamps:
+            ts = data[0 : data.index(" ")]
+            data = data[data.index(" ") + 1 :]
+            try:
+                ts = dateutil.parser.isoparse(ts)
+            except Exception:
+                pass
+        return KubeApiPodLogWatcherLine(data, ts, name=self.name, namespace=self.namespace)
+
+    def _create_pod_log_command_args(self):
+        command_args = {
+            "previous": self.previous,
+            "tail_lines": self.tail_lines,
+            "container": self.container,
+            "timestamps": self.read_timestamps,
+        }
+
+        return _clean_dictionary_nulls(command_args)
+
+    def _create_pod_log_response(self):
+        rsp = self.client.read_namespaced_pod_log_with_http_info(
+            name=self.name,
+            namespace=self.namespace,
+            follow=True,
+            **self._create_pod_log_command_args(),
+            _preload_content=False,
+        )
+
+        return rsp[0]
+
+    def read_currnet_logs(self, emit_events=False, collect_events=True):
+        """Read all of the current logs from the resource. Helper method."""
+        log_chunks = self.client.read_namespaced_pod_log(
+            self.name, self.namespace, **self._create_pod_log_command_args(), async_req=True
+        ).get()
+        if not isinstance(log_chunks, list):
+            log_chunks = log_chunks.strip().split("\n")
+
+        log_lines = []
+        for chunk in log_chunks:
+            for line in chunk.split("\n"):
+                data = self.parse_data(line)
+                if collect_events:
+                    log_lines.append(data)
+                self.emit(self.api_event_name, data)
+
+        return log_lines if collect_events else None
