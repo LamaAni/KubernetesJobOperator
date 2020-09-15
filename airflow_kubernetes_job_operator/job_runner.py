@@ -11,6 +11,7 @@ from airflow_kubernetes_job_operator.utils import (
     randomString,
     get_yaml_path_value,
 )
+from airflow_kubernetes_job_operator.kube_api.utils import apply
 
 JOB_RUNNER_INSTANCE_ID_LABEL = "job-runner-instance-id"
 KUBERNETES_IN_CLUSTER_SERVICE_ACCOUNT_PATH = "/var/run/secrets/kubernetes.io/serviceaccount"
@@ -240,6 +241,7 @@ class JobRunner(EventHandler):
         # creating the client
         coreClient = kubernetes.client.CoreV1Api()
         batchClient = kubernetes.client.BatchV1Api()
+        coreClient.read_namespaced_pod_status()
 
         # checking if job exists.
         status = None

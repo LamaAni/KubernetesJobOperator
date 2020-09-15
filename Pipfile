@@ -10,7 +10,7 @@ pytest = "*"
 pyyaml = ">=5.0"
 kubernetes = ">=9.0.0"
 urllib3 = ">=1.25.0"
-zthreading = ">=0.1.5"
+zthreading = ">=0.1.7"
 python-dateutil = "*"
 
 [requires]
