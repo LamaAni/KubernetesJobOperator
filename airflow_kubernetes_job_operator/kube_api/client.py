@@ -41,8 +41,7 @@ def set_asyncio_mode(is_active: bool):
 
 
 def get_asyncio_mode() -> bool:
-    """Returns the asyncio mode. Defaults to true if not defined in env (reduces memory)
-    """
+    """Returns the asyncio mode. Defaults to true if not defined in env (reduces memory)"""
     return os.environ.get(KUBERNETES_API_CLIENT_USE_ASYNCIO_ENV_NAME, "true") == "true"
 
 
