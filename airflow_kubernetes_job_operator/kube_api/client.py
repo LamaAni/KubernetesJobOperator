@@ -33,6 +33,17 @@ KUBERNETES_JOB_OPERATOR_DEFAULT_CONFIG_LOCATIONS = join_locations_list(
     [kube_config.KUBE_CONFIG_DEFAULT_LOCATION], os.environ.get("KUBERNETES_JOB_OPERATOR_DEFAULT_CONFIG_LOCATIONS", None)
 )
 KUBERNETES_SERVICE_ACCOUNT_PATH = os.path.dirname(incluster_config.SERVICE_CERT_FILENAME)
+KUBERNETES_API_CLIENT_USE_ASYNCIO_ENV_NAME = "KUBERNETES_API_CLIENT_USE_ASYNCIO"
+
+
+def set_asyncio_mode(is_active: bool):
+    os.environ[KUBERNETES_API_CLIENT_USE_ASYNCIO_ENV_NAME] = str(is_active).lower()
+
+
+def get_asyncio_mode() -> bool:
+    """Returns the asyncio mode. Defaults to true if not defined in env (reduces memory)
+    """
+    return os.environ.get(KUBERNETES_API_CLIENT_USE_ASYNCIO_ENV_NAME, "true") == "true"
 
 
 class KubeApiRestQuery(Task):
@@ -50,10 +61,11 @@ class KubeApiRestQuery(Task):
         body: dict = None,
         headers: dict = None,
         timeout: float = None,
+        use_asyncio: bool = get_asyncio_mode(),
     ):
         super().__init__(
             self._query_loop,
-            use_async_loop=False,
+            use_async_loop=use_asyncio,
             use_daemon_thread=True,
             thread_name=f"{self.__class__.__name__} {id(self)}",
             event_name=KubeApiRestQuery.complete_event_name,
@@ -248,9 +260,12 @@ class KubeApiRestClient:
                     if os.path.isfile(expanduser(loc)):
                         config_file = loc
 
-            kube_config.load_kube_config(
-                config_file=config_file, context=context, client_configuration=configuration, persist_config=persist
-            )
+            assert config_file is not None, "Kubernetes config file not provided and default config could not be found."
+
+            if config_file is not None:
+                kube_config.load_kube_config(
+                    config_file=config_file, context=context, client_configuration=configuration, persist_config=persist
+                )
             configuration.filepath = config_file
 
         return configuration

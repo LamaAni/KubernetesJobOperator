@@ -14,4 +14,4 @@ zthreading = ">=0.1.7"
 python-dateutil = "*"
 
 [requires]
-python_version = "3.8"
+python_version = "3.6"

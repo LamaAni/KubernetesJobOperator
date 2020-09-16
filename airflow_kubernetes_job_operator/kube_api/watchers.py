@@ -11,7 +11,12 @@ from airflow_kubernetes_job_operator.kube_api.queries import GetNamespaceObjects
 class NamespaceWatchQuery(KubeApiRestQuery):
     def __init__(
         self,
-        kinds: List[str] = [NamespaceObjectKinds.Pod, NamespaceObjectKinds.Job, NamespaceObjectKinds.Service],
+        kinds: List[str] = [
+            NamespaceObjectKinds.Pod,
+            NamespaceObjectKinds.Job,
+            NamespaceObjectKinds.Service,
+            NamespaceObjectKinds.Deployment,
+        ],
         namespace: str = None,
         watch: bool = True,
         label_selector: str = None,

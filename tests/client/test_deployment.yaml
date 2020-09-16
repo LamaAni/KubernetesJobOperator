@@ -1,0 +1,21 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: test-deployment
+spec:
+  selector:
+    matchLabels:
+      app: test-deployment
+  template:
+    metadata:
+      labels:
+        app: test-deployment
+    spec:
+      containers:
+        - name: test-deployment
+          image: ubuntu
+          command:
+            - echo
+            - 'This is a log from a deployment pod'
+          resources:
+            limits: {}
