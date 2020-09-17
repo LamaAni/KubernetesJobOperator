@@ -1,10 +1,40 @@
+from logging import Logger
+import logging
 import datetime
+import os
+from sys import api_version
 import kubernetes
 import json
 import dateutil.parser
 from typing import Callable
 from enum import Enum
+from zthreading.events import Event
+
+from airflow_kubernetes_job_operator.kube_api.utils import kube_logger
+from yaml import emit
 from airflow_kubernetes_job_operator.kube_api.client import KubeApiRestQuery, KubeApiRestClient
+
+
+KUBE_API_SHOW_SERVER_LOG_TIMESTAMPS = os.environ.get("KUBE_API_SHOW_SERVER_LOG_TIMESTAMPS", "false").lower() == "true"
+KUBE_API_SHOW_SERVER_DETECT_LOG_LEVEL = (
+    os.environ.get("KUBE_API_SHOW_SERVER_DETECT_LOG_LEVEL", "true").lower() == "true"
+)
+
+
+def do_detect_log_level(line: "LogLine", msg: str):
+    if "CRITICAL" in msg:
+        return logging.CRITICAL
+    if "ERROR" in msg:
+        return logging.ERROR
+    elif "WARN" in msg or "WARNING" in msg:
+        return logging.WARNING
+    elif "DEBUG" in msg:
+        return logging.DEBUG
+    else:
+        return logging.INFO
+
+
+KUBE_API_SHOW_SERVER_DETECT_LOG_LEVEL_METHOD = do_detect_log_level
 
 
 class LogLine:
@@ -15,11 +45,24 @@ class LogLine:
         self.message = message
         self.timestamp = timestamp
 
+    def log(self, logger: Logger = kube_logger):
+        msg = self.__repr__()
+        if not KUBE_API_SHOW_SERVER_DETECT_LOG_LEVEL:
+            logger.info(msg)
+        elif KUBE_API_SHOW_SERVER_DETECT_LOG_LEVEL_METHOD is not None:
+            logger.log(
+                KUBE_API_SHOW_SERVER_DETECT_LOG_LEVEL_METHOD(self, msg) or logging.INFO,
+                msg,
+            )
+        else:
+            logger.info(msg)
+
     def __str__(self):
         return self.message
 
     def __repr__(self):
-        return f"[{self.timestamp}][{self.namespace}.{self.pod_name}]: {self.message}"
+        timestamp = f"[{self.timestamp}]" if KUBE_API_SHOW_SERVER_LOG_TIMESTAMPS else ""
+        return timestamp + f"[{self.namespace}/pods/{self.pod_name}]: {self.message}"
 
 
 class GetPodLogs(KubeApiRestQuery):
@@ -49,11 +92,23 @@ class GetPodLogs(KubeApiRestQuery):
 
         self._active_namespace = None
 
-    def parse_data(self, line: str):
-        timestamp = dateutil.parser.isoparse(line[: line.index(" ")])
-        message = line[line.index(" ") + 1 :]
-        log_line = LogLine(self.name, self._active_namespace, message, timestamp)
-        return log_line
+    def parse_data(self, message_line: str):
+        timestamp = dateutil.parser.isoparse(message_line[: message_line.index(" ")])
+        message = message_line[message_line.index(" ") + 1 :]
+        message = message.replace("\r", "")
+        lines = []
+        for message_line in message.split("\n"):
+            lines.append(LogLine(self.name, self._active_namespace, message_line, timestamp))
+        return lines
+
+    def emit_data(self, data):
+        for line in data:
+            super().emit_data(line)
+
+    def log_event(self, logger: Logger, ev: Event):
+        if ev.name == self.data_event_name and isinstance(ev.args[0], LogLine):
+            ev.args[0].log(logger)
+        super().log_event(logger, ev)
 
     def pre_request(self, client: KubeApiRestClient):
         namespace = self.namespace or client.get_default_namespace()
@@ -99,6 +154,7 @@ class GetNamespaceObjects(KubeApiRestQuery):
     def __init__(
         self,
         kind: str,
+        api_path: str = None,
         namespace: str = None,
         watch: bool = False,
         label_selector: str = None,
@@ -114,6 +170,7 @@ class GetNamespaceObjects(KubeApiRestQuery):
                 "watch": watch,
             },
         )
+        self.api_version = api_version
         self.kind = kind
         self.namespace = namespace
 
@@ -139,7 +196,7 @@ class GetNamespaceObjects(KubeApiRestQuery):
                     item["kind"] = item_kind
                     super().emit_data(item)
             else:
-                super().emit_data(item)
+                super().emit_data(data)
         elif "type" in data:
             # as event.
             event_object = data["object"]

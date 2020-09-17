@@ -1,12 +1,17 @@
 # Implements a rest api
+from logging import Logger
 import os
 import json
+import traceback
+from os import terminal_size
+from socket import timeout
+from types import TracebackType
 import yaml
 from typing import List, Callable, Set
 from weakref import WeakSet
 from os.path import expanduser
 from zthreading.tasks import Task
-from zthreading.events import EventHandler
+from zthreading.events import Event, EventHandler
 from requests import request, Response
 
 from airflow_kubernetes_job_operator.kube_api.exceptions import KubeApiException
@@ -14,6 +19,7 @@ from airflow_kubernetes_job_operator.kube_api.utils import unqiue_with_order, cl
 
 from kubernetes.client import ApiClient
 from kubernetes.config import kube_config, incluster_config, list_kube_config_contexts
+from airflow_kubernetes_job_operator.kube_api.utils import kube_logger
 
 
 def join_locations_list(*args):
@@ -37,17 +43,26 @@ KUBERNETES_API_CLIENT_USE_ASYNCIO_ENV_NAME = "KUBERNETES_API_CLIENT_USE_ASYNCIO"
 
 
 def set_asyncio_mode(is_active: bool):
-    os.environ[KUBERNETES_API_CLIENT_USE_ASYNCIO_ENV_NAME] = str(is_active).lower()
+    if is_active:
+        raise NotImplementedError("AsyncIO not yet implemented.")
+    KubeApiRestQuery.default_use_asyncio = is_active
 
 
 def get_asyncio_mode() -> bool:
     """Returns the asyncio mode. Defaults to true if not defined in env (reduces memory)"""
-    return os.environ.get(KUBERNETES_API_CLIENT_USE_ASYNCIO_ENV_NAME, "true") == "true"
+    return KubeApiRestQuery.default_use_asyncio
+
+
+if "KUBERNETES_API_CLIENT_USE_ASYNCIO_ENV_NAME" in os.environ:
+    set_asyncio_mode(os.environ.get("KUBERNETES_API_CLIENT_USE_ASYNCIO_ENV_NAME", "false") == "true")
 
 
 class KubeApiRestQuery(Task):
     data_event_name = "kube_api_query_result"
-    complete_event_name = "kube_api_query_complete"
+    default_use_asyncio = False
+
+    query_started_event_name = "kube_api_query_started"
+    query_ended_event_name = "kube_api_query_ended"
 
     def __init__(
         self,
@@ -60,14 +75,14 @@ class KubeApiRestQuery(Task):
         body: dict = None,
         headers: dict = None,
         timeout: float = None,
-        use_asyncio: bool = get_asyncio_mode(),
+        use_asyncio: bool = None,
     ):
+        assert use_asyncio is not True, NotImplementedError("AsyncIO not yet implemented.")
         super().__init__(
-            self._query_loop,
-            use_async_loop=use_asyncio,
+            self._exdcute_query,
+            use_async_loop=use_asyncio or KubeApiRestQuery.default_use_asyncio,
             use_daemon_thread=True,
             thread_name=f"{self.__class__.__name__} {id(self)}",
-            event_name=KubeApiRestQuery.complete_event_name,
         )
 
         self.resource_path = resource_path
@@ -79,6 +94,10 @@ class KubeApiRestQuery(Task):
         self.method = method
         self.files = files
         self.body = body
+
+        # these event are object specific
+        self.query_started_event_name = f"{self.query_started_event_name} {id(self)}"
+        self.query_ended_event_name = f"{self.query_started_event_name} {id(self)}"
 
     def parse_data(self, line: str):
         return line
@@ -115,9 +134,14 @@ class KubeApiRestQuery(Task):
     def post_request(self, client: "KubeApiRestClient"):
         pass
 
-    def _query_loop(self, client: "KubeApiRestClient"):
+    def _exdcute_query(self, client: "KubeApiRestClient"):
+        self.emit(self.query_started_event_name, self, client)
         self.pre_request(client)
+        self.query_loop(client)
+        self.post_request(client)
+        self.emit(self.query_ended_event_name, self, client)
 
+    def query_loop(self, client: "KubeApiRestClient"):
         def validate_dictionary(d: dict, default: dict = None):
             if default is not None:
                 update_with = d or {}
@@ -158,7 +182,7 @@ class KubeApiRestQuery(Task):
             response_type="str",
             auth_settings=["BearerToken"],
             async_req=False,
-            _return_http_data_only=False,  # noqa: E501
+            _return_http_data_only=False,
             _preload_content=False,
             _request_timeout=self.timeout,
             collection_formats={},
@@ -170,9 +194,6 @@ class KubeApiRestQuery(Task):
             data = self.parse_data(line)
             self.emit_data(data)
 
-        self.post_request(client)
-        self.emit(self.complete_event_name)
-
     def start(self, client: "KubeApiRestClient"):
         """Start the query execution
 
@@ -181,7 +202,43 @@ class KubeApiRestQuery(Task):
         """
         assert not self.is_running, "Cannot start a running query"
         assert isinstance(client, KubeApiRestClient), "client must be of class KubeApiRestClient"
-        return super().start(client)
+
+        super().start(client)
+
+        return self
+
+    def wait_until_started(self, timeout: float = 5, ignore_if_running=True):
+        if self.is_running and ignore_if_running:
+            return
+        self.wait_for(self.query_started_event_name, timeout=timeout)
+
+    def stop(self, timeout: float = None, throw_error_if_not_running: bool = None):
+        self.stop_all_streams()
+        return super().stop(timeout=timeout, throw_error_if_not_running=throw_error_if_not_running)
+
+    def log_event(self, logger: Logger, ev: Event):
+        pass
+
+    def bind_logger(self, logger: Logger = kube_logger, allowed_event_names=None) -> int:
+        allowed_event_names = set(allowed_event_names or [self.data_event_name])
+
+        def process_log_event(ev: Event):
+            if ev.name in [self.error_event_name, self.warning_event_name]:
+                err: Exception = ev.args[-1] if len(ev.args) > 0 else Exception("Unknown error")
+                msg = (
+                    "\n".join(traceback.format_exception(err.__class__, err, err.__traceback__))
+                    if isinstance(err, Exception)
+                    else err
+                )
+                if ev.name == self.error_event_name:
+                    logger.error(msg)
+                else:
+                    logger.warning(msg)
+            elif ev.name in allowed_event_names:
+                self.log_event(logger, ev)
+
+        # bind errors and warnings.
+        return self.on_any_event(lambda name, *args, **kwargs: process_log_event(Event(name, args, kwargs)))
 
 
 class KubeApiRestClient:
@@ -314,10 +371,15 @@ class KubeApiRestClient:
         q: KubeApiRestQuery = None
         for q in queries:
             self._active_queries.add(q)
-            q.on(q.complete_event_name, lambda: remove_from_pending(q))
+            q.on(q.query_ended_event_name, lambda query, client: remove_from_pending(q))
             q.pipe(handler)
 
         return handler
+
+    def _start_execution(self, queries: List[KubeApiRestQuery]):
+        for query in queries:
+            self._active_queries.add(query)
+            query.start(self)
 
     def async_query(self, queries: List[KubeApiRestQuery]) -> EventHandler:
         if isinstance(queries, KubeApiRestQuery):
@@ -325,24 +387,34 @@ class KubeApiRestClient:
 
         handler = self._create_query_handler(queries)
 
-        for q in queries:
-            q.start(self)
+        self._start_execution(queries)
 
         return handler
 
-    def stream(self, queries: List[KubeApiRestQuery], event_name: str = KubeApiRestQuery.data_event_name, timeout=None):
+    def stream(
+        self,
+        queries: List[KubeApiRestQuery],
+        event_name: str = None,
+        timeout=None,
+        process_event_data: Callable = None,
+    ):
         if isinstance(queries, KubeApiRestQuery):
             queries = [queries]
 
         strm = self._create_query_handler(queries).stream(
-            event_name, timeout, use_async_loop=False, process_event_data=lambda ev: ev.args[0]
+            event_name, timeout, use_async_loop=False, process_event_data=process_event_data
         )
 
-        for q in queries:
-            q.start(self)
+        self._start_execution(queries)
 
-        return strm
+        for ev in strm:
+            yield ev
 
-    def query(self, queries: List[KubeApiRestQuery], event_name: str = KubeApiRestQuery.data_event_name, timeout=None):
-        strm = self.stream(queries)
+    def query(
+        self,
+        queries: List[KubeApiRestQuery],
+        event_name: str = KubeApiRestQuery.data_event_name,
+        timeout=None,
+    ):
+        strm = self.stream(queries, event_name=event_name, timeout=timeout)
         return [v for v in strm]

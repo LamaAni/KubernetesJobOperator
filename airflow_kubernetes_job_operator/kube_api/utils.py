@@ -1,6 +1,9 @@
+from logging import Logger
 import kubernetes
 from airflow_kubernetes_job_operator.kube_api.exceptions import KubeApiException
+import logging
 
+kube_logger:Logger = logging.getLogger(__name__)
 
 def clean_dictionary_nulls(d: dict):
     if d is None:
