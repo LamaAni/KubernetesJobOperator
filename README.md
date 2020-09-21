@@ -59,8 +59,8 @@ job_task=KubernetesJobOperator(
     command=["bash", "-c", 'echo "all ok"'],
 )
 
-job_yaml=... # loaded from file.
-job_task_from_yaml = KubernetesJobOperator(task_id="test-job-from-yaml", job_yaml=job_yaml, dag=dag)
+body=... # loaded from file.
+job_task_from_yaml = KubernetesJobOperator(task_id="test-job-from-yaml", body=body, dag=dag)
 
 
 # Legacy compatibility to KubernetesPodOperator

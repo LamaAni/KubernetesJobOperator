@@ -7,8 +7,8 @@ from logging import Logger
 from uuid import uuid4
 from typing import Callable, List, Type, Union
 from airflow_kubernetes_job_operator.kube_api.client import KubeApiRestQuery
+from airflow_kubernetes_job_operator.kube_api.utils import not_empty_string
 from airflow_kubernetes_job_operator.utils import randomString
-from airflow_kubernetes_job_operator.exceptions import KubernetesJobOperatorException
 from airflow_kubernetes_job_operator.kube_api import (
     KubeApiRestClient,
     KubeObjectKind,
@@ -23,6 +23,10 @@ from airflow_kubernetes_job_operator.kube_api import (
 )
 
 
+class JobRunnerException(Exception):
+    pass
+
+
 class JobRunner:
     job_runner_instance_id_label_name = "kubernetes-job-runner-instance-id"
     custom_prepare_kinds: dict = {}
@@ -32,7 +36,6 @@ class JobRunner:
         self,
         body,
         namespace: str = None,
-        random_name_postfix_length=8,
         logger: Logger = kube_logger,
         show_pod_logs: bool = True,
         show_operation_logs: bool = True,
@@ -41,25 +44,25 @@ class JobRunner:
         show_error_logs: bool = True,
         delete_on_success: bool = True,
         delete_on_failure: bool = False,
-        auto_load_kube_config=False,
+        auto_load_kube_config=True,
+        random_name_postfix_length=8,
+        name_prefix: str = None,
+        name_postfix: str = None,
     ):
-        if isinstance(body, str):
-            body = yaml.safe_load_all(body)
-        if isinstance(body, dict):
-            body = [body]
-
-        assert isinstance(body, list) and len(body) > 0 and all(isinstance(o, dict) for o in body), ValueError(
+        assert isinstance(body, (list, dict, str)), ValueError(
             "body must be a dictionary, a list of dictionaries with at least one value, or string yaml"
         )
 
-        # Make a copy so not to augment the original
-        body = copy.deepcopy(body)
-
         self._client = KubeApiRestClient(auto_load_kube_config=auto_load_kube_config)
+        self._is_body_ready = False
         self._body = body
-        self.name_postfix = "" if random_name_postfix_length <= 0 else randomString((random_name_postfix_length))
         self.logger: Logger = logger
         self._id = str(uuid4())
+
+        self.name_postfix = (
+            name_postfix or "" if random_name_postfix_length <= 0 else randomString((random_name_postfix_length))
+        )
+        self.name_prefix = name_prefix
 
         self.namespace = namespace
         self.show_pod_logs = show_pod_logs
@@ -83,6 +86,8 @@ class JobRunner:
 
     @property
     def body(self) -> List[dict]:
+        if not self._is_body_ready:
+            self.prepare_body()
         return self._body
 
     @property
@@ -121,11 +126,11 @@ class JobRunner:
         assert isinstance(body, dict), ValueError("Body must be a dictionary")
         descriptor = KubeObjectDescriptor(body)
 
-        assert isinstance(descriptor.spec.get("template", None), dict), KubernetesJobOperatorException(
+        assert isinstance(descriptor.spec.get("template", None), dict), JobRunnerException(
             "Cannot create a job without a template, 'spec.template' is missing or not a dictionary"
         )
 
-        assert isinstance(descriptor.metadata["template"].get("spec", None), dict), KubernetesJobOperatorException(
+        assert isinstance(descriptor.metadata["template"].get("spec", None), dict), JobRunnerException(
             "Cannot create a job without a template spec, 'spec.template.spec' is missing or not a dictionary"
         )
 
@@ -142,6 +147,27 @@ class JobRunner:
         descriptor = KubeObjectDescriptor(body)
         descriptor.spec.setdefault("restartPolicy", "Never")
 
+    def prepare_body(self):
+        if self._is_body_ready:
+            return
+
+        body = self._body
+        if isinstance(body, str):
+            body = yaml.safe_load_all(body)
+        else:
+            body = copy.deepcopy(body)
+            if not isinstance(body, list):
+                body = [body]
+
+        assert all(isinstance(o, dict) for i in body), JobRunnerException(
+            "Failed to parse body, found errored collection values"
+        )
+
+        for obj in body:
+            self._prepare_kube_object(obj)
+        self._body = body
+        self._is_body_ready = True
+
     def _prepare_kube_object(
         self,
         body: dict,
@@ -150,7 +176,7 @@ class JobRunner:
 
         kind_name: str = body.get("kind", None)
         if kind_name is None or not KubeObjectKind.has_kind(kind_name.strip().lower()):
-            raise KubernetesJobOperatorException(
+            raise JobRunnerException(
                 f"Unrecognized kubernetes object kind: '{kind_name}', "
                 + f"Allowed core kinds are {KubeObjectKind.all_names()}. "
                 + "To register new kinds use: KubeObjectKind.register_global_kind(..), "
@@ -159,11 +185,12 @@ class JobRunner:
             )
 
         descriptor = KubeObjectDescriptor(body)
-        assert descriptor.name is not None, ValueError("body['name'] must be defined")
         assert descriptor.spec is not None, ValueError("body['spec'] is not defined")
 
         descriptor.metadata.setdefault("namespace", self.namespace or self.client.get_default_namespace())
-        descriptor.name = f"{descriptor.name}-{self.name_postfix}"
+        name_parts = [v for v in [self.name_prefix, descriptor.name, self.name_postfix] if not_empty_string(v)]
+        assert len(name_parts) > 0, JobRunnerException("Invalid name or auto generated name")
+        descriptor.name = "-".join(name_parts)
 
         self.update_metadata_labels(
             body,
@@ -194,21 +221,23 @@ class JobRunner:
     def execute_job(
         self,
         timeout: int = 60 * 5,
+        watcher_start_timeout: int = 10,
     ):
+        self.prepare_body()
+
         # prepare the run objects.
         namespaces: List[str] = []
 
         for obj in self.body:
-            self._prepare_kube_object(obj)
             namespaces.append(obj["metadata"]["namespace"])
 
         state_object = KubeObjectDescriptor(self.body[0])
 
-        assert state_object.kind is not None, KubernetesJobOperatorException(
+        assert state_object.kind is not None, JobRunnerException(
             "The first object in the list of objects must have a recognizable object kind (obj['kind'] is not None)"
         )
         parseable_kinds = [k for k in KubeObjectKind.all() if k.parse_kind_state is not None]
-        assert state_object.kind.parse_kind_state is not None, KubernetesJobOperatorException(
+        assert state_object.kind.parse_kind_state is not None, JobRunnerException(
             "The first object in the object list must have a kind with a parseable state, "
             + "where the states Failed or Succeeded are returned when the object finishes execution."
             + f"Active kinds with parseable states are: {[k.name for k in parseable_kinds]}. "
@@ -231,7 +260,7 @@ class JobRunner:
             watcher.pipe_to_logger(self.logger)
 
         self.client.query_async([watcher])
-        watcher.wait_until_running(timeout=timeout)
+        watcher.wait_until_running(timeout=watcher_start_timeout)
 
         self.log(f"Started watcher for kinds: {', '.join(list(watcher.kinds.keys()))}")
         self.log(f"Watching namespaces: {', '.join(namespaces)}")
@@ -285,7 +314,7 @@ class JobRunner:
 
         Arguments:
 
-            job_yaml {dict} -- The job description yaml.
+            body {dict} -- The job description yaml.
         """
         self.log(("Deleting job.."))
         descriptors: List[KubeObjectDescriptor] = [KubeObjectDescriptor(o) for o in self.body]
@@ -296,6 +325,12 @@ class JobRunner:
         )
         self.client.query(self._create_body_operation_queries(DeleteNamespaceObject))
         self.log("Job deleted")
+
+    def abort(self):
+        self.log("Aborting job ...")
+        self.delete_job()
+        self.client.stop()
+        self.log("Client stopped")
 
 
 JobRunner.register_custom_prepare_kind("pod", JobRunner.custom_prepare_pod_kind)

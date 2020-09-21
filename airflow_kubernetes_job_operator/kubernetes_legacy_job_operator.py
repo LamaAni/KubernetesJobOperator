@@ -9,7 +9,7 @@ from airflow.contrib.kubernetes.volume_mount import VolumeMount
 from airflow.contrib.kubernetes.volume import Volume
 from airflow.contrib.kubernetes.secret import Secret
 
-JOB_YAML_DEFAULT_FILE = os.path.abspath(f"{__file__}.job.yaml")
+body_DEFAULT_FILE = os.path.abspath(f"{__file__}.job.yaml")
 
 
 class KubernetesLegacyJobOperator(KubernetesJobOperator):
@@ -46,10 +46,10 @@ class KubernetesLegacyJobOperator(KubernetesJobOperator):
         pod_runtime_info_envs: dict = None,
         dnspolicy: str = None,
         ## new args.
-        job_yaml: str = None,
-        job_yaml_filepath: str = None,
+        body: str = None,
+        body_filepath: str = None,
         delete_policy: str = None,
-        validate_yaml_on_init: bool = None,
+        validate_body_on_init: bool = None,
         *args,
         **kwargs,
     ):
@@ -136,19 +136,19 @@ class KubernetesLegacyJobOperator(KubernetesJobOperator):
 
         Added arguments:
 
-            job_yaml {dict|string} -- The job to execute as a yaml description. (default: None)
-            job_yaml_filepath {str} -- The path to the file to read the yaml from, overridden by
-                job_yaml. (default: None)
+            body {dict|string} -- The job to execute as a yaml description. (default: None)
+            body_filepath {str} -- The path to the file to read the yaml from, overridden by
+                body. (default: None)
             delete_policy {str} -- Any of: Never, Always, IfSucceeded (default: {"IfSucceeded"});
                 overrides is_delete_operator_pod.
-            validate_yaml_on_init {bool} -- If true, validates the yaml in the constructor,
+            validate_body_on_init {bool} -- If true, validates the yaml in the constructor,
                 setting this to True, will slow dag creation.
-                (default: {from env/airflow config: AIRFLOW__KUBE_JOB_OPERATOR__VALIDATE_YAML_ON_INIT or False})
+                (default: {from env/airflow config: AIRFLOW__KUBE_JOB_OPERATOR__validate_body_on_init or False})
         """
         delete_policy = delete_policy or "IfSucceeded" if is_delete_operator_pod else "Never"
-        validate_yaml_on_init = (
+        validate_body_on_init = (
             configuration.conf.getboolean(
-                "kube_job_operator", "VALIDATE_YAML_ON_INIT", fallback=False
+                "kube_job_operator", "validate_body_on_init", fallback=False
             )
             or False
         )
@@ -159,13 +159,13 @@ class KubernetesLegacyJobOperator(KubernetesJobOperator):
             image=image,
             namespace=namespace,
             name=name,
-            job_yaml=job_yaml,
-            job_yaml_filepath=job_yaml_filepath,
+            body=body,
+            body_filepath=body_filepath,
             delete_policy=delete_policy,
             in_cluster=in_cluster,
             config_file=config_file,
             cluster_context=cluster_context,
-            validate_yaml_on_init=validate_yaml_on_init,
+            validate_body_on_init=validate_body_on_init,
             startup_timeout_seconds=startup_timeout_seconds,
             get_logs=get_logs,
             *args,
@@ -223,17 +223,17 @@ class KubernetesLegacyJobOperator(KubernetesJobOperator):
         # selecting appropriate pod values.
         all_labels = {}
         all_labels.update(self.labels)
-        all_labels.update(self.job_yaml["spec"]["template"]["metadata"]["labels"])
-        image = self.image or self.job_yaml["spec"]["template"]["spec"]["containers"][0]["image"]
-        cmds = self.cmds or self.job_yaml["spec"]["template"]["spec"]["containers"][0]["command"]
+        all_labels.update(self.body["spec"]["template"]["metadata"]["labels"])
+        image = self.image or self.body["spec"]["template"]["spec"]["containers"][0]["image"]
+        cmds = self.cmds or self.body["spec"]["template"]["spec"]["containers"][0]["command"]
         arguments = (
-            self.arguments or self.job_yaml["spec"]["template"]["spec"]["containers"][0]["args"]
+            self.arguments or self.body["spec"]["template"]["spec"]["containers"][0]["args"]
         )
 
         pod = gen.make_pod(
-            namespace=self.job_yaml["metadata"]["namespace"],
+            namespace=self.body["metadata"]["namespace"],
             image=image,
-            pod_id=self.job_yaml["metadata"]["name"],
+            pod_id=self.body["metadata"]["name"],
             cmds=cmds,
             arguments=arguments,
             labels=all_labels,
@@ -258,5 +258,5 @@ class KubernetesLegacyJobOperator(KubernetesJobOperator):
         pod_yaml = pod_request_factory.SimplePodRequestFactory().create(pod)
 
         # setting the pod template.
-        self.job_yaml["spec"]["template"]["spec"] = pod_yaml["spec"]
+        self.body["spec"]["template"]["spec"] = pod_yaml["spec"]
 

@@ -4,7 +4,6 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: default-job
   finalizers:
     - foregroundDeletion
 spec:
@@ -15,5 +14,10 @@ spec:
       restartPolicy: Never
       containers:
         - name: task-executor
+          imagePullPolicy: Always
+          command:
+              - ""
+          args:
+              - ""
           image: alpine
   backoffLimit: 0
