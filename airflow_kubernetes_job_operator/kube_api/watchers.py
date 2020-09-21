@@ -1,81 +1,19 @@
-import datetime
-from datetime import time
-from logging import Logger
-import queue
-import kubernetes
 import json
-import dateutil.parser
-
-from zthreading.events import EventHandler, Event
+from datetime import datetime
+from logging import Logger
 from weakref import WeakSet, WeakValueDictionary
-from typing import List, Dict, Callable, Generator
-from enum import Enum
-
+from typing import List, Dict
+from zthreading.events import EventHandler, Event
 from zthreading.tasks import Task
+
 from airflow_kubernetes_job_operator.kube_api.utils import kube_logger
+from airflow_kubernetes_job_operator.kube_api.collections import KubeObjectState, KubeObjectKind
 from airflow_kubernetes_job_operator.kube_api.client import KubeApiRestQuery, KubeApiRestClient
 from airflow_kubernetes_job_operator.kube_api.queries import (
     GetNamespaceObjects,
     GetPodLogs,
-    NamespaceObjectKinds,
     LogLine,
 )
-
-
-class KubeObjectState(Enum):
-    Pending = "Pending"
-    Active = "Active"
-    Succeeded = "Succeeded"
-    Failed = "Failed"
-    Running = "Running"
-    Deleted = "Deleted"
-
-    def __str__(self) -> str:
-        return self.value
-
-    @classmethod
-    def get_state(cls, yaml: dict):
-        kind = yaml.get("kind")
-        status = yaml.get("status", {})
-        spec = yaml.get("spec", {})
-
-        if kind == "Job":
-            job_status = "Pending"
-            back_off_limit = int(spec["backoffLimit"])
-            if "startTime" in status:
-                if "completionTime" in status:
-                    job_status = KubeObjectState.Succeeded
-                elif "failed" in status and int(status["failed"]) > back_off_limit:
-                    job_status = KubeObjectState.Failed
-                else:
-                    job_status = KubeObjectState.Running
-            return job_status
-
-        elif kind == "Pod":
-            pod_phase = status["phase"]
-            container_status = status.get("containerStatuses", [])
-            for container_status in container_status:
-                if "state" in container_status:
-                    if (
-                        "waiting" in container_status["state"]
-                        and "reason" in container_status["state"]["waiting"]
-                        and "BackOff" in container_status["state"]["waiting"]["reason"]
-                    ):
-                        return KubeObjectState.Failed
-                    if "error" in container_status["state"]:
-                        return KubeObjectState.Failed
-
-            if pod_phase == "Pending":
-                return KubeObjectState.Pending
-            elif pod_phase == "Running":
-                return KubeObjectState.Running
-            elif pod_phase == "Completed":
-                return KubeObjectState.Succeeded
-            elif pod_phase == "Failed":
-                return KubeObjectState.Failed
-            return pod_phase
-        else:
-            return KubeObjectState.Active
 
 
 class NamespaceWatchQueryObjectState(EventHandler):
@@ -94,6 +32,7 @@ class NamespaceWatchQueryObjectState(EventHandler):
         self.state_changed_event_name = state_changed_event_name
         self._last_state: KubeObjectState = None
         self._state: KubeObjectState = None
+        self._kind: KubeObjectKind = None
 
     @classmethod
     def detect(cls, yaml: dict):
@@ -106,8 +45,19 @@ class NamespaceWatchQueryObjectState(EventHandler):
         return self.metadata["uid"]
 
     @property
-    def kind(self) -> str:
-        return self.yaml.get("kind", "{undefined}")
+    def kind(self) -> KubeObjectKind:
+        if self._kind is None:
+            if "kind" not in self.yaml:
+                return None
+            self._kind = KubeObjectKind.create_from_existing(
+                self.yaml.get("kind", "{undefined}"),
+                self.yaml.get("apiVersion", None),
+            )
+        return self._kind
+
+    @property
+    def kind_name(self) -> str:
+        return self.kind.name
 
     @property
     def name(self) -> str:
@@ -132,10 +82,9 @@ class NamespaceWatchQueryObjectState(EventHandler):
     @property
     def state(self) -> KubeObjectState:
         if self._state is None:
-            if self.deleted:
-                self._state = KubeObjectState.Deleted
-            else:
-                self._state = KubeObjectState.get_state(self.yaml)
+            if self.kind is None:
+                return None
+            self._state = self.kind.parse_state(self.yaml, self.deleted)
         return self._state
 
     def update(self, object_yaml):
@@ -164,12 +113,7 @@ class NamespaceWatchQuery(KubeApiRestQuery):
 
     def __init__(
         self,
-        kinds: List[str] = [
-            NamespaceObjectKinds.Pod,
-            NamespaceObjectKinds.Job,
-            NamespaceObjectKinds.Service,
-            NamespaceObjectKinds.Deployment,
-        ],
+        kinds: list = None,
         namespace: str = None,
         watch: bool = True,
         label_selector: str = None,
@@ -186,6 +130,9 @@ class NamespaceWatchQuery(KubeApiRestQuery):
             timeout=timeout,
         )
 
+        # update kinds
+        kinds = KubeObjectKind.watchable()
+
         self.watch = watch
         self.namespace = namespace
         self.label_selector = label_selector
@@ -195,7 +142,10 @@ class NamespaceWatchQuery(KubeApiRestQuery):
         self.pod_log_since = pod_log_since
         self.collect_kube_object_state = collect_kube_object_state
 
-        self.kinds = [str(k).lower() for k in kinds]
+        self.kinds = {}
+        for kind in kinds:
+            kind: KubeObjectKind = kind if isinstance(kind, KubeObjectKind) else KubeObjectKind.get_kind(kind)
+            self.kinds[kind.name] = kind
 
         self._executing_queries: List[KubeApiRestQuery] = WeakSet()
         self._executing_pod_loggers: Dict[str, GetPodLogs] = WeakValueDictionary()
@@ -226,7 +176,12 @@ class NamespaceWatchQuery(KubeApiRestQuery):
             name = data["metadata"]["name"]
             pod_status = data["status"]["phase"]
             if pod_status != "Pending":
-                read_logs = GetPodLogs(name, namespace, self.pod_log_since, True)
+                read_logs = GetPodLogs(
+                    name=name,
+                    namespace=namespace,
+                    since=self.pod_log_since,
+                    follow=True,
+                )
                 # binding only relevant events.
                 read_logs.on(read_logs.data_event_name, lambda line: self.emit_log(line))
                 read_logs.on(read_logs.error_event_name, lambda sender, err: self.emit(self.error_event_name, err))
@@ -243,13 +198,13 @@ class NamespaceWatchQuery(KubeApiRestQuery):
 
     def log_event(self, logger: Logger, ev: Event):
         if ev.name == self.state_changed_event_name:
-            state: NamespaceWatchQueryObjectState = ev.args[0]
-            logger.info(f"[{state.namespace}/{state.kind.lower()}s/{state.name}] {state.state}")
+            os: NamespaceWatchQueryObjectState = ev.args[0]
+            logger.info(f"[{os.namespace}/{os.kind_name.lower()}s/{os.name}]" + f" {os.state}")
         elif ev.name == self.pod_log_event_name:
             line: LogLine = ev.args[0]
             line.log(logger)
 
-    def bind_logger(self, logger: Logger = kube_logger, allowed_event_names=None) -> int:
+    def pipe_to_logger(self, logger: Logger = kube_logger, allowed_event_names=None) -> int:
         allowed_event_names = set(
             allowed_event_names
             or [
@@ -258,17 +213,18 @@ class NamespaceWatchQuery(KubeApiRestQuery):
             ]
         )
 
-        return super().bind_logger(logger, allowed_event_names)
+        return super().pipe_to_logger(logger, allowed_event_names)
 
     def query_loop(self, client: KubeApiRestClient):
         # specialized loop. Uses the event handler to read multiple sourced events,
         # and waits for the stream to stop.
         queries: List[GetNamespaceObjects] = []
+        namespace = self.namespace or client.get_default_namespace()
 
-        for kind in self.kinds:
+        for kind in self.kinds.values():
             q = GetNamespaceObjects(
                 kind=kind,
-                namespace=self.namespace,
+                namespace=namespace,
                 watch=self.watch,
                 field_selector=self.field_selector,
                 label_selector=self.label_selector,

@@ -3,23 +3,19 @@ from logging import Logger
 import os
 import json
 import traceback
-from os import terminal_size
-from socket import timeout
-from types import TracebackType
-import yaml
 from typing import List, Callable, Set
 from weakref import WeakSet
 from os.path import expanduser
 from zthreading.tasks import Task
 from zthreading.events import Event, EventHandler
-from requests import request, Response
 
-from airflow_kubernetes_job_operator.kube_api.exceptions import KubeApiException
 from airflow_kubernetes_job_operator.kube_api.utils import unqiue_with_order, clean_dictionary_nulls
 
+from kubernetes.stream.ws_client import ApiException as KuberenetesApiException
 from kubernetes.client import ApiClient
 from kubernetes.config import kube_config, incluster_config, list_kube_config_contexts
 from airflow_kubernetes_job_operator.kube_api.utils import kube_logger
+from airflow_kubernetes_job_operator.kube_api.exceptions import KubeApiException
 
 
 def join_locations_list(*args):
@@ -55,6 +51,19 @@ def get_asyncio_mode() -> bool:
 
 if "KUBERNETES_API_CLIENT_USE_ASYNCIO_ENV_NAME" in os.environ:
     set_asyncio_mode(os.environ.get("KUBERNETES_API_CLIENT_USE_ASYNCIO_ENV_NAME", "false") == "true")
+
+KURBETNTES_API_ACCEPT = [
+    "application/json",
+    "application/yaml",
+    "application/vnd.kubernetes.protobuf",
+]
+
+KUBERENTES_API_CONTENT_TYPES = [
+    "application/json",
+    "application/json-patch+json",
+    "application/merge-patch+json",
+    "application/strategic-merge-patch+json",
+]
 
 
 class KubeApiRestQuery(Task):
@@ -98,6 +107,13 @@ class KubeApiRestQuery(Task):
         # these event are object specific
         self.query_started_event_name = f"{self.query_started_event_name} {id(self)}"
         self.query_ended_event_name = f"{self.query_started_event_name} {id(self)}"
+
+    def _get_method_content_type(self) -> str:
+        if self.method == "PATCH":
+            return "application/json-patch+json"
+        else:
+            return "application/json"
+        return None
 
     def parse_data(self, line: str):
         return line
@@ -155,8 +171,8 @@ class KubeApiRestQuery(Task):
         headers = validate_dictionary(
             self.headers,
             default={
-                "Accept": client.api_client.select_header_accept(["*/*"]),
-                "Content-Type": client.api_client.select_header_content_type(["*/*"]),
+                "Accept": "application/json",
+                "Content-Type": self._get_method_content_type(),
             },
         )
 
@@ -170,29 +186,40 @@ class KubeApiRestQuery(Task):
             query_params_array.append((k, query_params[k]))
 
         # starting query.
-        request_info = client.api_client.call_api(
-            resource_path=self.resource_path,
-            method=self.method,
-            path_params=clean_dictionary_nulls(path_params),
-            query_params=clean_dictionary_nulls(query_params),
-            header_params=clean_dictionary_nulls(headers),
-            body=self.body,
-            post_params=form_params or [],
-            files=files or dict(),
-            response_type="str",
-            auth_settings=["BearerToken"],
-            async_req=False,
-            _return_http_data_only=False,
-            _preload_content=False,
-            _request_timeout=self.timeout,
-            collection_formats={},
-        )
+        try:
+            request_info = client.api_client.call_api(
+                resource_path=self.resource_path,
+                method=self.method,
+                path_params=path_params,
+                query_params=query_params_array,
+                header_params=headers,
+                body=self.body,
+                post_params=form_params or [],
+                files=files or dict(),
+                response_type="str",
+                auth_settings=["BearerToken"],
+                async_req=False,
+                _return_http_data_only=False,
+                _preload_content=False,
+                _request_timeout=self.timeout,
+                collection_formats={},
+            )
 
-        response = request_info[0]
+            response = request_info[0]
 
-        for line in self.read_response_stream_lines(response):
-            data = self.parse_data(line)
-            self.emit_data(data)
+            for line in self.read_response_stream_lines(response):
+                data = self.parse_data(line)
+                self.emit_data(data)
+        except KuberenetesApiException as ex:
+            if ex.body is not None:
+                exception_details: dict = json.loads(ex.body or {})
+                raise KubeApiException(
+                    f"{ex.reason}, {exception_details.get('reason')}: {exception_details.get('message')}"
+                )
+            else:
+                raise ex
+        except Exception as ex:
+            raise ex
 
     def start(self, client: "KubeApiRestClient"):
         """Start the query execution
@@ -219,7 +246,7 @@ class KubeApiRestQuery(Task):
     def log_event(self, logger: Logger, ev: Event):
         pass
 
-    def bind_logger(self, logger: Logger = kube_logger, allowed_event_names=None) -> int:
+    def pipe_to_logger(self, logger: Logger = kube_logger, allowed_event_names=None) -> EventHandler:
         allowed_event_names = set(allowed_event_names or [self.data_event_name])
 
         def process_log_event(ev: Event):
@@ -237,8 +264,17 @@ class KubeApiRestQuery(Task):
             elif ev.name in allowed_event_names:
                 self.log_event(logger, ev)
 
-        # bind errors and warnings.
-        return self.on_any_event(lambda name, *args, **kwargs: process_log_event(Event(name, args, kwargs)))
+        bind_handler = EventHandler(on_event=process_log_event)
+        self.pipe(bind_handler)
+
+        return bind_handler
+
+
+def kube_api_default_stream_process_event_data(ev: Event):
+    if isinstance(ev.sender, KubeApiRestQuery) and ev.name == ev.sender.data_event_name:
+        return ev.args[0]
+    else:
+        return ev
 
 
 class KubeApiRestClient:
@@ -364,14 +400,16 @@ class KubeApiRestClient:
         pending = set(queries)
 
         def remove_from_pending(q):
-            pending.remove(q)
+            if q in pending:
+                pending.remove(q)
             if len(pending) == 0:
                 handler.stop_all_streams()
 
         q: KubeApiRestQuery = None
         for q in queries:
             self._active_queries.add(q)
-            q.on(q.query_ended_event_name, lambda query, client: remove_from_pending(q))
+            q.on(q.query_ended_event_name, lambda query, client: remove_from_pending(query))
+            q.on(q.error_event_name, lambda query, err: remove_from_pending(query))
             q.pipe(handler)
 
         return handler
@@ -396,13 +434,19 @@ class KubeApiRestClient:
         queries: List[KubeApiRestQuery],
         event_name: str = None,
         timeout=None,
-        process_event_data: Callable = None,
+        process_event_data: Callable = kube_api_default_stream_process_event_data,
     ):
         if isinstance(queries, KubeApiRestQuery):
             queries = [queries]
 
+        if event_name is None:
+            event_name = list(set([q.data_event_name for q in queries]))
+
         strm = self._create_query_handler(queries).stream(
-            event_name, timeout, use_async_loop=False, process_event_data=process_event_data
+            event_name,
+            timeout,
+            use_async_loop=False,
+            process_event_data=process_event_data or self.default_process_event_data,
         )
 
         self._start_execution(queries)
@@ -413,8 +457,12 @@ class KubeApiRestClient:
     def query(
         self,
         queries: List[KubeApiRestQuery],
-        event_name: str = KubeApiRestQuery.data_event_name,
+        event_name: str = None,
         timeout=None,
-    ):
+    ) -> List[dict]:
         strm = self.stream(queries, event_name=event_name, timeout=timeout)
-        return [v for v in strm]
+        rslt = [v for v in strm]
+        if not isinstance(queries, list):
+            return rslt[0] if len(rslt) > 0 else None
+        else:
+            return rslt

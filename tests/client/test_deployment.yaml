@@ -21,18 +21,21 @@ spec:
             - -c
             - |
               apt update
-              echo "Sleeping in bash..."
-              sleep infinity
+              echo "lama 1"
+              while true; do
+                sleep 1
+                date
+              done
           resources:
             limits: {}
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: test-dev-svc
-spec:
-  selector:
-    app: test-deployment
-  ports:
-    - port: 8080
-      targetPort: 6000
+# ---
+# apiVersion: v1
+# kind: Service
+# metadata:
+#   name: test-dev-svc
+# spec:
+#   selector:
+#     app: test-deployment
+#   ports:
+#     - port: 8080
+#       targetPort: 6000

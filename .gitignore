@@ -1,5 +1,5 @@
 # Env
-local/
+.local/
 .vscode/
 Pipefile.lock
 .devcontainer/

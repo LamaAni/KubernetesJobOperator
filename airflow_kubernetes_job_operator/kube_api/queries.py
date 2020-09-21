@@ -2,17 +2,13 @@ from logging import Logger
 import logging
 import datetime
 import os
-from sys import api_version
-import kubernetes
 import json
 import dateutil.parser
-from typing import Callable
-from enum import Enum
 from zthreading.events import Event
 
-from airflow_kubernetes_job_operator.kube_api.utils import kube_logger
-from yaml import emit
-from airflow_kubernetes_job_operator.kube_api.client import KubeApiRestQuery, KubeApiRestClient
+from airflow_kubernetes_job_operator.kube_api.utils import kube_logger, not_empty_string
+from airflow_kubernetes_job_operator.kube_api.collections import KubeObjectKind
+from airflow_kubernetes_job_operator.kube_api.client import KubeApiRestQuery
 
 
 KUBE_API_SHOW_SERVER_LOG_TIMESTAMPS = os.environ.get("KUBE_API_SHOW_SERVER_LOG_TIMESTAMPS", "false").lower() == "true"
@@ -74,12 +70,17 @@ class GetPodLogs(KubeApiRestQuery):
         follow: bool = False,
         timeout: int = None,
     ):
+        assert not_empty_string(name), ValueError("name must be a non empty string")
+        assert not_empty_string(namespace), ValueError("namespace must be a non empty string")
+
+        kind: KubeObjectKind = KubeObjectKind.get_kind("Pod")
         super().__init__(
-            resource_path=None,  # Will be updated just before the run.
+            resource_path=kind.compose_resource_path(namespace=namespace, name=name, suffix="log"),
             method="GET",
             timeout=timeout,
         )
 
+        self.kind = kind
         self.name: str = name
         self.namespace: str = namespace
         self.since: datetime = since
@@ -98,7 +99,7 @@ class GetPodLogs(KubeApiRestQuery):
         message = message.replace("\r", "")
         lines = []
         for message_line in message.split("\n"):
-            lines.append(LogLine(self.name, self._active_namespace, message_line, timestamp))
+            lines.append(LogLine(self.name, self.namespace, message_line, timestamp))
         return lines
 
     def emit_data(self, data):
@@ -110,58 +111,20 @@ class GetPodLogs(KubeApiRestQuery):
             ev.args[0].log(logger)
         super().log_event(logger, ev)
 
-    def pre_request(self, client: KubeApiRestClient):
-        namespace = self.namespace or client.get_default_namespace()
-        self._active_namespace = namespace
-        assert namespace is not None, ValueError("Invalid namespace and could not read default namespace")
-        self.resource_path = f"/api/v1/namespaces/{namespace}/pods/{self.name}/log"
-
-        return super().pre_request(client)
-
-
-class NamespaceObjectKinds(Enum):
-    Pod = "pod"
-    Job = "job"
-    Service = "service"
-    Deployment = "deployment"
-    Event = "event"
-
-    def __str__(self):
-        return self.value.__str__()
-
-    def __repr__(self):
-        return self.value.__repr__()
-
-
-NAMESPACE_OBJECTS_KIND_MAP = {}
-
-
-def add_namespace_object_kind(name: str, compose: Callable):
-    NAMESPACE_OBJECTS_KIND_MAP[str(name).lower()] = compose
-
-
-add_namespace_object_kind(
-    NamespaceObjectKinds.Job,
-    lambda namespace: f"/apis/batch/v1/namespaces/{namespace}/jobs",
-)
-add_namespace_object_kind(
-    NamespaceObjectKinds.Deployment,
-    lambda namespace: f"/apis/apps/v1/namespaces/{namespace}/deployments",
-)
-
 
 class GetNamespaceObjects(KubeApiRestQuery):
     def __init__(
         self,
         kind: str,
-        api_path: str = None,
-        namespace: str = None,
+        namespace: str,
+        api_version: str = None,
         watch: bool = False,
         label_selector: str = None,
         field_selector: str = None,
     ):
+        kind: KubeObjectKind = kind if isinstance(kind, KubeObjectKind) else KubeObjectKind.get_kind(kind)
         super().__init__(
-            resource_path=None,
+            resource_path=kind.compose_resource_path(namespace, api_version=api_version),
             method="GET",
             query_params={
                 "pretty": False,
@@ -170,18 +133,8 @@ class GetNamespaceObjects(KubeApiRestQuery):
                 "watch": watch,
             },
         )
-        self.api_version = api_version
         self.kind = kind
         self.namespace = namespace
-
-    @classmethod
-    def to_resource_path(cls, kind: str, namespace):
-        # FIXME: Change uri (example: /api/v1/namespaces) to a repo values.
-        kind = str(kind).lower()
-        if kind in NAMESPACE_OBJECTS_KIND_MAP:
-            return NAMESPACE_OBJECTS_KIND_MAP[kind](namespace)
-        else:
-            return f"/api/v1/namespaces/{namespace}/{kind + 's'}"
 
     def parse_data(self, line):
         rsp = json.loads(line)
@@ -203,6 +156,34 @@ class GetNamespaceObjects(KubeApiRestQuery):
             event_object["event_type"] = data["type"]
             super().emit_data(event_object)
 
-    def pre_request(self, client: KubeApiRestClient):
-        self.resource_path = self.to_resource_path(self.kind, self.namespace or client.get_default_namespace())
-        return super().pre_request(client)
+    def query_loop(self, client):
+        try:
+            return super().query_loop(client)
+        except Exception as ex:
+            raise ex
+
+
+class GetAPIResources(KubeApiRestQuery):
+    def __init__(
+        self,
+        api="apps/v1",
+    ):
+        super().__init__(
+            f"/apis/{api}",
+        )
+
+    def parse_data(self, data):
+        return json.loads(data)
+
+
+class GetAPIVersions(KubeApiRestQuery):
+    def __init__(
+        self,
+    ):
+        super().__init__(
+            "/apis",
+            method="GET",
+        )
+
+    def parse_data(self, data):
+        return json.loads(data)

@@ -1,15 +1,19 @@
-from logging import log
-import os
 from tests.utils import logging
+from airflow_kubernetes_job_operator.kube_api import KubeObjectKind
+from airflow_kubernetes_job_operator.kube_api import KubeApiRestClient
+from airflow_kubernetes_job_operator.kube_api import NamespaceWatchQuery
 
-from zthreading.events import Event
-from airflow_kubernetes_job_operator.kube_api.client import KubeApiRestClient
-from airflow_kubernetes_job_operator.kube_api.watchers import NamespaceWatchQuery
+KubeObjectKind.register_global_kind(
+    KubeObjectKind("HCjob", "hc.dto.cbsinteractive.com/v1alpha1", parse_kind_state=KubeObjectKind.parse_state_job)
+)
+
 
 client = KubeApiRestClient()
-query = NamespaceWatchQuery()
-query.bind_logger()
+query = NamespaceWatchQuery(watch_pod_logs=False)
+query.pipe_to_logger()
+
 rslt = client.async_query(query)
 
-logging.info("Starting watch...")
+query.wait_until_started()
+logging.info(f"Starting watch @ {client.get_default_namespace()}...")
 query.join()
