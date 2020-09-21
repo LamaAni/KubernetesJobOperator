@@ -3,7 +3,7 @@ from logging import Logger
 import os
 import json
 import traceback
-from typing import List, Callable, Set
+from typing import List, Callable, Set, Union
 from weakref import WeakSet
 from os.path import expanduser
 from zthreading.tasks import Task
@@ -177,7 +177,7 @@ class KubeApiRestQuery(Task):
             return clean_dictionary_nulls(d)
 
         headers = validate_dictionary(
-            self.headers,
+            self.headers,  # type:ignore
             default={
                 "Accept": "application/json",
                 "Content-Type": self._get_method_content_type(),
@@ -186,8 +186,8 @@ class KubeApiRestQuery(Task):
 
         path_params = validate_dictionary(self.path_params)
         query_params = validate_dictionary(self.query_params)
-        form_params = validate_dictionary(self.form_params)
-        files = validate_dictionary(self.files)
+        form_params = validate_dictionary(self.form_params)  # type:ignore
+        files = validate_dictionary(self.files)  # type:ignore
 
         query_params_array = []
         for k in query_params:
@@ -213,7 +213,7 @@ class KubeApiRestQuery(Task):
                 collection_formats={},
             )
 
-            response = request_info[0]
+            response = request_info[0]  # type:ignore
             self._emit_running()
 
             for line in self.read_response_stream_lines(response):
@@ -222,7 +222,7 @@ class KubeApiRestQuery(Task):
 
         except KuberenetesApiException as ex:
             if ex.body is not None:
-                exception_details: dict = json.loads(ex.body or {})
+                exception_details: dict = json.loads(ex.body or {})  # type:ignore
                 raise KubeApiException(
                     f"{ex.reason}, {exception_details.get('reason')}: {exception_details.get('message')}"
                 )
@@ -256,7 +256,7 @@ class KubeApiRestQuery(Task):
 
     def stop(self, timeout: float = None, throw_error_if_not_running: bool = None):
         self.stop_all_streams()
-        return super().stop(timeout=timeout, throw_error_if_not_running=throw_error_if_not_running)
+        return super().stop(timeout=timeout, throw_error_if_not_running=throw_error_if_not_running)  # type:ignore
 
     def log_event(self, logger: Logger, ev: Event):
         pass
@@ -300,11 +300,15 @@ class KubeApiRestClient:
         """Creates a new kubernetes api rest client."""
         super().__init__()
 
-        self._active_queries: Set[KubeApiRestQuery] = WeakSet()
-        self._active_handlers: Set[EventHandler] = WeakSet()
-        self.auto_load_kube_config = auto_load_kube_config
-        self._kube_config: kube_config.Configuration = None
-        self._api_client: ApiClient = None
+        self._active_queries: Set[KubeApiRestQuery] = WeakSet()  # type:ignore
+        self._active_handlers: Set[EventHandler] = WeakSet()  # type:ignore
+        self.auto_load_kube_config = auto_load_kube_config  # type:ignore
+        self._kube_config: kube_config.Configuration = None  # type:ignore
+        self._api_client: ApiClient = None  # type:ignore
+
+    @property
+    def is_kube_config_loaded(self) -> bool:
+        return self._kube_config is not None
 
     @property
     def kube_config(self) -> kube_config.Configuration:
@@ -335,7 +339,7 @@ class KubeApiRestClient:
             config_file (str, optional): The configuration file path. Defaults to None = search for config.
             is_in_cluster (bool, optional): If true, the client will expect to run inside a cluster
                 and to load the cluster config. Defaults to None = auto detect.
-            extra_config_locations (List[str], optional): Extra locations to search for a configuration. 
+            extra_config_locations (List[str], optional): Extra locations to search for a configuration.
                 Defaults to None.
             context (str, optional): The context name to run in. Defaults to None = active context.
             persist (bool, optional): If True, config file will be updated when changed (e.g GCP token refresh).
@@ -403,9 +407,9 @@ class KubeApiRestClient:
         )
         self._api_client: ApiClient = ApiClient(configuration=self.kube_config)
 
-    def get_default_namespace(self):
+    def get_default_namespace(self) -> str:
         """Returns the default namespace for the current config."""
-        namespace = None
+        namespace: str = None  # type:ignore
         try:
             in_cluster_namespace_fpath = os.path.join(KUBERNETES_SERVICE_ACCOUNT_PATH, "namespace")
             if os.path.exists(in_cluster_namespace_fpath):
@@ -448,7 +452,6 @@ class KubeApiRestClient:
             if len(pending) == 0:
                 handler.stop_all_streams()
 
-        q: KubeApiRestQuery = None
         for q in queries:
             self._active_queries.add(q)
             q.on(q.query_ended_event_name, lambda query, client: remove_from_pending(query))
@@ -462,7 +465,7 @@ class KubeApiRestClient:
             self._active_queries.add(query)
             query.start(self)
 
-    def async_query(self, queries: List[KubeApiRestQuery]) -> EventHandler:
+    def query_async(self, queries: Union[List[KubeApiRestQuery], KubeApiRestQuery]) -> EventHandler:
         if isinstance(queries, KubeApiRestQuery):
             queries = [queries]
 
@@ -474,8 +477,8 @@ class KubeApiRestClient:
 
     def stream(
         self,
-        queries: List[KubeApiRestQuery],
-        event_name: str = None,
+        queries: Union[List[KubeApiRestQuery], KubeApiRestQuery],
+        event_name: Union[List[str], str] = None,
         timeout=None,
         process_event_data: Callable = kube_api_default_stream_process_event_data,
     ):
@@ -486,10 +489,10 @@ class KubeApiRestClient:
             event_name = list(set([q.data_event_name for q in queries]))
 
         strm = self._create_query_handler(queries).stream(
-            event_name,
+            event_name,  # type:ignore
             timeout,
             use_async_loop=False,
-            process_event_data=process_event_data or self.default_process_event_data,
+            process_event_data=process_event_data,
         )
 
         self._start_execution(queries)
@@ -499,10 +502,10 @@ class KubeApiRestClient:
 
     def query(
         self,
-        queries: List[KubeApiRestQuery],
-        event_name: str = None,
+        queries: Union[List[KubeApiRestQuery], KubeApiRestQuery],
+        event_name: Union[List[str], str] = None,
         timeout=None,
-    ) -> List[dict]:
+    ) -> Union[List[object], object]:
         strm = self.stream(queries, event_name=event_name, timeout=timeout)
         rslt = [v for v in strm]
         if not isinstance(queries, list):

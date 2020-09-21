@@ -12,7 +12,7 @@ client = KubeApiRestClient()
 query = NamespaceWatchQuery(watch_pod_logs=False)
 query.pipe_to_logger()
 
-rslt = client.async_query(query)
+rslt = client.query_async(query)
 
 logging.info(f"Waiting for watch @ {client.get_default_namespace()}...")
 query.wait_until_running()

@@ -51,18 +51,18 @@ class KubeObjectKind:
         self.auto_include_in_watch = auto_include_in_watch
 
     @property
-    def name(self) -> object:
+    def name(self) -> str:
         return self._name
 
     @property
     def plural(self) -> str:
         return self.name + "s"
 
-    def parse_state(self, yaml: dict, was_deleted: bool = False) -> KubeObjectState:
+    def parse_state(self, body: dict, was_deleted: bool = False) -> KubeObjectState:
         if was_deleted:
             return KubeObjectState.Deleted
         else:
-            state = (self.parse_kind_state or parse_kind_state_default)(yaml)
+            state = (self.parse_kind_state or parse_kind_state_default)(body)
             if not isinstance(state, KubeObjectState):
                 state = KubeObjectState(state)
             return state
@@ -100,6 +100,11 @@ class KubeObjectKind:
             api_version or global_kind.api_version,
             parse_kind_state or global_kind.parse_kind_state,
         )
+
+    @classmethod
+    def has_kind(cls, kind: str) -> bool:
+        global kinds_collection
+        return kind in kinds_collection
 
     @classmethod
     def get_kind(cls, kind: str) -> "KubeObjectKind":
@@ -199,8 +204,13 @@ class KubeObjectDescriptor:
         assert isinstance(body, dict), ValueError("body must be a dictionary")
 
         self._body = body
-        self._kind = KubeObjectKind.create_from_existing(
-            self.body.get("kind"), api_version or self.body.get("apiVersion")
+        self._kind = (
+            None
+            if self.body.get("kind", None) is None
+            else KubeObjectKind.create_from_existing(
+                self.body.get("kind"),
+                api_version or self.body.get("apiVersion"),
+            )
         )
 
         if assert_metadata:
@@ -221,16 +231,38 @@ class KubeObjectDescriptor:
         return self._kind
 
     @property
+    def kind_name(self) -> str:
+        if self.kind is None:
+            return self.body.get("kind", "{unknown}")
+        return self.kind.name
+
+    @property
+    def kind_plural(self) -> object:
+        return self.kind_name.lower() + "s" if self.kind is not None else None
+
+    @property
+    def spec(self) -> dict:
+        return self.body.get("spec")
+
+    @property
+    def status(self) -> dict:
+        return self.body.get("status")
+
+    @property
     def name(self) -> str:
         return self.metadata.get("name", None)
+
+    @name.setter
+    def name(self, val: str):
+        self.metadata["name"] = val
 
     @property
     def namespace(self) -> str:
         return self.metadata.get("namespace", None)
 
-    @property
-    def kind_plural(self) -> object:
-        return self.kind.lower() + "s" if self.kind is not None else None
+    @namespace.setter
+    def namespace(self, val: str):
+        self.metadata["namespace"] = val
 
     @property
     def metadata(self) -> dict:
@@ -243,8 +275,8 @@ class KubeObjectDescriptor:
     def __str__(self):
         if self.namespace is not None:
             if self.name:
-                return f"{self.namespace}/{self.kind.plural}/{self.name}"
+                return f"{self.namespace}/{self.kind_plural}/{self.name}"
             else:
-                return f"{self.namespace}/{self.kind.plural}/{self.name}"
+                return f"{self.namespace}/{self.kind_plural}/{self.name}"
         else:
-            return f"{self.api_version}/{self.kind.name}"
+            return f"{self.api_version}/{self.kind_name}"

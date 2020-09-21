@@ -39,8 +39,6 @@ label_selector = None
 label_selector = f"task-id={task_id}"
 
 obj_definitions = load_yaml_obj_configs("../../.local/test_custom.yaml")
-# obj_definitions = load_yaml_obj_configs("./test_job.yaml")
-# obj_definitions = load_yaml_obj_configs("../../.local/test_custom.yaml")
 task = KubeObjectDescriptor(obj_definitions[0])
 obj: dict = None
 kinds = set()
@@ -68,12 +66,12 @@ def update_metadata_labels(obj: dict, labels: dict):
 
 watcher = NamespaceWatchQuery(namespace=namespace, label_selector=label_selector)
 watcher.pipe_to_logger(logging)
-client.async_query(watcher)
+client.query_async(watcher)
 watcher.wait_until_running()
-logging.info(f"Watcher started for {task_id}, watch kinds: \n" + "\n".join(watcher.kinds.keys()))
+logging.info(f"Watcher started for {task_id}, watch kinds: " + ", ".join(watcher.kinds.keys()))
 
 logging.info(f"Sending {task} to server with dependencies...")
-client.async_query(apply_on_objects(CreateNamespaceObject))
+client.query_async(apply_on_objects(CreateNamespaceObject))
 
 logging.info(f"Waiting for {task} of kind {task.kind.name} to succeed or fail ...")
 final_state = watcher.wait_for_state(

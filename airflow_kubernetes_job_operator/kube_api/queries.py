@@ -3,11 +3,12 @@ import logging
 import datetime
 import os
 import json
+from typing import Union
 import dateutil.parser
 from zthreading.events import Event
 
 from airflow_kubernetes_job_operator.kube_api.utils import kube_logger, not_empty_string
-from airflow_kubernetes_job_operator.kube_api.collections import KubeObjectKind
+from airflow_kubernetes_job_operator.kube_api.collections import KubeObjectKind, KubeObjectState
 from airflow_kubernetes_job_operator.kube_api.client import KubeApiRestQuery
 
 
@@ -115,14 +116,16 @@ class GetPodLogs(KubeApiRestQuery):
 class GetNamespaceObjects(KubeApiRestQuery):
     def __init__(
         self,
-        kind: str,
+        kind: Union[str, KubeObjectState],  # type:ignore
         namespace: str,
         api_version: str = None,
         watch: bool = False,
         label_selector: str = None,
         field_selector: str = None,
     ):
-        kind: KubeObjectKind = kind if isinstance(kind, KubeObjectKind) else KubeObjectKind.get_kind(kind)
+        kind: KubeObjectKind = (
+            kind if isinstance(kind, KubeObjectKind) else KubeObjectKind.get_kind(kind)  # type:ignore
+        )
         super().__init__(
             resource_path=kind.compose_resource_path(namespace, api_version=api_version),
             method="GET",

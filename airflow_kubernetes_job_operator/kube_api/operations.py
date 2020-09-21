@@ -11,7 +11,7 @@ class ConfigureNamespaceObject(KubeApiRestQuery):
     def __init__(
         self,
         body,
-        method: str,
+        method: str = "POST",
         name: str = None,
         namespace: str = None,
         api_version: str = None,

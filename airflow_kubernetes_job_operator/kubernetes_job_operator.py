@@ -160,7 +160,7 @@ class KubernetesJobOperator(BaseOperator):
         the name provided in the yaml. This method internally uses
         the method 'to_kubernetes_valid_name' in utils.
 
-        Override this method to create or augment your own name.
+        Override this method to cretimeoutame.
 
         Returns:
             str -- The job name

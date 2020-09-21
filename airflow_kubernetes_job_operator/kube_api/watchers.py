@@ -137,7 +137,7 @@ class NamespaceWatchQuery(KubeApiRestQuery):
         kinds = KubeObjectKind.watchable()
 
         self.watch = watch
-        self.namespace = namespace
+        self.namespaces = [] if namespace is None else namespace if isinstance(namespace, list) else [namespace]
         self.label_selector = label_selector
         self.field_selector = field_selector
         self.watch_pod_logs = watch_pod_logs
@@ -150,9 +150,13 @@ class NamespaceWatchQuery(KubeApiRestQuery):
             kind: KubeObjectKind = kind if isinstance(kind, KubeObjectKind) else KubeObjectKind.get_kind(kind)
             self.kinds[kind.name] = kind
 
-        self._executing_queries: List[KubeApiRestQuery] = WeakSet()
-        self._executing_pod_loggers: Dict[str, GetPodLogs] = WeakValueDictionary()
+        self._executing_queries: List[KubeApiRestQuery] = WeakSet()  # type:ignore
+        self._executing_pod_loggers: Dict[str, GetPodLogs] = WeakValueDictionary()  # type:ignore
         self._object_states: Dict[str, NamespaceWatchQueryObjectState] = dict()
+
+    @property
+    def watched_objects(self) -> List[NamespaceWatchQueryObjectState]:
+        return list(self._object_states.values())
 
     def emit_log(self, data):
         self.emit(self.pod_log_event_name, data)
@@ -196,7 +200,7 @@ class NamespaceWatchQuery(KubeApiRestQuery):
                 read_logs.on(read_logs.data_event_name, lambda line: self.emit_log(line))
                 read_logs.on(read_logs.error_event_name, handle_error)
                 self._executing_pod_loggers[uid] = read_logs
-                client.async_query(read_logs)
+                client.query_async(read_logs)
 
     def stop(self, timeout: float = None, throw_error_if_not_running: bool = None):
         for q in self._executing_queries:
@@ -262,23 +266,26 @@ class NamespaceWatchQuery(KubeApiRestQuery):
         # specialized loop. Uses the event handler to read multiple sourced events,
         # and waits for the stream to stop.
         queries: List[GetNamespaceObjects] = []
-        namespace = self.namespace or client.get_default_namespace()
+        namespaces = set(self.namespaces)
+        if len(namespaces) == 0:
+            namespaces = set(client.get_default_namespace())
 
-        for kind in list(self.kinds.values()):
-            q = GetNamespaceObjects(
-                kind=kind,
-                namespace=namespace,
-                watch=self.watch,
-                field_selector=self.field_selector,
-                label_selector=self.label_selector,
-            )
-            q.on(q.data_event_name, lambda data: self.process_data_state(data, client))
-            q.pipe(self)
+        for namespace in namespaces:
+            for kind in list(self.kinds.values()):
+                q = GetNamespaceObjects(
+                    kind=kind,
+                    namespace=namespace,
+                    watch=self.watch,
+                    field_selector=self.field_selector,
+                    label_selector=self.label_selector,
+                )
+                q.on(q.data_event_name, lambda data: self.process_data_state(data, client))
+                q.pipe(self)
 
-            queries.append(q)
-            self._executing_queries.add(q)
+                queries.append(q)
+                self._executing_queries.add(q)
 
-        client.async_query(queries)
+        client.query_async(queries)
         for q in queries:
             q.wait_until_running(timeout=None)
         self._emit_running()

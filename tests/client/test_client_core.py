@@ -6,7 +6,7 @@ client = KubeApiRestClient()
 
 query = GetPodLogs("tester", follow=True)
 query.pipe_to_logger()
-client.async_query(query)
+client.query_async(query)
 query.wait_until_running()
 logging.info("Starting watch...")
 query.join()

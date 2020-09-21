@@ -1,0 +1,2 @@
+class KubernetesJobOperatorException(Exception):
+    pass
