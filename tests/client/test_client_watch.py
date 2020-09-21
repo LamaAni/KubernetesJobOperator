@@ -14,6 +14,7 @@ query.pipe_to_logger()
 
 rslt = client.async_query(query)
 
-query.wait_until_started()
+logging.info(f"Waiting for watch @ {client.get_default_namespace()}...")
+query.wait_until_running()
 logging.info(f"Starting watch @ {client.get_default_namespace()}...")
 query.join()

@@ -44,7 +44,7 @@ class ConfigureNamespaceObject(KubeApiRestQuery):
 
     def log_event(self, logger: Logger, ev: Event):
         if ev.name == self.data_event_name:
-            logger.info(f"{self._descriptor}: {self.data_event_name}")
+            logger.info(f"[{self._descriptor}] {self.data_event_name}")
         return super().log_event(logger, ev)
 
 

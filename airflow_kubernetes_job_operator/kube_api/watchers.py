@@ -25,7 +25,7 @@ class NamespaceWatchQueryObjectState(EventHandler):
         deleted_event_name="deleted",
     ) -> None:
         super().__init__()
-        self.yaml = {"metadata": {"uid": uid}}
+        self.body = {"metadata": {"uid": uid}}
         self._deleted = False
         self.status_changed_event_name = status_changed_event_name
         self.deleted_event_name = deleted_event_name
@@ -47,11 +47,11 @@ class NamespaceWatchQueryObjectState(EventHandler):
     @property
     def kind(self) -> KubeObjectKind:
         if self._kind is None:
-            if "kind" not in self.yaml:
+            if "kind" not in self.body:
                 return None
             self._kind = KubeObjectKind.create_from_existing(
-                self.yaml.get("kind", "{undefined}"),
-                self.yaml.get("apiVersion", None),
+                self.body.get("kind", "{undefined}"),
+                self.body.get("apiVersion", None),
             )
         return self._kind
 
@@ -73,36 +73,36 @@ class NamespaceWatchQueryObjectState(EventHandler):
 
     @property
     def metadata(self) -> dict:
-        return self.yaml.get("metadata", {})
+        return self.body.get("metadata", {})
 
     @property
     def status(self) -> dict:
-        return self.yaml.get("status", {})
+        return self.body.get("status", {})
 
     @property
     def state(self) -> KubeObjectState:
         if self._state is None:
             if self.kind is None:
                 return None
-            self._state = self.kind.parse_state(self.yaml, self.deleted)
+            self._state = self.kind.parse_state(self.body, self.deleted)
         return self._state
 
     def update(self, object_yaml):
         if object_yaml.get("event_type", None) == "DELETED":
             self._deleted = True
-            self.emit(self.deleted_event_name, self)
+            self.emit(self.deleted_event_name)
 
         has_status_changed = json.dumps(self.status) != json.dumps(object_yaml.get("status", {}))
         if has_status_changed:
-            self.emit(self.status_changed_event_name, self)
+            self.emit(self.status_changed_event_name)
 
-        self.yaml.update(object_yaml)
+        self.body.update(object_yaml)
 
         # reset the state.
         self._state = None
 
         if self._last_state != self.state:
-            self.emit(self.state_changed_event_name, self)
+            self.emit(self.state_changed_event_name)
         self._last_state = self.state
 
 
@@ -110,6 +110,7 @@ class NamespaceWatchQuery(KubeApiRestQuery):
     status_changed_event_name = "status_changed"
     state_changed_event_name = "state_changed"
     deleted_event_name = "deleted"
+    watch_started_event_name = "watch_started"
 
     def __init__(
         self,
@@ -198,8 +199,8 @@ class NamespaceWatchQuery(KubeApiRestQuery):
 
     def log_event(self, logger: Logger, ev: Event):
         if ev.name == self.state_changed_event_name:
-            os: NamespaceWatchQueryObjectState = ev.args[0]
-            logger.info(f"[{os.namespace}/{os.kind_name.lower()}s/{os.name}]" + f" {os.state}")
+            osw: NamespaceWatchQueryObjectState = ev.sender
+            logger.info(f"[{osw.namespace}/{osw.kind_name.lower()}s/{osw.name}]" + f" {osw.state}")
         elif ev.name == self.pod_log_event_name:
             line: LogLine = ev.args[0]
             line.log(logger)
@@ -215,13 +216,46 @@ class NamespaceWatchQuery(KubeApiRestQuery):
 
         return super().pipe_to_logger(logger, allowed_event_names)
 
+    def wait_for_state(
+        self,
+        state: KubeObjectState,
+        kind: KubeObjectKind,
+        name: str,
+        namespace: str,
+        timeout: float = None,
+    ) -> KubeObjectState:
+        if not isinstance(state, list):
+            state = [state]
+
+        final_state = None
+
+        def state_reached(sender: EventHandler, event: Event):
+            if event.name != self.state_changed_event_name:
+                return False
+            if not isinstance(event.sender, NamespaceWatchQueryObjectState):
+                return False
+
+            osw: NamespaceWatchQueryObjectState = event.sender
+            if osw.name != name or osw.namespace != namespace or osw.kind.name != kind.name:
+                return False
+
+            if osw.state in state:
+                nonlocal final_state
+                final_state = osw.state
+                return True
+            else:
+                return False
+
+        self.wait_for(predict=state_reached, raise_errors=True, timeout=timeout)
+        return final_state
+
     def query_loop(self, client: KubeApiRestClient):
         # specialized loop. Uses the event handler to read multiple sourced events,
         # and waits for the stream to stop.
         queries: List[GetNamespaceObjects] = []
         namespace = self.namespace or client.get_default_namespace()
 
-        for kind in self.kinds.values():
+        for kind in list(self.kinds.values()):
             q = GetNamespaceObjects(
                 kind=kind,
                 namespace=namespace,
@@ -236,4 +270,7 @@ class NamespaceWatchQuery(KubeApiRestQuery):
             self._executing_queries.add(q)
 
         client.async_query(queries)
+        for q in queries:
+            q.wait_until_running(timeout=None)
+        self._emit_running()
         Task.wait_for_all(queries)

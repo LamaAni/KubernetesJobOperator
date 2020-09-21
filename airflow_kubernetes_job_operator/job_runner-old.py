@@ -1,14 +1,20 @@
 import kubernetes
 import yaml
 import copy
-from zthreading.events import EventHandler
-from airflow_kubernetes_job_operator.kube_api import KubeApiRestClient
+import os
+from airflow_kubernetes_job_operator.threaded_kubernetes_resource_watchers import (
+    ThreadedKubernetesNamespaceResourcesWatcher,
+    ThreadedKubernetesResourcesWatcher,
+)
+from airflow_kubernetes_job_operator.event_handler import EventHandler
 from airflow_kubernetes_job_operator.utils import (
     randomString,
     get_yaml_path_value,
 )
+from airflow_kubernetes_job_operator.kube_api.utils import apply
 
 JOB_RUNNER_INSTANCE_ID_LABEL = "job-runner-instance-id"
+KUBERNETES_IN_CLUSTER_SERVICE_ACCOUNT_PATH = "/var/run/secrets/kubernetes.io/serviceaccount"
 
 
 class JobRunner(EventHandler):
@@ -16,6 +22,7 @@ class JobRunner(EventHandler):
         """Holds methods for executing jobs on a cluster.
 
         Example:
+
             runner = JobRunner()
             runner.on("log", lambda msg, sender: print(msg))
             jobyaml = runner.prepare_job_yaml(
@@ -26,19 +33,71 @@ class JobRunner(EventHandler):
             print(info.status)
             print(info.yaml)
         """
-        self._client = KubeApiRestClient()
+        self._loaded_config_file = None
         super().__init__()
 
-    @property
-    def client(self) -> KubeApiRestClient:
-        return self._client
+    def load_kuberntes_configuration(
+        self, in_cluster: bool = None, config_file: str = None, context: str = None,
+    ):
+        """Loads the appropriate kubernetes configuration into the global
+        context.
 
-    def prepare_job_yaml(
-        self,
-        job_yaml,
-        random_name_postfix_length: int = 0,
-        force_job_name: str = None,
-    ) -> dict:
+        Keyword Arguments:
+
+            in_cluster {bool} -- If true, load the configuration from the cluster
+                (default: {None}, will try and autodetect)
+            config_file {str} -- the path to the file to load from,
+                if None, loads the kubernetes default ~/.kube. (default: {None})
+            context {str} -- The context to load. If None loads the current
+                context (default: {None})
+        """
+        in_cluster = in_cluster or os.environ.get("KUBERNETES_SERVICE_HOST", None) is not None
+
+        # loading the current config to use.
+        if in_cluster:
+            kubernetes.config.load_incluster_config()
+        else:
+            # load from file must have a config file,
+            assert config_file is None or os.path.exists(
+                config_file
+            ), f"Cannot find kubernetes configuration file @ {config_file}"
+
+            # NOTE: When loading from a config file there is no way
+            # (as of the current kubernetes package) to retrieve the loaded
+            # configuration. As such, kubernetes.config.list_kube_config_contexts
+            # will not provide the last loaded configuration and will revert
+            # to the default config. Therefore if a config file is loaded
+            # into the runner it will be used to retrieve the default namespace
+            # (or other locations)
+            self._loaded_config_file = config_file
+
+            kubernetes.config.load_kube_config(config_file=config_file, context=context)
+
+    def get_current_namespace(self):
+        """Returns the current namespace.
+        Returns:
+            str
+        """
+        namespace = ""
+        try:
+            in_cluster_namespace_fpath = os.path.join(KUBERNETES_IN_CLUSTER_SERVICE_ACCOUNT_PATH, "namespace")
+            if os.path.exists(in_cluster_namespace_fpath):
+                with open(in_cluster_namespace_fpath, "r", encoding="utf-8") as nsfile:
+                    namespace = nsfile.read()
+            else:
+                (contexts, active_context,) = kubernetes.config.list_kube_config_contexts(
+                    config_file=self._loaded_config_file
+                )
+                namespace = (
+                    active_context["context"]["namespace"] if "namespace" in active_context["context"] else "default"
+                )
+        except Exception as e:
+            raise Exception(
+                "Could not resolve current namespace, you must provide a namespace or a context file", e,
+            )
+        return namespace
+
+    def prepare_job_yaml(self, job_yaml, random_name_postfix_length: int = 0, force_job_name: str = None,) -> dict:
         """Pre-prepare the job yaml dictionary for execution,
         can also accept a string input.
 
@@ -112,8 +171,7 @@ class JobRunner(EventHandler):
                 job_yaml["metadata"]["namespace"] = self.get_current_namespace()
             except Exception as ex:
                 raise Exception(
-                    "Namespace was not provided in yaml and auto namespace resolution failed.",
-                    ex,
+                    "Namespace was not provided in yaml and auto namespace resolution failed.", ex,
                 )
 
         # FIXME: Should be a better way to add missing values.
@@ -146,7 +204,10 @@ class JobRunner(EventHandler):
 
     def execute_job(
         self, job_yaml: dict, start_timeout: int = None, read_logs: bool = True
-    ) -> (ThreadedKubernetesResourcesWatcher, ThreadedKubernetesNamespaceResourcesWatcher,):
+    ) -> (
+        ThreadedKubernetesResourcesWatcher,
+        ThreadedKubernetesNamespaceResourcesWatcher,
+    ):
         """Executes a job with a pre-prepared job yaml,
         to prepare the job yaml please call JobRunner.prepare_job_yaml
 
@@ -200,9 +261,7 @@ class JobRunner(EventHandler):
         watcher.remove_deleted_kube_resources_from_memory = False
         watcher.pipe(self)
         watcher.watch_namespace(
-            namespace,
-            label_selector=f"{JOB_RUNNER_INSTANCE_ID_LABEL}={instance_id}",
-            watch_for_kinds=["Job", "Pod"],
+            namespace, label_selector=f"{JOB_RUNNER_INSTANCE_ID_LABEL}={instance_id}", watch_for_kinds=["Job", "Pod"],
         )
 
         # starting the job
@@ -213,12 +272,7 @@ class JobRunner(EventHandler):
         self.emit("job_started", job_watcher, self)
 
         # waiting for the job to completed.
-        job_watcher = watcher.waitfor_status(
-            "Job",
-            name,
-            namespace,
-            status_list=["Failed", "Succeeded", "Deleted"],
-        )
+        job_watcher = watcher.waitfor_status("Job", name, namespace, status_list=["Failed", "Succeeded", "Deleted"],)
 
         # not need to read status and logs anymore.
         watcher.stop()

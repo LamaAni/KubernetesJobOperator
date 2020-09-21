@@ -16,6 +16,9 @@ class KubeObjectState(Enum):
     def __str__(self) -> str:
         return self.value
 
+    def __repr__(self):
+        return str(self)
+
 
 def parse_kind_state_default(yaml: dict) -> "KubeObjectState":
     return KubeObjectState.Active
@@ -60,7 +63,10 @@ class KubeObjectKind:
         if was_deleted:
             return KubeObjectState.Deleted
         else:
-            return (self.parse_kind_state or parse_kind_state_default)(yaml)
+            state = (self.parse_kind_state or parse_kind_state_default)(yaml)
+            if not isinstance(state, KubeObjectState):
+                state = KubeObjectState(state)
+            return state
 
     def compose_resource_path(self, namespace: str, name: str = None, api_version: str = None, suffix: str = None):
         api_version = api_version or self.api_version
@@ -164,7 +170,7 @@ class KubeObjectKind:
             return KubeObjectState.Pending
         elif pod_phase == "Running":
             return KubeObjectState.Running
-        elif pod_phase == "Completed":
+        elif pod_phase == "Succeeded":
             return KubeObjectState.Succeeded
         elif pod_phase == "Failed":
             return KubeObjectState.Failed

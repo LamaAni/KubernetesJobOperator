@@ -1,0 +1,34 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: test-job-run
+  finalizers:
+    - foregroundDeletion
+spec:
+  backoffLimit: 0
+  template:
+    metadata:
+      name: test-job-run-pod
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: main
+          image: frolvlad/alpine-bash
+          imagePullPolicy: IfNotPresent
+          command:
+            - bash
+            - -c
+            - |
+              echo "Running tester..."
+              sleep 2
+              RNUM=$((RANDOM%100))
+              echo "Error chance roll: $RNUM"
+              if [ "$RNUM" -gt "$SUCCESS_CHANCE" ]; then
+                echo "Force throw error"
+                exit 1
+              else
+                echo "Done succesfully"
+              fi
+          env:
+            - name: SUCCESS_CHANCE
+              value: '10'

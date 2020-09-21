@@ -71,6 +71,7 @@ class KubeApiRestQuery(Task):
     default_use_asyncio = False
 
     query_started_event_name = "kube_api_query_started"
+    query_running_event_name = "kube_api_query_running"
     query_ended_event_name = "kube_api_query_ended"
 
     def __init__(
@@ -107,6 +108,12 @@ class KubeApiRestQuery(Task):
         # these event are object specific
         self.query_started_event_name = f"{self.query_started_event_name} {id(self)}"
         self.query_ended_event_name = f"{self.query_started_event_name} {id(self)}"
+
+        self._query_running: bool = False
+
+    @property
+    def query_running(self) -> bool:
+        return self._query_running and self.is_running
 
     def _get_method_content_type(self) -> str:
         if self.method == "PATCH":
@@ -205,11 +212,15 @@ class KubeApiRestQuery(Task):
                 collection_formats={},
             )
 
+            self._query_running = True
+            self.emit(self.query_running_event_name)
+
             response = request_info[0]
 
             for line in self.read_response_stream_lines(response):
                 data = self.parse_data(line)
                 self.emit_data(data)
+
         except KuberenetesApiException as ex:
             if ex.body is not None:
                 exception_details: dict = json.loads(ex.body or {})
@@ -230,14 +241,19 @@ class KubeApiRestQuery(Task):
         assert not self.is_running, "Cannot start a running query"
         assert isinstance(client, KubeApiRestClient), "client must be of class KubeApiRestClient"
 
+        self._query_running = False
         super().start(client)
 
         return self
 
-    def wait_until_started(self, timeout: float = 5, ignore_if_running=True):
-        if self.is_running and ignore_if_running:
+    def wait_until_running(self, timeout: float = 5, ignore_if_running=True):
+        if ignore_if_running and self.query_running:
             return
-        self.wait_for(self.query_started_event_name, timeout=timeout)
+        self.wait_for(self.query_running_event_name, timeout=timeout)
+
+    def _emit_running(self):
+        self._query_running = True
+        self.emit(self.query_running_event_name)
 
     def stop(self, timeout: float = None, throw_error_if_not_running: bool = None):
         self.stop_all_streams()
@@ -280,33 +296,33 @@ def kube_api_default_stream_process_event_data(ev: Event):
 class KubeApiRestClient:
     def __init__(
         self,
-        config_file: str = None,
-        is_in_cluster: bool = None,
-        extra_config_locations: List[str] = None,
-        context: str = None,
-        persist: bool = False,
+        auto_load_kube_config: bool = True,
     ):
-        """Creates a new kubernetes api rest client.
-
-        Args:
-            config_file (str, optional): The configuration file path. Defaults to None = search for config.
-            is_in_cluster (bool, optional): If true, the client will expect to run inside a cluster
-                and to load the cluster config. Defaults to None = auto detect.
-            extra_config_locations (List[str], optional): Extra locations to search for a configuration. Defaults to None.
-            context (str, optional): The context name to run in. Defaults to None = active context.
-            persist (bool, optional): If True, config file will be updated when changed
-                (e.g GCP token refresh).
-        """
+        """Creates a new kubernetes api rest client."""
         super().__init__()
-        self.kube_config: kube_config.Configuration = self.load_kube_config(
-            config_file, is_in_cluster, extra_config_locations, context, persist
-        )
-        self.api_client: ApiClient = ApiClient(configuration=self.kube_config)
+
         self._active_queries: Set[KubeApiRestQuery] = WeakSet()
         self._active_handlers: Set[EventHandler] = WeakSet()
+        self.auto_load_kube_config = auto_load_kube_config
+        self._kube_config: kube_config.Configuration = None
+        self._api_client: ApiClient = None
+
+    @property
+    def kube_config(self) -> kube_config.Configuration:
+        if self._kube_config is None:
+            if not self.auto_load_kube_config:
+                raise KubeApiException("Kubernetes configuration not loaded and auto load is set to false.")
+            self.load_kube_config()
+            assert self._kube_config is not None, "Failed to load default kubernetes configuration"
+        return self._kube_config
+
+    @property
+    def api_client(self) -> ApiClient:
+
+        return self._api_client
 
     @classmethod
-    def load_kube_config(
+    def load_kubernetes_configuration_from_file(
         cls,
         config_file: str = None,
         is_in_cluster: bool = None,
@@ -361,6 +377,30 @@ class KubeApiRestClient:
             configuration.filepath = config_file
 
         return configuration
+
+    def load_kube_config(
+        self,
+        config_file: str = None,
+        context: str = None,
+        is_in_cluster: bool = False,
+        extra_config_locations: List[str] = None,
+        persist: bool = False,
+    ):
+        """Loads a kubernetes configuration from file.
+
+        Args:
+            config_file (str, optional): The configuration file path. Defaults to None = search for config.
+            is_in_cluster (bool, optional): If true, the client will expect to run inside a cluster
+                and to load the cluster config. Defaults to None = auto detect.
+            extra_config_locations (List[str], optional): Extra locations to search for a configuration. Defaults to None.
+            context (str, optional): The context name to run in. Defaults to None = active context.
+            persist (bool, optional): If True, config file will be updated when changed
+                (e.g GCP token refresh).
+        """
+        self._kube_config: kube_config.Configuration = self.load_kubernetes_configuration_from_file(
+            config_file, is_in_cluster, extra_config_locations, context, persist
+        )
+        self._api_client: ApiClient = ApiClient(configuration=self.kube_config)
 
     def get_default_namespace(self):
         """Returns the default namespace for the current config."""

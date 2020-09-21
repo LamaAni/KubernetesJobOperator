@@ -8,8 +8,6 @@ from airflow_kubernetes_job_operator.kube_api.client import KubeApiRestClient
 from airflow_kubernetes_job_operator.kube_api import CreateNamespaceObject, DeleteNamespaceObject
 
 
-kubernetes.client.AppsV1Api().delete_namespaced_deployment
-
 def load_yaml_obj_configs(fpath: str):
     if fpath.startswith("./"):
         fpath = os.path.join(os.path.dirname(__file__), fpath)
