@@ -13,6 +13,7 @@ from airflow_kubernetes_job_operator.kube_api.utils import unqiue_with_order, cl
 
 from kubernetes.stream.ws_client import ApiException as KuberenetesApiException
 from kubernetes.client import ApiClient
+from urllib3.response import HTTPResponse
 from kubernetes.config import kube_config, incluster_config, list_kube_config_contexts
 from airflow_kubernetes_job_operator.kube_api.utils import kube_logger
 from airflow_kubernetes_job_operator.kube_api.exceptions import KubeApiException
@@ -111,6 +112,7 @@ class KubeApiRestQuery(Task):
         self.query_running_event_name = f"{self.query_running_event_name} {id(self)}"
 
         self._query_running: bool = False
+        self._active_responses: Set[HTTPResponse] = WeakSet()  # type:ignore
 
     @property
     def query_running(self) -> bool:
@@ -130,7 +132,7 @@ class KubeApiRestQuery(Task):
         self.emit(self.data_event_name, data)
 
     @classmethod
-    def read_response_stream_lines(cls, response):
+    def read_response_stream_lines(cls, response: HTTPResponse):
         """INTERNAL. Helper yield method. Parses the streaming http response
         to lines (can by async!)
 
@@ -213,11 +215,12 @@ class KubeApiRestQuery(Task):
                 collection_formats={},
             )
 
-            response = request_info[0]  # type:ignore
+            response: HTTPResponse = request_info[0]  # type:ignore
+            self._active_responses.add(response)
             self._emit_running()
 
             for line in self.read_response_stream_lines(response):
-                data = self.parse_data(line)
+                data = self.parse_data(line)  # type:ignore
                 self.emit_data(data)
 
         except KuberenetesApiException as ex:
@@ -256,6 +259,12 @@ class KubeApiRestQuery(Task):
 
     def stop(self, timeout: float = None, throw_error_if_not_running: bool = None):
         self.stop_all_streams()
+        for rsp in self._active_responses:
+            if not rsp.isclosed:
+                try:
+                    rsp.close()
+                except Exception:
+                    pass
         return super().stop(timeout=timeout, throw_error_if_not_running=throw_error_if_not_running)  # type:ignore
 
     def log_event(self, logger: Logger, ev: Event):
@@ -481,6 +490,7 @@ class KubeApiRestClient:
         event_name: Union[List[str], str] = None,
         timeout=None,
         process_event_data: Callable = kube_api_default_stream_process_event_data,
+        throw_errors: bool = True,
     ):
         if isinstance(queries, KubeApiRestQuery):
             queries = [queries]
@@ -493,6 +503,7 @@ class KubeApiRestClient:
             timeout,
             use_async_loop=False,
             process_event_data=process_event_data,
+            throw_errors=throw_errors,
         )
 
         self._start_execution(queries)
@@ -505,8 +516,9 @@ class KubeApiRestClient:
         queries: Union[List[KubeApiRestQuery], KubeApiRestQuery],
         event_name: Union[List[str], str] = None,
         timeout=None,
+        throw_errors: bool = True,
     ) -> Union[List[object], object]:
-        strm = self.stream(queries, event_name=event_name, timeout=timeout)
+        strm = self.stream(queries, event_name=event_name, timeout=timeout, throw_errors=throw_errors)
         rslt = [v for v in strm]
         if not isinstance(queries, list):
             return rslt[0] if len(rslt) > 0 else None

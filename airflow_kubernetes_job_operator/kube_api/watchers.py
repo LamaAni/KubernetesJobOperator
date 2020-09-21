@@ -162,6 +162,8 @@ class NamespaceWatchQuery(KubeApiRestQuery):
         self.emit(self.pod_log_event_name, data)
 
     def process_data_state(self, data: dict, client: KubeApiRestClient):
+        if not self.is_running:
+            return
         uid, kind = NamespaceWatchQueryObjectState.detect(data)
         if self.collect_kube_object_state and kind in self.kinds:
             if uid not in self._object_states:

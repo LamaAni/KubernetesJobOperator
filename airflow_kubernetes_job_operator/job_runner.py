@@ -193,7 +193,7 @@ class JobRunner:
 
     def execute_job(
         self,
-        timeout: int = 10,
+        timeout: int = 60 * 5,
     ):
         # prepare the run objects.
         namespaces: List[str] = []
@@ -287,6 +287,7 @@ class JobRunner:
 
             job_yaml {dict} -- The job description yaml.
         """
+        self.log(("Deleting job.."))
         descriptors: List[KubeObjectDescriptor] = [KubeObjectDescriptor(o) for o in self.body]
         descriptors = [d for d in descriptors if d.kind is not None and d.name is not None and d.namespace is not None]
 
