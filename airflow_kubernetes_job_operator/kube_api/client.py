@@ -108,6 +108,7 @@ class KubeApiRestQuery(Task):
         # these event are object specific
         self.query_started_event_name = f"{self.query_started_event_name} {id(self)}"
         self.query_ended_event_name = f"{self.query_started_event_name} {id(self)}"
+        self.query_running_event_name = f"{self.query_running_event_name} {id(self)}"
 
         self._query_running: bool = False
 
@@ -212,10 +213,8 @@ class KubeApiRestQuery(Task):
                 collection_formats={},
             )
 
-            self._query_running = True
-            self.emit(self.query_running_event_name)
-
             response = request_info[0]
+            self._emit_running()
 
             for line in self.read_response_stream_lines(response):
                 data = self.parse_data(line)
@@ -336,7 +335,8 @@ class KubeApiRestClient:
             config_file (str, optional): The configuration file path. Defaults to None = search for config.
             is_in_cluster (bool, optional): If true, the client will expect to run inside a cluster
                 and to load the cluster config. Defaults to None = auto detect.
-            extra_config_locations (List[str], optional): Extra locations to search for a configuration. Defaults to None.
+            extra_config_locations (List[str], optional): Extra locations to search for a configuration. 
+                Defaults to None.
             context (str, optional): The context name to run in. Defaults to None = active context.
             persist (bool, optional): If True, config file will be updated when changed (e.g GCP token refresh).
         """
@@ -392,7 +392,8 @@ class KubeApiRestClient:
             config_file (str, optional): The configuration file path. Defaults to None = search for config.
             is_in_cluster (bool, optional): If true, the client will expect to run inside a cluster
                 and to load the cluster config. Defaults to None = auto detect.
-            extra_config_locations (List[str], optional): Extra locations to search for a configuration. Defaults to None.
+            extra_config_locations (List[str], optional): Extra locations to search for a configuration.
+                Defaults to None.
             context (str, optional): The context name to run in. Defaults to None = active context.
             persist (bool, optional): If True, config file will be updated when changed
                 (e.g GCP token refresh).
@@ -426,8 +427,10 @@ class KubeApiRestClient:
         return namespace
 
     def stop(self):
-        for hndl in list(self._active_queries) + list(self._active_handlers):
-            hndl.stop()
+        for q in list(self._active_queries):
+            q.stop()
+        for hndl in list(self._active_handlers):
+            hndl.stop_all_streams()
 
     def _create_query_handler(self, queries: List[KubeApiRestQuery]) -> EventHandler:
         assert isinstance(queries, list), "queries Must be a list of queries"

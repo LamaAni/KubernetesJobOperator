@@ -2,11 +2,12 @@ import json
 from datetime import datetime
 from logging import Logger
 from weakref import WeakSet, WeakValueDictionary
-from typing import List, Dict
+from typing import List, Dict, Callable
 from zthreading.events import EventHandler, Event
 from zthreading.tasks import Task
 
 from airflow_kubernetes_job_operator.kube_api.utils import kube_logger
+from airflow_kubernetes_job_operator.kube_api.exceptions import KubeApiException
 from airflow_kubernetes_job_operator.kube_api.collections import KubeObjectState, KubeObjectKind
 from airflow_kubernetes_job_operator.kube_api.client import KubeApiRestQuery, KubeApiRestClient
 from airflow_kubernetes_job_operator.kube_api.queries import (
@@ -124,6 +125,7 @@ class NamespaceWatchQuery(KubeApiRestQuery):
         collect_kube_object_state: bool = True,
         pod_log_event_name: str = "log",
         pod_log_since: datetime = None,
+        watch_predict: Callable = None,
     ):
         super().__init__(
             None,
@@ -183,9 +185,16 @@ class NamespaceWatchQuery(KubeApiRestQuery):
                     since=self.pod_log_since,
                     follow=True,
                 )
+
+                def handle_error(sender, *args):
+                    if len(args) == 0:
+                        self.emit_error(KubeApiException("Unknown error from sender", sender))
+                    else:
+                        self.emit_error(args[0])
+
                 # binding only relevant events.
                 read_logs.on(read_logs.data_event_name, lambda line: self.emit_log(line))
-                read_logs.on(read_logs.error_event_name, lambda sender, err: self.emit(self.error_event_name, err))
+                read_logs.on(read_logs.error_event_name, handle_error)
                 self._executing_pod_loggers[uid] = read_logs
                 client.async_query(read_logs)
 

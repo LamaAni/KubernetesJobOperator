@@ -2,7 +2,6 @@ import re
 from enum import Enum
 from typing import Callable, Dict, List
 from airflow_kubernetes_job_operator.kube_api.utils import not_empty_string
-from airflow_kubernetes_job_operator.kube_api.exceptions import KubeApiException
 
 
 class KubeObjectState(Enum):
