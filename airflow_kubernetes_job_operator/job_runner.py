@@ -3,6 +3,7 @@ import copy
 import logging
 import os
 
+from enum import Enum
 from logging import Logger
 from uuid import uuid4
 from typing import Callable, List, Type, Union
@@ -27,6 +28,16 @@ class JobRunnerException(Exception):
     pass
 
 
+class JobRunnerDeletePolicy(Enum):
+    Never = "Never"
+    Always = "Always"
+    IfFailed = "IfFailed"
+    IfSucceeded = "IfSucceeded"
+
+    def __str__(self) -> str:
+        return self.value
+
+
 class JobRunner:
     job_runner_instance_id_label_name = "kubernetes-job-runner-instance-id"
     custom_prepare_kinds: dict = {}
@@ -42,8 +53,7 @@ class JobRunner:
         show_watcher_logs: bool = True,
         show_executor_logs: bool = True,
         show_error_logs: bool = True,
-        delete_on_success: bool = True,
-        delete_on_failure: bool = False,
+        delete_policy: JobRunnerDeletePolicy = JobRunnerDeletePolicy.Always,
         auto_load_kube_config=True,
         random_name_postfix_length=8,
         name_prefix: str = None,
@@ -70,8 +80,7 @@ class JobRunner:
         self.show_watcher_logs = show_watcher_logs
         self.show_executor_logs = show_executor_logs
         self.show_error_logs = show_error_logs
-        self.delete_on_success = delete_on_success
-        self.delete_on_failure = delete_on_failure
+        self.delete_policy = delete_policy
 
         if self.show_runner_id_on_logs is None:
             self.show_runner_id_on_logs = (
@@ -272,13 +281,19 @@ class JobRunner:
         run_query_handler.on(run_query_handler.error_event_name, lambda sender, err: watcher.emit_error(err))
 
         self.log(f"Waiting for state object {state_object.namespace}/{state_object.name} to finish...")
-        final_state = watcher.wait_for_state(
-            [KubeObjectState.Failed, KubeObjectState.Succeeded],  # type:ignore
-            kind=state_object.kind,
-            name=state_object.name,
-            namespace=state_object.namespace,
-            timeout=timeout,
-        )
+
+        try:
+            final_state = watcher.wait_for_state(
+                [KubeObjectState.Failed, KubeObjectState.Succeeded],  # type:ignore
+                kind=state_object.kind,
+                name=state_object.name,
+                namespace=state_object.namespace,
+                timeout=timeout,
+            )
+        except Exception as ex:
+            self.log("Execution timeout... deleting resources", level=logging.WARN)
+            self.abort()
+            raise ex
 
         self.log(f"Job {final_state}")
 
@@ -300,13 +315,16 @@ class JobRunner:
                 else:
                     self.logger.error(f"[{descriptor}]: Has {obj_state} (status not provided)")
 
-        if (final_state == KubeObjectState.Failed and self.delete_on_failure) or (
-            final_state == KubeObjectState.Succeeded and self.delete_on_success
+        if (
+            self.delete_policy == JobRunnerDeletePolicy.Always
+            or self.delete_policy == JobRunnerDeletePolicy.IfFailed
+            and final_state == KubeObjectState.Failed
         ):
+            self.log(f"Deleting resources due to policy: {str(self.delete_policy)}")
             self.delete_job()
 
         self.client.stop()
-        self.log("Client stopped")
+        self.log("Client stopped, execution completed.")
 
         return final_state
 
@@ -322,7 +340,7 @@ class JobRunner:
         descriptors = [d for d in descriptors if d.kind is not None and d.name is not None and d.namespace is not None]
 
         self.log(
-            "Deleting job deployments for items:\n" + "\n".join([f"{d}" for d in descriptors]), level=logging.DEBUG
+            "Deleting job deployments for items: " + ", ".join([f"{d}" for d in descriptors]),
         )
         self.client.query(self._create_body_operation_queries(DeleteNamespaceObject))
         self.log("Job deleted")
@@ -331,7 +349,7 @@ class JobRunner:
         self.log("Aborting job ...")
         self.delete_job()
         self.client.stop()
-        self.log("Client stopped")
+        self.log("Client stopped, execution aborted.")
 
 
 JobRunner.register_custom_prepare_kind("pod", JobRunner.custom_prepare_pod_kind)

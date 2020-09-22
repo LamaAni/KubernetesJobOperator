@@ -9,12 +9,12 @@ KubeObjectKind.register_global_kind(
 
 
 client = KubeApiRestClient()
-query = NamespaceWatchQuery(watch_pod_logs=False)
-query.pipe_to_logger()
+watcher = NamespaceWatchQuery(watch_pod_logs=True)
+watcher.pipe_to_logger()
 
-rslt = client.query_async(query)
+rslt = client.query_async(watcher)
 
 logging.info(f"Waiting for watch @ {client.get_default_namespace()}...")
-query.wait_until_running()
+watcher.wait_until_running()
 logging.info(f"Starting watch @ {client.get_default_namespace()}...")
-query.join()
+watcher.join()

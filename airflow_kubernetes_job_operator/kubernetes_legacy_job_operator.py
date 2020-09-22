@@ -1,10 +1,9 @@
 import kubernetes.client as k8s
 
-from typing import List, Optional
+from typing import List, Optional, Union
 from airflow import configuration
-from airflow_kubernetes_job_operator.kubernetes_job_operator import (
-    KubernetesJobOperator,
-)
+from airflow_kubernetes_job_operator.job_runner import JobRunnerDeletePolicy
+from airflow_kubernetes_job_operator.kubernetes_job_operator import KubernetesJobOperator
 
 try:
     from airflow.contrib.kubernetes.kubernetes_request_factory import pod_request_factory
@@ -65,8 +64,9 @@ class KubernetesLegacyJobOperator(KubernetesJobOperator):
         # job operator args
         body: str = None,
         body_filepath: str = None,
-        delete_policy: str = None,
+        delete_policy: Union[str, JobRunnerDeletePolicy] = None,
         validate_body_on_init: bool = None,
+        wait_for_task_timeout: float = None,
         *args,
         **kwargs,
     ):
@@ -162,7 +162,12 @@ class KubernetesLegacyJobOperator(KubernetesJobOperator):
                 setting this to True, will slow dag creation.
                 (default: {from env/airflow config: AIRFLOW__KUBE_JOB_OPERATOR__validate_body_on_init or False})
         """
-        delete_policy = delete_policy or "IfSucceeded" if is_delete_operator_pod else "Never"
+        delete_policy = (
+            delete_policy or JobRunnerDeletePolicy.IfSucceeded
+            if is_delete_operator_pod
+            else JobRunnerDeletePolicy.Never
+        )
+
         validate_body_on_init = (
             configuration.conf.getboolean("kube_job_operator", "validate_body_on_init", fallback=False) or False
         )
@@ -180,6 +185,7 @@ class KubernetesLegacyJobOperator(KubernetesJobOperator):
             cluster_context=cluster_context,
             validate_body_on_init=validate_body_on_init,
             startup_timeout_seconds=startup_timeout_seconds,
+            wait_for_task_timeout=wait_for_task_timeout,
             get_logs=get_logs,
             *args,
             **kwargs,

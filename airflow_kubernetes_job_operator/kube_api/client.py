@@ -3,6 +3,7 @@ from logging import Logger
 import os
 import json
 import traceback
+import time
 from typing import List, Callable, Set, Union
 from weakref import WeakSet
 from os.path import expanduser
@@ -87,6 +88,9 @@ class KubeApiRestQuery(Task):
         headers: dict = None,
         timeout: float = None,
         use_asyncio: bool = None,
+        auto_reconnect: bool = False,
+        auto_reconnect_max_attempts: int = 20,
+        auto_reconnect_wait_between_attempts: float = 3,
     ):
         assert use_asyncio is not True, NotImplementedError("AsyncIO not yet implemented.")
         super().__init__(
@@ -105,6 +109,9 @@ class KubeApiRestQuery(Task):
         self.method = method
         self.files = files
         self.body = body
+        self.auto_reconnect = auto_reconnect
+        self.auto_reconnect_max_attempts = auto_reconnect_max_attempts
+        self.auto_reconnect_wait_between_attempts = auto_reconnect_wait_between_attempts
 
         # these event are object specific
         self.query_started_event_name = f"{self.query_started_event_name} {id(self)}"
@@ -113,6 +120,7 @@ class KubeApiRestQuery(Task):
 
         self._query_running: bool = False
         self._active_responses: Set[HTTPResponse] = WeakSet()  # type:ignore
+        self._is_being_stopped: bool = False
 
     @property
     def query_running(self) -> bool:
@@ -195,51 +203,81 @@ class KubeApiRestQuery(Task):
         for k in query_params:
             query_params_array.append((k, query_params[k]))
 
+        total_consecutive_reconnects = 0
+
+        def wait_for_reconnect():
+            if not self.auto_reconnect:
+                return False
+
+            nonlocal total_consecutive_reconnects
+            total_consecutive_reconnects += 1
+
+            if total_consecutive_reconnects >= self.auto_reconnect_max_attempts:
+                return False
+            if not self.use_async_loop:
+                time.sleep(self.auto_reconnect_wait_between_attempts)
+            return True
+
         # starting query.
-        try:
-            request_info = client.api_client.call_api(
-                resource_path=self.resource_path,
-                method=self.method,
-                path_params=path_params,
-                query_params=query_params_array,
-                header_params=headers,
-                body=self.body,
-                post_params=form_params or [],
-                files=files or dict(),
-                response_type="str",
-                auth_settings=["BearerToken"],
-                async_req=False,
-                _return_http_data_only=False,
-                _preload_content=False,
-                _request_timeout=self.timeout,
-                collection_formats={},
-            )
+        is_first_call = True
+        while self.is_running and not self._is_being_stopped and (is_first_call or self.auto_reconnect):
+            try:
+                is_first_call = False
+                request_info = client.api_client.call_api(
+                    resource_path=self.resource_path,
+                    method=self.method,
+                    path_params=path_params,
+                    query_params=query_params_array,
+                    header_params=headers,
+                    body=self.body,
+                    post_params=form_params or [],
+                    files=files or dict(),
+                    response_type="str",
+                    auth_settings=["BearerToken"],
+                    async_req=False,
+                    _return_http_data_only=False,
+                    _preload_content=False,
+                    _request_timeout=self.timeout,
+                    collection_formats={},
+                )
 
-            response: HTTPResponse = request_info[0]  # type:ignore
-            self._active_responses.add(response)
-            self._emit_running()
+                response: HTTPResponse = request_info[0]  # type:ignore
+                self._active_responses.add(response)
+                self._emit_running()
 
-            for line in self.read_response_stream_lines(response):
-                data = self.parse_data(line)  # type:ignore
-                self.emit_data(data)
+                for line in self.read_response_stream_lines(response):
+                    data = self.parse_data(line)  # type:ignore
+                    self.emit_data(data)
 
-        except KubernetesNativeApiException as ex:
-            if ex.body is not None:
-                if isinstance(ex.body, dict):
-                    exception_details: dict = json.loads(ex.body or {})  # type:ignore
-                    raise KubeApiClientException(
-                        f"{ex.reason}, {exception_details.get('reason')}: {exception_details.get('message')}",
-                        inner_exception=ex,
-                    )
+                # On smooth stop there is no need to wait and we can try and reconnect immediately.
+
+            except KubernetesNativeApiException as ex:
+                if ex.body is not None:
+                    exception_message = f"{ex.reason}: {ex.body}"
+                    if isinstance(ex.body, dict):
+                        exception_details: dict = json.loads(ex.body or {})  # type:ignore
+                        exception_message = (
+                            f"{ex.reason}, {exception_details.get('reason')}: {exception_details.get('message')}"
+                        )
+                    if wait_for_reconnect():
+                        self.emit_warning(Exception("[Attempt to reconnect] " + exception_message))
+                        continue
+                    raise KubeApiClientException(exception_message, inner_exception=ex)
+                    # if isinstance(ex.body, dict):
+                    #     exception_details: dict = json.loads(ex.body or {})  # type:ignore
+                    #     raise KubeApiClientException(
+                    #         f"{ex.reason}, {exception_details.get('reason')}: {exception_details.get('message')}",
+                    #         inner_exception=ex,
+                    #     )
+                    # else:
+                    #     raise KubeApiClientException(
+                    #         f"{ex.reason}: {ex.body}",
+                    #         inner_exception=ex,
+                    #     )
                 else:
-                    raise KubeApiClientException(
-                        f"{ex.reason}: {ex.body}",
-                        inner_exception=ex,
-                    )
-            else:
+                    raise ex
+            except Exception as ex:
                 raise ex
-        except Exception as ex:
-            raise ex
 
     def start(self, client: "KubeApiRestClient"):
         """Start the query execution
@@ -265,14 +303,18 @@ class KubeApiRestQuery(Task):
         self.emit(self.query_running_event_name)
 
     def stop(self, timeout: float = None, throw_error_if_not_running: bool = None):
-        self.stop_all_streams()
-        for rsp in self._active_responses:
-            if not rsp.isclosed:
-                try:
-                    rsp.close()
-                except Exception:
-                    pass
-        return super().stop(timeout=timeout, throw_error_if_not_running=throw_error_if_not_running)  # type:ignore
+        try:
+            self._is_being_stopped = True
+            self.stop_all_streams()
+            for rsp in self._active_responses:
+                if not rsp.isclosed:
+                    try:
+                        rsp.close()
+                    except Exception:
+                        pass
+            super().stop(timeout=timeout, throw_error_if_not_running=throw_error_if_not_running)  # type:ignore
+        finally:
+            self._is_being_stopped = False
 
     def log_event(self, logger: Logger, ev: Event):
         pass

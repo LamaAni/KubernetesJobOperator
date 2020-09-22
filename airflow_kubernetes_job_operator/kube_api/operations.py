@@ -28,12 +28,14 @@ class ConfigureNamespaceObject(KubeApiRestQuery):
             "The object kind must be defined. body['apiVersion'] != None"
         )
 
+        resource_path = (
+            self._descriptor.kind.compose_resource_path(self._descriptor.namespace)
+            if method == "POST"
+            else self._descriptor.kind.compose_resource_path(self._descriptor.namespace, self._descriptor.name)
+        )
+
         super().__init__(
-            self._descriptor.kind.compose_resource_path(self._descriptor.namespace),
-            path_params={
-                namespace: self._descriptor.namespace,
-                name: self._descriptor.name,
-            },
+            resource_path=resource_path,
             query_params=query_params,
             method=method,
             body=body if include_body_in_query else None,

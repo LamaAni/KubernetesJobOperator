@@ -125,7 +125,6 @@ class NamespaceWatchQuery(KubeApiRestQuery):
         collect_kube_object_state: bool = True,
         pod_log_event_name: str = "log",
         pod_log_since: datetime = None,
-        watch_predict: Callable = None,
     ):
         super().__init__(
             None,
@@ -270,7 +269,7 @@ class NamespaceWatchQuery(KubeApiRestQuery):
         queries: List[GetNamespaceObjects] = []
         namespaces = set(self.namespaces)
         if len(namespaces) == 0:
-            namespaces = set(client.get_default_namespace())
+            namespaces = set([client.get_default_namespace()])
 
         for namespace in namespaces:
             for kind in list(self.kinds.values()):

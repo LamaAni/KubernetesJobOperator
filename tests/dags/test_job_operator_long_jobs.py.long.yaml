@@ -25,9 +25,8 @@ spec:
                   date
                   sleep 1
               done
-
               echo "Complete"
           env:
             - name: TIC_COUNT
-              value: '5'
+              value: '10800' # 3 hrs
   backoffLimit: 0

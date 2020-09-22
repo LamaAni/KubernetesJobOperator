@@ -1,4 +1,5 @@
 from utils import resolve_file, default_args
+from datetime import timedelta
 from airflow import DAG
 from airflow_kubernetes_job_operator.kubernetes_job_operator import KubernetesJobOperator
 
@@ -32,6 +33,16 @@ tj_overrides = KubernetesJobOperator(
     image="ubuntu",
     envs=envs,
     command=["bash", "-c", 'echo "Starting $PASS_ARG"; sleep 10; echo end'],
+)
+ti_timeout = KubernetesJobOperator(
+    task_id="test-job-timeout",
+    body_filepath=resolve_file(__file__ + ".success.yaml"),
+    envs={
+        "TIC_COUNT": "100",
+        "PASS_ARG": "timeout",
+    },
+    dag=dag,
+    execution_timeout=timedelta(seconds=3),
 )
 
 if __name__ == "__main__":

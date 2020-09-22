@@ -9,7 +9,7 @@ from airflow_kubernetes_job_operator.kube_api import KubeObjectState
 from airflow_kubernetes_job_operator.utils import (
     to_kubernetes_valid_name,
 )
-from airflow_kubernetes_job_operator.job_runner import JobRunner
+from airflow_kubernetes_job_operator.job_runner import JobRunner, JobRunnerDeletePolicy
 
 
 class KubernetesJobOperatorException(AirflowException):
@@ -17,6 +17,16 @@ class KubernetesJobOperatorException(AirflowException):
 
 
 KUBERNETES_JOB_OPERATOR_DEFAULT_BODY = os.path.abspath(f"{__file__}.default.yaml")
+KUBERNETES_JOB_OPERATOR_DEFAULT_DELETE_POLICY = configuration.conf.get(
+    "kube_job_operator", "delete_policy", fallback=str(JobRunnerDeletePolicy.IfSucceeded)
+)
+try:
+    KUBERNETES_JOB_OPERATOR_DEFAULT_DELETE_POLICY = JobRunnerDeletePolicy(KUBERNETES_JOB_OPERATOR_DEFAULT_DELETE_POLICY)
+except Exception:
+    raise Exception(
+        "Invalid ariflow configuration kube_job_operator.delete_policy: "
+        + KUBERNETES_JOB_OPERATOR_DEFAULT_DELETE_POLICY
+    )
 
 
 class KubernetesJobOperator(BaseOperator):
@@ -34,12 +44,12 @@ class KubernetesJobOperator(BaseOperator):
         body: Union[str, dict, List[dict]] = None,
         body_filepath: str = None,
         image_pull_policy: str = None,
-        delete_policy: str = "IfSucceeded",
+        delete_policy: Union[str, JobRunnerDeletePolicy] = KUBERNETES_JOB_OPERATOR_DEFAULT_DELETE_POLICY,
         in_cluster: bool = None,
         config_file: str = None,
         get_logs: bool = True,
         cluster_context: str = None,
-        startup_timeout_seconds: int = None,
+        startup_timeout_seconds: float = 120,
         validate_body_on_init: bool = configuration.conf.getboolean(
             "kube_job_operator", "validate_body_on_init", fallback=False
         )
@@ -96,11 +106,9 @@ class KubernetesJobOperator(BaseOperator):
             "body must either be a yaml string or a dict"
         )
 
-        assert delete_policy is not None and delete_policy.lower() in [
-            "never",
-            "always",
-            "ifsucceeded",
-        ], "the delete_policy must be one of: Never, Always, IfSucceeded"
+        assert delete_policy in JobRunnerDeletePolicy, ValueError(
+            f"Invalid delete policy. Valid values are: {[str(v) for v in JobRunnerDeletePolicy]}"
+        )
 
         assert envs is None or isinstance(envs, dict), ValueError("The env collection must be a dict or None")
         assert image is None or isinstance(image, str), ValueError("image must be a string or None")
@@ -121,8 +129,10 @@ class KubernetesJobOperator(BaseOperator):
 
         # operation properties
         self.startup_timeout_seconds = startup_timeout_seconds
-        self.delete_policy = delete_policy
         self.get_logs = get_logs
+
+        # Used for debugging
+        self._internal_wait_kuberentes_object_timeout = None
 
         # create the job runner.
         self.job_runner: JobRunner = JobRunner(
@@ -132,6 +142,7 @@ class KubernetesJobOperator(BaseOperator):
             auto_load_kube_config=False,
             name_prefix=self._create_job_name(task_id),
             show_pod_logs=get_logs,
+            delete_policy=delete_policy,
         )
 
         if validate_body_on_init:
@@ -147,6 +158,14 @@ class KubernetesJobOperator(BaseOperator):
     @property
     def body(self) -> dict:
         return self.job_runner.body
+
+    @property
+    def delete_policy(self) -> JobRunnerDeletePolicy:
+        return self.job_runner.delete_policy
+
+    @delete_policy.setter
+    def delete_policy(self, val: JobRunnerDeletePolicy):
+        self.job_runner.delete_policy = val
 
     @classmethod
     def _create_job_name(cls, name):
@@ -216,13 +235,13 @@ class KubernetesJobOperator(BaseOperator):
         Raises:
             AirflowException: Error in execution.
         """
-        delete_policy = self.delete_policy.lower()
-        self.job_runner.delete_on_failure = delete_policy == "always"
-        self.job_runner.delete_on_success = self.job_runner.delete_on_failure or delete_policy == "ifsucceeded"
 
         self._job_is_executing = True
         try:
-            rslt = self.job_runner.execute_job(watcher_start_timeout=self.startup_timeout_seconds)
+            rslt = self.job_runner.execute_job(
+                watcher_start_timeout=self.startup_timeout_seconds,
+                timeout=self._internal_wait_kuberentes_object_timeout,
+            )
 
             if rslt == KubeObjectState.Failed:
                 raise KubernetesJobOperatorException(
