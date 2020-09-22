@@ -22,6 +22,8 @@ from airflow_kubernetes_job_operator.kube_api.config import (
     DEFAULT_KUBE_CONFIG_LOCATIONS,
     DEFAULT_SERVICE_ACCOUNT_PATH,
     DEFAULT_USE_ASYNCIO_ENV_NAME,
+    DEFAULT_AUTO_RECONNECT_MAX_ATTEMPTS,
+    DEFAULT_AUTO_RECONNECT_WAIT_BETWEEN_ATTEMPTS,
 )
 
 
@@ -62,8 +64,8 @@ class KubeApiRestQuery(Task):
         timeout: float = None,
         use_asyncio: bool = None,
         auto_reconnect: bool = False,
-        auto_reconnect_max_attempts: int = 60,
-        auto_reconnect_wait_between_attempts: float = 5,
+        auto_reconnect_max_attempts: int = DEFAULT_AUTO_RECONNECT_MAX_ATTEMPTS,
+        auto_reconnect_wait_between_attempts: float = DEFAULT_AUTO_RECONNECT_WAIT_BETWEEN_ATTEMPTS,
     ):
         assert use_asyncio is not True, NotImplementedError("AsyncIO not yet implemented.")
         super().__init__(

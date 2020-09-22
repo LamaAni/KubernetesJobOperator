@@ -22,3 +22,6 @@ KUBERENTES_API_CONTENT_TYPES = [
     "application/merge-patch+json",
     "application/strategic-merge-patch+json",
 ]
+
+DEFAULT_AUTO_RECONNECT_MAX_ATTEMPTS = 60
+DEFAULT_AUTO_RECONNECT_WAIT_BETWEEN_ATTEMPTS = 5
