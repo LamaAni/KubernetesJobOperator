@@ -11,12 +11,12 @@ from zthreading.events import Event, EventHandler
 
 from airflow_kubernetes_job_operator.kube_api.utils import unqiue_with_order, clean_dictionary_nulls
 
-from kubernetes.stream.ws_client import ApiException as KuberenetesApiException
+from kubernetes.stream.ws_client import ApiException as KubernetesNativeApiException
 from kubernetes.client import ApiClient
 from urllib3.response import HTTPResponse
 from kubernetes.config import kube_config, incluster_config, list_kube_config_contexts
 from airflow_kubernetes_job_operator.kube_api.utils import kube_logger
-from airflow_kubernetes_job_operator.kube_api.exceptions import KubeApiException
+from airflow_kubernetes_job_operator.kube_api.exceptions import KubeApiException, KubeApiClientException
 
 
 def join_locations_list(*args):
@@ -223,12 +223,19 @@ class KubeApiRestQuery(Task):
                 data = self.parse_data(line)  # type:ignore
                 self.emit_data(data)
 
-        except KuberenetesApiException as ex:
+        except KubernetesNativeApiException as ex:
             if ex.body is not None:
-                exception_details: dict = json.loads(ex.body or {})  # type:ignore
-                raise KubeApiException(
-                    f"{ex.reason}, {exception_details.get('reason')}: {exception_details.get('message')}"
-                )
+                if isinstance(ex.body, dict):
+                    exception_details: dict = json.loads(ex.body or {})  # type:ignore
+                    raise KubeApiClientException(
+                        f"{ex.reason}, {exception_details.get('reason')}: {exception_details.get('message')}",
+                        inner_exception=ex,
+                    )
+                else:
+                    raise KubeApiClientException(
+                        f"{ex.reason}: {ex.body}",
+                        inner_exception=ex,
+                    )
             else:
                 raise ex
         except Exception as ex:

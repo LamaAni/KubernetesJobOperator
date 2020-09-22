@@ -4,7 +4,6 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: test-job
   finalizers:
     - foregroundDeletion
 spec:

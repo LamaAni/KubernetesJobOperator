@@ -3,10 +3,20 @@ command -v realpath >/dev/null
 if [ ! $? ]; then
   # resolve for mac
   function realpath() {
-    python3 -c "import os; print(os.path.realpath('$1'))"
+    python3 -c "import os; print(os.path.abspath('$1'))"
   }
 fi
 
-: ${REPO_PATH:="$(dirname $(dirname $(realpath "$BASH_SOURCE[0]")))"}
-source "$REPO_PATH/test/manual/configure"
-airflow "$@"
+CUR_DIR=$(dirname "$(realpath "${BASH_SOURCE[0]}")")
+REPO_PATH="$(realpath "$CUR_DIR/../../")"
+
+source "$CUR_DIR/configure" || exit $?
+
+if [ "$#" -eq 0 ]; then
+  airflow scheduler &
+  SCHEDULER_PID="$!"
+  airflow webserver
+  kill "$SCHEDULER_PID"
+else
+  airflow "$@"
+fi

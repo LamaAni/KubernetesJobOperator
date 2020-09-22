@@ -24,7 +24,7 @@ def parse_kind_state_default(yaml: dict) -> "KubeObjectState":
 
 
 global kinds_collection
-kinds_collection: Dict[str, "KubeObjectKind"] = {}
+kinds_collection = {}
 
 
 class KubeObjectKind:

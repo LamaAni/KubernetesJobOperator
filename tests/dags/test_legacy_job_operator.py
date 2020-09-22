@@ -3,7 +3,7 @@ from airflow import DAG
 from airflow_kubernetes_job_operator.kubernetes_legacy_job_operator import KubernetesLegacyJobOperator
 
 dag = DAG(
-    "bjo",
+    "bjo-legacy",
     default_args=default_args,
     description="Test base job operator",
     schedule_interval=None,
@@ -29,13 +29,14 @@ echo "Complete"
 """
 # BashOperator(bash_command="date", task_id="test-bash", dag=dag)
 
-KubernetesLegacyJobOperator(
+op = KubernetesLegacyJobOperator(
     task_id="legacy-test-job-success",
     image="ubuntu",
     cmds=["bash", "-c", bash_script],
     dag=dag,
     is_delete_operator_pod=True,
 )
+
 
 KubernetesLegacyJobOperator(
     task_id="legacy-test-job-fail",

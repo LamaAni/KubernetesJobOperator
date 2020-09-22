@@ -7,6 +7,7 @@ from typing import Union
 import dateutil.parser
 from zthreading.events import Event
 
+from airflow_kubernetes_job_operator.kube_api.exceptions import KubeApiClientException, KubeApiException
 from airflow_kubernetes_job_operator.kube_api.utils import kube_logger, not_empty_string
 from airflow_kubernetes_job_operator.kube_api.collections import KubeObjectKind, KubeObjectState
 from airflow_kubernetes_job_operator.kube_api.client import KubeApiRestQuery
@@ -162,6 +163,11 @@ class GetNamespaceObjects(KubeApiRestQuery):
     def query_loop(self, client):
         try:
             return super().query_loop(client)
+        except KubeApiClientException as ex:
+            if ex.inner_exception.status == 404:
+                raise KubeApiException(
+                    f"Resource {self.resource_path} of kind '{self.kind.api_version}/{self.kind.name}' not found"
+                )
         except Exception as ex:
             raise ex
 

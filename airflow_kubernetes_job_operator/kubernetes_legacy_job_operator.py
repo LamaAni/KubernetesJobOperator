@@ -30,7 +30,6 @@ class KubernetesLegacyJobOperator(KubernetesJobOperator):
         self,
         namespace: str = None,
         image: str = None,
-        name: str = None,
         cmds: List[str] = None,
         arguments: List[str] = None,
         ports: list = None,
@@ -173,7 +172,6 @@ class KubernetesLegacyJobOperator(KubernetesJobOperator):
             arguments=arguments,
             image=image,
             namespace=namespace,
-            name=name,
             body=body,
             body_filepath=body_filepath,
             delete_policy=delete_policy,
@@ -194,7 +192,6 @@ class KubernetesLegacyJobOperator(KubernetesJobOperator):
         self.arguments = arguments or []
         self.labels = labels or {}
         self.startup_timeout_seconds = startup_timeout_seconds
-        self.name = name
         self.env_vars = env_vars or {}
         self.ports = ports or []
         self.volume_mounts = volume_mounts or []
@@ -242,18 +239,20 @@ class KubernetesLegacyJobOperator(KubernetesJobOperator):
             for volume in self.volumes:
                 gen.add_volume(volume)
 
+            job_obj = self.body[0]
+
             # selecting appropriate pod values.
             all_labels = {}
             all_labels.update(self.labels)
-            all_labels.update(self.body["spec"]["template"]["metadata"]["labels"])
-            image = self.image or self.body["spec"]["template"]["spec"]["containers"][0]["image"]
-            cmds = self.cmds or self.body["spec"]["template"]["spec"]["containers"][0]["command"]
-            arguments = self.arguments or self.body["spec"]["template"]["spec"]["containers"][0]["args"]
+            all_labels.update(job_obj["spec"]["template"]["metadata"].get("labels", {}))
+            image = self.image or job_obj["spec"]["template"]["spec"]["containers"][0]["image"]
+            cmds = self.cmds or job_obj["spec"]["template"]["spec"]["containers"][0]["command"]
+            arguments = self.arguments or job_obj["spec"]["template"]["spec"]["containers"][0]["args"]
 
             pod = gen.make_pod(
-                namespace=self.body["metadata"]["namespace"],
+                namespace=job_obj["metadata"]["namespace"],
                 image=image,
-                pod_id=self.body["metadata"]["name"],
+                pod_id=job_obj["metadata"]["name"],
                 cmds=cmds,
                 arguments=arguments,
                 labels=all_labels,
@@ -284,7 +283,7 @@ class KubernetesLegacyJobOperator(KubernetesJobOperator):
                 metadata=k8s.V1ObjectMeta(
                     namespace=self.namespace,
                     labels=self.labels,
-                    name=self.name,
+                    name="legacy",
                     annotations=self.annotations,
                 ),
                 spec=k8s.V1PodSpec(
@@ -323,8 +322,6 @@ class KubernetesLegacyJobOperator(KubernetesJobOperator):
                 "spec": self.job_runner.client.api_client.sanitize_for_serialization(pod_body.spec),
             }
 
-        # prepare the base body.
-        self.job_runner.prepare_body()
         # reset the name
         del self.body[0]["metadata"]["name"]
         self.body[0]["spec"]["template"] = pod_body

@@ -130,7 +130,7 @@ class KubernetesJobOperator(BaseOperator):
             logger=self.logger,
             namespace=namespace,
             auto_load_kube_config=False,
-            name_postfix=self._create_job_name(),
+            name_prefix=self._create_job_name(task_id),
             show_pod_logs=get_logs,
         )
 
@@ -148,9 +148,10 @@ class KubernetesJobOperator(BaseOperator):
     def body(self) -> dict:
         return self.job_runner.body
 
-    def _create_job_name(self):
+    @classmethod
+    def _create_job_name(cls, name):
         return to_kubernetes_valid_name(
-            self.task_id,
+            name,
             max_length=configuration.conf.getint("kube_job_operator", "max_job_name_length", fallback=50),
         )
 

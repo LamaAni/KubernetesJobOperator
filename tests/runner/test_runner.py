@@ -23,7 +23,7 @@ def load_yaml_obj_configs(fpath: str) -> dict:
 def _exec_test(body: dict):
     runner = JobRunner(body, auto_load_kube_config=True, delete_on_failure=True, logger=logging)  # type:ignore
     runner.delete_on_failure = True
-    runner.delete_on_success = Trues
+    runner.delete_on_success = True
     runner.execute_job()
 
 
