@@ -2,8 +2,9 @@ from utils import resolve_file, default_args
 from airflow import DAG
 from airflow_kubernetes_job_operator.kubernetes_job_operator import KubernetesJobOperator
 
+
 dag = DAG(
-    "bjo",
+    "bjo-custom",
     default_args=default_args,
     description="Test base job operator",
     schedule_interval=None,
@@ -14,25 +15,20 @@ envs = {
     "PASS_ARG": "a test",
 }
 
-tj_success = KubernetesJobOperator(
-    task_id="test-job-success",
-    body_filepath=resolve_file(__file__ + ".success.yaml"),
+KubernetesJobOperator(
+    task_id="test-job-custom-success",
+    body_filepath=resolve_file("./.local/test_custom.yaml"),
     envs=envs,
     dag=dag,
 )
-tj_fail = KubernetesJobOperator(
-    task_id="test-job-fail",
-    body_filepath=resolve_file(__file__ + ".fail.yaml"),
+
+KubernetesJobOperator(
+    task_id="test-job-custom-fail",
+    body_filepath=resolve_file("./.local/test_custom.fail.yaml"),
     envs=envs,
     dag=dag,
 )
-tj_overrides = KubernetesJobOperator(
-    task_id="test-job-overrides",
-    dag=dag,
-    image="ubuntu",
-    envs=envs,
-    command=["bash", "-c", 'echo "Starting $PASS_ARG"; sleep 10; echo end'],
-)
+
 
 if __name__ == "__main__":
     dag.clear(reset_dag_runs=True)

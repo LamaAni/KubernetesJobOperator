@@ -44,7 +44,6 @@ class KubernetesJobOperator(BaseOperator):
             "kube_job_operator", "validate_body_on_init", fallback=False
         )
         or False,
-        *args,
         **kwargs,
     ):
         """A operator that executes an airflow task as a kubernetes Job.
@@ -85,10 +84,10 @@ class KubernetesJobOperator(BaseOperator):
             metadata.finalizers += foregroundDeletion
 
         """
-        super().__init__(task_id, *args, **kwargs)
+        super().__init__(task_id=task_id, **kwargs)
 
-        assert body is not None or image is not None, ValueError(
-            "body is None, and an image was not defined. Unknown image to execute."
+        assert body_filepath is not None or body is not None or image is not None, ValueError(
+            "body is None, body_filepath is None and an image was not defined. Unknown image to execute."
         )
 
         body = body or self._read_body(body_filepath or KUBERNETES_JOB_OPERATOR_DEFAULT_BODY)
@@ -155,33 +154,31 @@ class KubernetesJobOperator(BaseOperator):
             max_length=configuration.conf.getint("kube_job_operator", "max_job_name_length", fallback=50),
         )
 
+    def update_override_params(self, o: dict):
+        if "spec" in o and "containers" in o.get("spec", {}):
+            containers: List[dict] = o["spec"]["containers"]
+            if isinstance(containers, list) and len(containers) > 0:
+                main_container = containers[0]
+                if self.command:
+                    main_container["command"] = self.command
+                if self.arguments:
+                    main_container["args"] = self.arguments
+                if self.envs:
+                    envs = main_container.get("envs", [])
+                    for k in self.envs.keys():
+                        envs.append({"name": k, "value": self.envs[k]})
+                    main_container["envs"] = envs
+                if self.image:
+                    main_container["image"] = self.image
+                if self.image_pull_policy:
+                    main_container["imagePullPolicy"] = self.image_pull_policy
+        for c in o.values():
+            if isinstance(c, dict):
+                self.update_override_params(c)
+
     def prepare_and_update_body(self):
         """Call to prepare the body for execution, this is a heavy command."""
         self.job_runner.prepare_body()
-
-        def update_override_params(o: dict):
-            if "spec" in o and "containers" in o.get("spec", {}):
-                containers: List[dict] = o["spec"]["containers"]
-                if isinstance(containers, list) and len(containers) > 0:
-                    main_container = containers[0]
-                    if self.command:
-                        main_container["command"] = self.command
-                    if self.arguments:
-                        main_container["args"] = self.arguments
-                    if self.envs:
-                        envs = main_container.get("envs", [])
-                        for k in self.envs.keys():
-                            envs.append({"name": k, "value": self.envs[k]})
-                        main_container["envs"] = envs
-                    if self.image:
-                        main_container["image"] = self.image
-                    if self.image_pull_policy:
-                        main_container["imagePullPolicy"] = self.image_pull_policy
-            for c in o.values():
-                if isinstance(c, dict):
-                    update_override_params(c)
-
-        update_override_params(self.job_runner.body[0])
 
     def pre_execute(self, context):
         """Called before execution by the airflow system.
@@ -200,8 +197,11 @@ class KubernetesJobOperator(BaseOperator):
             context=self.cluster_context,
         )
 
-        # updating parameters and overrides.
+        # prepare the body
         self.prepare_and_update_body()
+
+        # write override params
+        self.update_override_params(self.body[0])
 
         # call parent.
         return super().pre_execute(context)

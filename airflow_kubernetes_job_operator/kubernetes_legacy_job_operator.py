@@ -1,15 +1,28 @@
-from airflow_kubernetes_job_operator.kubernetes_job_operator import KubernetesJobOperator
-from typing import List
-import os
-from airflow import configuration
-from airflow.contrib.kubernetes.kubernetes_request_factory import pod_request_factory
-from airflow.contrib.kubernetes import pod_generator
-from airflow.contrib.kubernetes.pod import Resources
-from airflow.contrib.kubernetes.volume_mount import VolumeMount
-from airflow.contrib.kubernetes.volume import Volume
-from airflow.contrib.kubernetes.secret import Secret
+import kubernetes.client as k8s
 
-body_DEFAULT_FILE = os.path.abspath(f"{__file__}.job.yaml")
+from typing import List, Optional
+from airflow import configuration
+from airflow_kubernetes_job_operator.kubernetes_job_operator import (
+    KubernetesJobOperator,
+)
+
+try:
+    from airflow.contrib.kubernetes.kubernetes_request_factory import pod_request_factory
+    from airflow.contrib.kubernetes import pod_generator
+    from airflow.contrib.kubernetes.pod import Resources
+    from airflow.contrib.kubernetes.volume_mount import VolumeMount
+    from airflow.contrib.kubernetes.volume import Volume
+    from airflow.contrib.kubernetes.secret import Secret
+except Exception:
+    from kubernetes.client import (
+        V1ResourceRequirements as Resources,
+        V1Volume as Volume,
+        V1VolumeMount as VolumeMount,
+        V1Secret as Secret,
+    )
+
+    pod_generator = None
+    pod_request_factory = None
 
 
 class KubernetesLegacyJobOperator(KubernetesJobOperator):
@@ -46,6 +59,11 @@ class KubernetesLegacyJobOperator(KubernetesJobOperator):
         pod_runtime_info_envs: dict = None,
         dnspolicy: str = None,
         ## new args.
+        init_containers: Optional[List[k8s.V1Container]] = None,
+        env_from: List[str] = None,
+        schedulername: str = None,
+        priority_class_name: str = None,
+        # job operator args
         body: str = None,
         body_filepath: str = None,
         delete_policy: str = None,
@@ -147,10 +165,7 @@ class KubernetesLegacyJobOperator(KubernetesJobOperator):
         """
         delete_policy = delete_policy or "IfSucceeded" if is_delete_operator_pod else "Never"
         validate_body_on_init = (
-            configuration.conf.getboolean(
-                "kube_job_operator", "validate_body_on_init", fallback=False
-            )
-            or False
+            configuration.conf.getboolean("kube_job_operator", "validate_body_on_init", fallback=False) or False
         )
 
         super().__init__(
@@ -199,6 +214,11 @@ class KubernetesLegacyJobOperator(KubernetesJobOperator):
         self.pod_runtime_info_envs = pod_runtime_info_envs or []
         self.dnspolicy = dnspolicy
 
+        self.init_containers = init_containers
+        self.env_from = env_from
+        self.schedulername = schedulername
+        self.priority_class_name = priority_class_name
+
     def _set_resources(self, resources):
         # Legacy
         inputResource = Resources()
@@ -207,56 +227,105 @@ class KubernetesLegacyJobOperator(KubernetesJobOperator):
                 setattr(inputResource, item, resources[item])
         return inputResource
 
-    def pre_execute(self, context):
-        # creating the job yaml.
-        super().pre_execute(context)
+    def prepare_and_update_body(self):
+        self.job_runner.prepare_body()
 
-        gen = pod_generator.PodGenerator()
+        pod_body = None
+        if pod_generator is not None:
+            # old pod generator
+            gen = pod_generator.PodGenerator()
 
-        for port in self.ports:
-            gen.add_port(port)
-        for mount in self.volume_mounts:
-            gen.add_mount(mount)
-        for volume in self.volumes:
-            gen.add_volume(volume)
+            for port in self.ports:
+                gen.add_port(port)
+            for mount in self.volume_mounts:
+                gen.add_mount(mount)
+            for volume in self.volumes:
+                gen.add_volume(volume)
 
-        # selecting appropriate pod values.
-        all_labels = {}
-        all_labels.update(self.labels)
-        all_labels.update(self.body["spec"]["template"]["metadata"]["labels"])
-        image = self.image or self.body["spec"]["template"]["spec"]["containers"][0]["image"]
-        cmds = self.cmds or self.body["spec"]["template"]["spec"]["containers"][0]["command"]
-        arguments = (
-            self.arguments or self.body["spec"]["template"]["spec"]["containers"][0]["args"]
-        )
+            # selecting appropriate pod values.
+            all_labels = {}
+            all_labels.update(self.labels)
+            all_labels.update(self.body["spec"]["template"]["metadata"]["labels"])
+            image = self.image or self.body["spec"]["template"]["spec"]["containers"][0]["image"]
+            cmds = self.cmds or self.body["spec"]["template"]["spec"]["containers"][0]["command"]
+            arguments = self.arguments or self.body["spec"]["template"]["spec"]["containers"][0]["args"]
 
-        pod = gen.make_pod(
-            namespace=self.body["metadata"]["namespace"],
-            image=image,
-            pod_id=self.body["metadata"]["name"],
-            cmds=cmds,
-            arguments=arguments,
-            labels=all_labels,
-        )
+            pod = gen.make_pod(
+                namespace=self.body["metadata"]["namespace"],
+                image=image,
+                pod_id=self.body["metadata"]["name"],
+                cmds=cmds,
+                arguments=arguments,
+                labels=all_labels,
+            )
 
-        pod.service_account_name = self.service_account_name
-        pod.secrets = self.secrets
-        pod.envs = self.env_vars
-        pod.image_pull_policy = self.image_pull_policy
-        pod.image_pull_secrets = self.image_pull_secrets
-        pod.annotations = self.annotations
-        pod.resources = self.resources
-        pod.affinity = self.affinity
-        pod.node_selectors = self.node_selectors
-        pod.hostnetwork = self.hostnetwork
-        pod.tolerations = self.tolerations
-        pod.configmaps = self.configmaps
-        pod.security_context = self.security_context
-        pod.pod_runtime_info_envs = self.pod_runtime_info_envs
-        pod.dnspolicy = self.dnspolicy
+            pod.service_account_name = self.service_account_name
+            pod.secrets = self.secrets
+            pod.envs = self.env_vars
+            pod.image_pull_policy = self.image_pull_policy
+            pod.image_pull_secrets = self.image_pull_secrets
+            pod.annotations = self.annotations
+            pod.resources = self.resources
+            pod.affinity = self.affinity
+            pod.node_selectors = self.node_selectors
+            pod.hostnetwork = self.hostnetwork
+            pod.tolerations = self.tolerations
+            pod.configmaps = self.configmaps
+            pod.security_context = self.security_context
+            pod.pod_runtime_info_envs = self.pod_runtime_info_envs
+            pod.dnspolicy = self.dnspolicy
 
-        pod_yaml = pod_request_factory.SimplePodRequestFactory().create(pod)
+            # old pod generation.. moving to new one
+            pod_body = pod_request_factory.SimplePodRequestFactory().create(pod)
+        else:
+            pod_body = k8s.V1Pod(
+                api_version="v1",
+                kind="Pod",
+                metadata=k8s.V1ObjectMeta(
+                    namespace=self.namespace,
+                    labels=self.labels,
+                    name=self.name,
+                    annotations=self.annotations,
+                ),
+                spec=k8s.V1PodSpec(
+                    node_selector=self.node_selectors,
+                    affinity=self.affinity,
+                    tolerations=self.tolerations,
+                    init_containers=self.init_containers,
+                    containers=[
+                        k8s.V1Container(
+                            image=self.image,
+                            name="main",
+                            command=self.cmds,
+                            ports=self.ports,
+                            resources=self.resources,
+                            volume_mounts=self.volume_mounts,
+                            args=self.arguments,
+                            env=None
+                            if self.env_vars is None
+                            else [{"name": k, "value": self.env_vars[k]} for k in self.env_vars.keys()],
+                            env_from=self.env_from,
+                        )
+                    ],
+                    image_pull_secrets=self.image_pull_secrets,
+                    service_account_name=self.service_account_name,
+                    host_network=self.hostnetwork,
+                    security_context=self.security_context,
+                    dns_policy=self.dnspolicy,
+                    scheduler_name=self.schedulername,
+                    restart_policy="Never",
+                    priority_class_name=self.priority_class_name,
+                    volumes=self.volumes,
+                ),
+            )
+            pod_body = {
+                "metadata": self.job_runner.client.api_client.sanitize_for_serialization(pod_body.metadata),
+                "spec": self.job_runner.client.api_client.sanitize_for_serialization(pod_body.spec),
+            }
 
-        # setting the pod template.
-        self.body["spec"]["template"]["spec"] = pod_yaml["spec"]
-
+        # prepare the base body.
+        self.job_runner.prepare_body()
+        # reset the name
+        del self.body[0]["metadata"]["name"]
+        self.body[0]["spec"]["template"] = pod_body
+        self.job_runner.prepare_body(True)

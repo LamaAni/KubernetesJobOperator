@@ -1,6 +1,3 @@
-# the code in this file is augmented by an ejs template
-# and by loading the yaml into memory.
-# some of these values will be replaced.
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -18,18 +15,18 @@ spec:
             - bash
             - -c
             - |
-                #/usr/bin/env bash
-                echo "Starting $PASS_ARG"
-                TIC_COUNT=5
-                cur_count=0
-                while true; do
-                    cur_count=$((cur_count + 1))
-                    if [ "$cur_count" -ge "$TIC_COUNT" ]; then
-                        break
-                    fi
-                    date
-                    sleep 1
-                done
-    
-                echo "Complete"
+              #/usr/bin/env bash
+              echo "Starting $PASS_ARG"
+              TIC_COUNT=5
+              cur_count=0
+              while true; do
+                  cur_count=$((cur_count + 1))
+                  if [ "$cur_count" -ge "$TIC_COUNT" ]; then
+                      break
+                  fi
+                  date
+                  sleep 1
+              done
+
+              echo "Complete"
   backoffLimit: 0

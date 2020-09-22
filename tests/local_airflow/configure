@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+command -v realpath >/dev/null
+if [ ! $? ]; then
+  # resolve for mac
+  function realpath() {
+    python3 -c "import os; print(os.path.abspath('$1'))"
+  }
+fi
+
+CUR_DIR=$(dirname "$(realpath "${BASH_SOURCE[0]}")")
+REPO_PATH="$(realpath "$CUR_DIR/../../")"
+
+export PYTHONPATH="$REPO_PATH"
+export AIRFLOW_HOME="$REPO_PATH/tests/local_airflow"
+export AIRFLOW__CORE__DAGS_PATH="$REPO_PATH/tests/dags"
+export AIRFLOW__CORE__PLUGINS_PATH="$REPO_PATH/tests/plugins"
+SQLITE_DB_FILE="$REPO_PATH/.local/airflow.db"
+export AIRFLOW__CORE__SQL_ALCHEMY_CONN="sqlite:///${SQLITE_DB_FILE}"
+echo "PYTHONPATH=$PYTHONPATH"
+env | grep "AIRFLOW"

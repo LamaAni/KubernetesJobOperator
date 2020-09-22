@@ -112,7 +112,8 @@ class JobRunner:
         assert isinstance(labels, dict), ValueError("labels must be a dictionary")
 
         if isinstance(body.get("spec", None), dict) or isinstance(body.get("metadata", None), dict):
-            metadata = body.get("metadata", {})
+            body.setdefault("metadata", {})
+            metadata = body["metadata"]
             if "labels" not in metadata:
                 metadata["labels"] = copy.deepcopy(labels)
             else:
@@ -147,19 +148,19 @@ class JobRunner:
         descriptor = KubeObjectDescriptor(body)
         descriptor.spec.setdefault("restartPolicy", "Never")
 
-    def prepare_body(self):
-        if self._is_body_ready:
+    def prepare_body(self, force=False):
+        if not force and self._is_body_ready:
             return
 
         body = self._body
         if isinstance(body, str):
-            body = yaml.safe_load_all(body)
+            body = list(yaml.safe_load_all(body))
         else:
             body = copy.deepcopy(body)
             if not isinstance(body, list):
                 body = [body]
 
-        assert all(isinstance(o, dict) for i in body), JobRunnerException(
+        assert all(isinstance(o, dict) for o in body), JobRunnerException(
             "Failed to parse body, found errored collection values"
         )
 
