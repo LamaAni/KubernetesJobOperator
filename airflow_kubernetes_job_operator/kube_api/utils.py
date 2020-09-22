@@ -1,5 +1,4 @@
 from logging import Logger
-import kubernetes
 from airflow_kubernetes_job_operator.kube_api.exceptions import KubeApiException
 import logging
 
@@ -40,3 +39,16 @@ def get_apply_uri_from_kind(kind: str, namespace: str):
 
 def not_empty_string(val: str):
     return isinstance(val, str) and len(val) > 0
+
+
+def join_locations_list(*args):
+    lcoations = []
+    v = None
+    for v in args:
+        if v is None or (isinstance(v, str) and len(v.strip()) == ""):
+            continue
+        if isinstance(v, list):
+            lcoations += v
+        else:
+            lcoations += v.split(",")
+    return unqiue_with_order(lcoations)

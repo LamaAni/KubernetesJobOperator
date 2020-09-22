@@ -1,10 +1,8 @@
-import kubernetes
 from logging import Logger
 from zthreading.events import Event
 
-from airflow_kubernetes_job_operator.kube_api.collections import KubeObjectKind, KubeObjectDescriptor
-from airflow_kubernetes_job_operator.kube_api.exceptions import KubeApiException
-from airflow_kubernetes_job_operator.kube_api.client import KubeApiRestQuery, KubeApiRestClient
+from airflow_kubernetes_job_operator.kube_api.collections import KubeObjectDescriptor
+from airflow_kubernetes_job_operator.kube_api.client import KubeApiRestQuery
 
 
 class ConfigureNamespaceObject(KubeApiRestQuery):

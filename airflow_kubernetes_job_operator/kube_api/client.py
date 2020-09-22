@@ -10,7 +10,7 @@ from os.path import expanduser
 from zthreading.tasks import Task
 from zthreading.events import Event, EventHandler
 
-from airflow_kubernetes_job_operator.kube_api.utils import unqiue_with_order, clean_dictionary_nulls
+from airflow_kubernetes_job_operator.kube_api.utils import clean_dictionary_nulls, join_locations_list
 
 from kubernetes.stream.ws_client import ApiException as KubernetesNativeApiException
 from kubernetes.client import ApiClient
@@ -18,26 +18,11 @@ from urllib3.response import HTTPResponse
 from kubernetes.config import kube_config, incluster_config, list_kube_config_contexts
 from airflow_kubernetes_job_operator.kube_api.utils import kube_logger
 from airflow_kubernetes_job_operator.kube_api.exceptions import KubeApiException, KubeApiClientException
-
-
-def join_locations_list(*args):
-    lcoations = []
-    v = None
-    for v in args:
-        if v is None or (isinstance(v, str) and len(v.strip()) == ""):
-            continue
-        if isinstance(v, list):
-            lcoations += v
-        else:
-            lcoations += v.split(",")
-    return unqiue_with_order(lcoations)
-
-
-KUBERNETES_JOB_OPERATOR_DEFAULT_CONFIG_LOCATIONS = join_locations_list(
-    [kube_config.KUBE_CONFIG_DEFAULT_LOCATION], os.environ.get("KUBERNETES_JOB_OPERATOR_DEFAULT_CONFIG_LOCATIONS", None)
+from airflow_kubernetes_job_operator.kube_api.config import (
+    DEFAULT_KUBE_CONFIG_LOCATIONS,
+    DEFAULT_SERVICE_ACCOUNT_PATH,
+    DEFAULT_USE_ASYNCIO_ENV_NAME,
 )
-KUBERNETES_SERVICE_ACCOUNT_PATH = os.path.dirname(incluster_config.SERVICE_CERT_FILENAME)
-KUBERNETES_API_CLIENT_USE_ASYNCIO_ENV_NAME = "KUBERNETES_API_CLIENT_USE_ASYNCIO"
 
 
 def set_asyncio_mode(is_active: bool):
@@ -51,21 +36,8 @@ def get_asyncio_mode() -> bool:
     return KubeApiRestQuery.default_use_asyncio
 
 
-if "KUBERNETES_API_CLIENT_USE_ASYNCIO_ENV_NAME" in os.environ:
-    set_asyncio_mode(os.environ.get("KUBERNETES_API_CLIENT_USE_ASYNCIO_ENV_NAME", "false") == "true")
-
-KURBETNTES_API_ACCEPT = [
-    "application/json",
-    "application/yaml",
-    "application/vnd.kubernetes.protobuf",
-]
-
-KUBERENTES_API_CONTENT_TYPES = [
-    "application/json",
-    "application/json-patch+json",
-    "application/merge-patch+json",
-    "application/strategic-merge-patch+json",
-]
+if DEFAULT_USE_ASYNCIO_ENV_NAME in os.environ:
+    set_asyncio_mode(os.environ.get(DEFAULT_USE_ASYNCIO_ENV_NAME, "false") == "true")
 
 
 class KubeApiRestQuery(Task):
@@ -90,8 +62,8 @@ class KubeApiRestQuery(Task):
         timeout: float = None,
         use_asyncio: bool = None,
         auto_reconnect: bool = False,
-        auto_reconnect_max_attempts: int = 20,
-        auto_reconnect_wait_between_attempts: float = 3,
+        auto_reconnect_max_attempts: int = 60,
+        auto_reconnect_wait_between_attempts: float = 5,
     ):
         assert use_asyncio is not True, NotImplementedError("AsyncIO not yet implemented.")
         super().__init__(
@@ -441,7 +413,7 @@ class KubeApiRestClient:
             if config_file is None:
                 config_possible_locations = join_locations_list(
                     extra_config_locations,
-                    KUBERNETES_JOB_OPERATOR_DEFAULT_CONFIG_LOCATIONS,
+                    DEFAULT_KUBE_CONFIG_LOCATIONS,
                 )
                 for loc in config_possible_locations:
                     if os.path.isfile(expanduser(loc)):
@@ -486,7 +458,7 @@ class KubeApiRestClient:
         """Returns the default namespace for the current config."""
         namespace: str = None  # type:ignore
         try:
-            in_cluster_namespace_fpath = os.path.join(KUBERNETES_SERVICE_ACCOUNT_PATH, "namespace")
+            in_cluster_namespace_fpath = os.path.join(DEFAULT_SERVICE_ACCOUNT_PATH, "namespace")
             if os.path.exists(in_cluster_namespace_fpath):
                 with open(in_cluster_namespace_fpath, "r", encoding="utf-8") as nsfile:
                     namespace = nsfile.read()

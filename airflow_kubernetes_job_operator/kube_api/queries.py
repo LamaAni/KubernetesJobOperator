@@ -127,7 +127,7 @@ class GetPodLogs(KubeApiRestQuery):
         self._last_timestamp = datetime.now()
         timestamp = dateutil.parser.isoparse(message_line[: message_line.index(" ")])
 
-        message = message_line[message_line.index(" ") + 1 :]
+        message = message_line[message_line.index(" ") + 1 :]  # noqa: E203
         message = message.replace("\r", "")
         lines = []
         for message_line in message.split("\n"):
