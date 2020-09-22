@@ -1,6 +1,6 @@
 from logging import Logger
 import logging
-import datetime
+from datetime import datetime
 import os
 import json
 from typing import Union
@@ -9,8 +9,8 @@ from zthreading.events import Event
 
 from airflow_kubernetes_job_operator.kube_api.exceptions import KubeApiClientException, KubeApiException
 from airflow_kubernetes_job_operator.kube_api.utils import kube_logger, not_empty_string
-from airflow_kubernetes_job_operator.kube_api.collections import KubeObjectKind, KubeObjectState
-from airflow_kubernetes_job_operator.kube_api.client import KubeApiRestQuery
+from airflow_kubernetes_job_operator.kube_api.collections import KubeObjectKind, KubeObjectState, KubeObjectDescriptor
+from airflow_kubernetes_job_operator.kube_api.client import KubeApiRestQuery, KubeApiRestClient
 
 
 KUBE_API_SHOW_SERVER_LOG_TIMESTAMPS = os.environ.get("KUBE_API_SHOW_SERVER_LOG_TIMESTAMPS", "false").lower() == "true"
@@ -80,6 +80,7 @@ class GetPodLogs(KubeApiRestQuery):
             resource_path=kind.compose_resource_path(namespace=namespace, name=name, suffix="log"),
             method="GET",
             timeout=timeout,
+            auto_reconnect=follow,
         )
 
         self.kind = kind
@@ -87,16 +88,45 @@ class GetPodLogs(KubeApiRestQuery):
         self.namespace: str = namespace
         self.since: datetime = since
         self.query_params = {
-            "sinceSeconds": None if since is None else (datetime.now() - self.since),
             "follow": follow,
             "pretty": False,
             "timestamps": True,
         }
 
+        self.update_since(since=since)
+
+        self._last_timestamp = None
         self._active_namespace = None
 
+    def update_since(self, since: datetime, last_timestamp: datetime = None):
+        self.query_params["sinceSeconds"] = (
+            None if since is None else ((last_timestamp or datetime.now()) - since).total_seconds()
+        )
+
+    def on_reconnect(self, client: KubeApiRestClient):
+        # updating the since property.
+        self.query_params["sinceSeconds"]
+        super().on_reconnect(client)
+        self.update_since(datetime.now(), self._last_timestamp)
+        if not self.auto_reconnect:
+            return
+        try:
+            pod = client.query(
+                GetNamespaceObjects(
+                    kind=self.kind,
+                    namespace=self.namespace,
+                    name=self.name,
+                )
+            )
+            self.auto_reconnect = pod is not None and KubeObjectDescriptor(pod).state == KubeObjectState.Running
+        except Exception as ex:
+            self.auto_reconnect = False
+            raise ex
+
     def parse_data(self, message_line: str):
+        self._last_timestamp = datetime.now()
         timestamp = dateutil.parser.isoparse(message_line[: message_line.index(" ")])
+
         message = message_line[message_line.index(" ") + 1 :]
         message = message.replace("\r", "")
         lines = []
@@ -119,6 +149,7 @@ class GetNamespaceObjects(KubeApiRestQuery):
         self,
         kind: Union[str, KubeObjectState],  # type:ignore
         namespace: str,
+        name: str = None,
         api_version: str = None,
         watch: bool = False,
         label_selector: str = None,
@@ -128,7 +159,7 @@ class GetNamespaceObjects(KubeApiRestQuery):
             kind if isinstance(kind, KubeObjectKind) else KubeObjectKind.get_kind(kind)  # type:ignore
         )
         super().__init__(
-            resource_path=kind.compose_resource_path(namespace, api_version=api_version),
+            resource_path=kind.compose_resource_path(namespace=namespace, name=name, api_version=api_version),
             method="GET",
             query_params={
                 "pretty": False,
@@ -136,6 +167,7 @@ class GetNamespaceObjects(KubeApiRestQuery):
                 "labelSelector": label_selector or "",
                 "watch": watch,
             },
+            auto_reconnect=watch,
         )
         self.kind = kind
         self.namespace = namespace

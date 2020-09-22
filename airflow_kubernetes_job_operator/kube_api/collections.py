@@ -249,6 +249,10 @@ class KubeObjectDescriptor:
         return self.body.get("status")
 
     @property
+    def state(self) -> KubeObjectState:
+        return self.kind.parse_state(self.body, False)
+
+    @property
     def name(self) -> str:
         return self.metadata.get("name", None)
 

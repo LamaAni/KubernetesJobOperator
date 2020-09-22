@@ -317,8 +317,8 @@ class JobRunner:
 
         if (
             self.delete_policy == JobRunnerDeletePolicy.Always
-            or self.delete_policy == JobRunnerDeletePolicy.IfFailed
-            and final_state == KubeObjectState.Failed
+            or (self.delete_policy == JobRunnerDeletePolicy.IfFailed and final_state == KubeObjectState.Failed)
+            or (self.delete_policy == JobRunnerDeletePolicy.IfSucceeded and final_state == KubeObjectState.Succeeded)
         ):
             self.log(f"Deleting resources due to policy: {str(self.delete_policy)}")
             self.delete_job()
