@@ -2,7 +2,7 @@ import json
 from datetime import datetime
 from logging import Logger
 from weakref import WeakSet, WeakValueDictionary
-from typing import List, Dict, Callable
+from typing import List, Dict
 from zthreading.events import EventHandler, Event
 from zthreading.tasks import Task
 
@@ -212,6 +212,13 @@ class NamespaceWatchQuery(KubeApiRestQuery):
         return super().stop(timeout=timeout, throw_error_if_not_running=throw_error_if_not_running)
 
     def log_event(self, logger: Logger, ev: Event):
+        if ev.name == self.query_before_reconnect_event_name:
+            if isinstance(ev.sender, GetNamespaceObjects):
+                get_ns_objs: GetNamespaceObjects = ev.sender
+                logger.info(
+                    f"[{get_ns_objs.namespace}/{get_ns_objs.kind.plural}] "
+                    + f"Watch collection for {get_ns_objs.kind.plural} lost, attempting to reconnect..."
+                )
         if ev.name == self.state_changed_event_name:
             osw: NamespaceWatchQueryObjectState = ev.sender
             logger.info(f"[{osw.namespace}/{osw.kind_name.lower()}s/{osw.name}]" + f" {osw.state}")

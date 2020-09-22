@@ -1,8 +1,6 @@
-import os
 from typing import List, Union
 
 from airflow import configuration
-from airflow import AirflowException
 from airflow.utils.decorators import apply_defaults
 from airflow.operators import BaseOperator
 from airflow_kubernetes_job_operator.kube_api import KubeObjectState
@@ -10,23 +8,14 @@ from airflow_kubernetes_job_operator.utils import (
     to_kubernetes_valid_name,
 )
 from airflow_kubernetes_job_operator.job_runner import JobRunner, JobRunnerDeletePolicy
-
-
-class KubernetesJobOperatorException(AirflowException):
-    pass
-
-
-KUBERNETES_JOB_OPERATOR_DEFAULT_BODY = os.path.abspath(f"{__file__}.default.yaml")
-KUBERNETES_JOB_OPERATOR_DEFAULT_DELETE_POLICY = configuration.conf.get(
-    "kube_job_operator", "delete_policy", fallback=str(JobRunnerDeletePolicy.IfSucceeded)
+from airflow_kubernetes_job_operator.exceptions import KubernetesJobOperatorException
+from airflow_kubernetes_job_operator.config import (
+    DEFAULT_VALIDATE_BODY_ON_INIT,
+    DEFAULT_EXECUTION_OBJECT_PATHS,
+    DEFAULT_EXECTION_OBJECT,
+    DEFAULT_DELETE_POLICY,
+    DEFAULT_TASK_STARTUP_TIMEOUT,
 )
-try:
-    KUBERNETES_JOB_OPERATOR_DEFAULT_DELETE_POLICY = JobRunnerDeletePolicy(KUBERNETES_JOB_OPERATOR_DEFAULT_DELETE_POLICY)
-except Exception:
-    raise Exception(
-        "Invalid ariflow configuration kube_job_operator.delete_policy: "
-        + KUBERNETES_JOB_OPERATOR_DEFAULT_DELETE_POLICY
-    )
 
 
 class KubernetesJobOperator(BaseOperator):
@@ -44,16 +33,13 @@ class KubernetesJobOperator(BaseOperator):
         body: Union[str, dict, List[dict]] = None,
         body_filepath: str = None,
         image_pull_policy: str = None,
-        delete_policy: Union[str, JobRunnerDeletePolicy] = KUBERNETES_JOB_OPERATOR_DEFAULT_DELETE_POLICY,
+        delete_policy: Union[str, JobRunnerDeletePolicy] = DEFAULT_DELETE_POLICY,
         in_cluster: bool = None,
         config_file: str = None,
         get_logs: bool = True,
         cluster_context: str = None,
-        startup_timeout_seconds: float = 120,
-        validate_body_on_init: bool = configuration.conf.getboolean(
-            "kube_job_operator", "validate_body_on_init", fallback=False
-        )
-        or False,
+        startup_timeout_seconds: float = DEFAULT_TASK_STARTUP_TIMEOUT,
+        validate_body_on_init: bool = DEFAULT_VALIDATE_BODY_ON_INIT,
         **kwargs,
     ):
         """A operator that executes an airflow task as a kubernetes Job.
@@ -100,7 +86,7 @@ class KubernetesJobOperator(BaseOperator):
             "body is None, body_filepath is None and an image was not defined. Unknown image to execute."
         )
 
-        body = body or self._read_body(body_filepath or KUBERNETES_JOB_OPERATOR_DEFAULT_BODY)
+        body = body or self._read_body(body_filepath or DEFAULT_EXECUTION_OBJECT_PATHS[DEFAULT_EXECTION_OBJECT])
 
         assert body is not None and (isinstance(body, (dict, str))), ValueError(
             "body must either be a yaml string or a dict"

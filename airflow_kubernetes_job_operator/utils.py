@@ -1,6 +1,17 @@
+import os
 import random
 import re
-from typing import Callable
+
+REPO_PATH = os.path.dirname(__file__)
+
+
+def repo_reslove(src: str):
+    if src.startswith("."):
+        if src.startswith("./"):
+            src = os.path.join(REPO_PATH, src[2:])
+        elif src.startswith("../"):
+            src = os.path.join(REPO_PATH, src)
+    return os.path.abspath(src)
 
 
 def get_dict_path_value(yaml: dict, path_names):

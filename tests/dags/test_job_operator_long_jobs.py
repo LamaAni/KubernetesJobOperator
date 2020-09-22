@@ -29,6 +29,7 @@ tj_success = KubernetesJobOperator(
 #     command=["bash", "-c", 'echo "Starting $PASS_ARG"; sleep 10; echo end'],
 # )
 
+
 if __name__ == "__main__":
     dag.clear(reset_dag_runs=True)
-    # dag.run()
+    dag.run()

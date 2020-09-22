@@ -105,8 +105,6 @@ class GetPodLogs(KubeApiRestQuery):
 
     def on_reconnect(self, client: KubeApiRestClient):
         # updating the since property.
-        self.query_params["sinceSeconds"]
-        super().on_reconnect(client)
         self.update_since(datetime.now(), self._last_timestamp)
         if not self.auto_reconnect:
             return
@@ -119,6 +117,8 @@ class GetPodLogs(KubeApiRestQuery):
                 )
             )
             self.auto_reconnect = pod is not None and KubeObjectDescriptor(pod).state == KubeObjectState.Running
+            if self.auto_reconnect:
+                super().on_reconnect(client)
         except Exception as ex:
             self.auto_reconnect = False
             raise ex

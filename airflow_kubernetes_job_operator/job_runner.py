@@ -3,13 +3,13 @@ import copy
 import logging
 import os
 
-from enum import Enum
 from logging import Logger
 from uuid import uuid4
 from typing import Callable, List, Type, Union
 from airflow_kubernetes_job_operator.kube_api.client import KubeApiRestQuery
 from airflow_kubernetes_job_operator.kube_api.utils import not_empty_string
 from airflow_kubernetes_job_operator.utils import randomString
+from airflow_kubernetes_job_operator.collections import JobRunnerDeletePolicy, JobRunnerException
 from airflow_kubernetes_job_operator.kube_api import (
     KubeApiRestClient,
     KubeObjectKind,
@@ -22,20 +22,6 @@ from airflow_kubernetes_job_operator.kube_api import (
     GetNamespaceObjects,
     kube_logger,
 )
-
-
-class JobRunnerException(Exception):
-    pass
-
-
-class JobRunnerDeletePolicy(Enum):
-    Never = "Never"
-    Always = "Always"
-    IfFailed = "IfFailed"
-    IfSucceeded = "IfSucceeded"
-
-    def __str__(self) -> str:
-        return self.value
 
 
 class JobRunner:
@@ -53,7 +39,7 @@ class JobRunner:
         show_watcher_logs: bool = True,
         show_executor_logs: bool = True,
         show_error_logs: bool = True,
-        delete_policy: JobRunnerDeletePolicy = JobRunnerDeletePolicy.Always,
+        delete_policy: JobRunnerDeletePolicy = JobRunnerDeletePolicy.IfSucceeded,
         auto_load_kube_config=True,
         random_name_postfix_length=8,
         name_prefix: str = None,

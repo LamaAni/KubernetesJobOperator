@@ -329,7 +329,13 @@ class KubeApiRestQuery(Task):
         pass
 
     def pipe_to_logger(self, logger: Logger = kube_logger, allowed_event_names=None) -> EventHandler:
-        allowed_event_names = set(allowed_event_names or [self.data_event_name])
+        allowed_event_names = set(
+            allowed_event_names
+            or [
+                self.data_event_name,
+                self.query_before_reconnect_event_name,
+            ]
+        )
 
         def process_log_event(ev: Event):
             if ev.name in [self.error_event_name, self.warning_event_name]:
@@ -360,6 +366,8 @@ def kube_api_default_stream_process_event_data(ev: Event):
 
 
 class KubeApiRestClient:
+    default_kube_config: kube_config.Configuration = None
+
     def __init__(
         self,
         auto_load_kube_config: bool = True,
