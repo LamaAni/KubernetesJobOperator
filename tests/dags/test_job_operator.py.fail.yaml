@@ -4,7 +4,6 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: test-job
   finalizers:
     - foregroundDeletion
 spec:
@@ -18,19 +17,21 @@ spec:
             - bash
             - -c
             - |
-                #/usr/bin/env bash
-                echo "Starting $PASS_ARG"
-                TIC_COUNT=5
-                cur_count=0
-                while true; do
-                    cur_count=$((cur_count + 1))
-                    if [ "$cur_count" -ge "$TIC_COUNT" ]; then
-                        break
-                    fi
-                    date
-                    sleep 1
-                done
+              #/usr/bin/env bash
+              echo "Starting $PASS_ARG"
+              cur_count=0
+              while true; do
+                  cur_count=$((cur_count + 1))
+                  if [ "$cur_count" -ge "$TIC_COUNT" ]; then
+                      break
+                  fi
+                  date
+                  sleep 1
+              done
 
-                echo "Force throw error:"
-                exit 99
+              echo "Force throw error:"
+              exit 99
+          env:
+            - name: TIC_COUNT
+              value: '2'
   backoffLimit: 0

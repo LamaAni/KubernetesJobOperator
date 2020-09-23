@@ -1,8 +1,20 @@
+import os
 import random
 import re
 
+REPO_PATH = os.path.dirname(__file__)
 
-def get_yaml_path_value(yaml: dict, path_names):
+
+def repo_reslove(src: str, basepath: str = REPO_PATH):
+    if src.startswith("."):
+        if src.startswith("./"):
+            src = os.path.join(basepath, src[2:])
+        elif src.startswith("../"):
+            src = os.path.join(basepath, src)
+    return os.path.abspath(src)
+
+
+def get_dict_path_value(yaml: dict, path_names):
     value = yaml
     cur_path = []
     for name in path_names:
@@ -20,9 +32,9 @@ def get_yaml_path_value(yaml: dict, path_names):
     return value
 
 
-def set_yaml_path_value(yaml: dict, path_names: list, value, if_not_exists=False):
+def set_dict_path_value(yaml: dict, path_names: list, value, if_not_exists=False):
     name_to_set = path_names[-1]
-    col = get_yaml_path_value(yaml, path_names[:-1])
+    col = get_dict_path_value(yaml, path_names[:-1])
 
     if isinstance(col, list):
         assert isinstance(name_to_set, int), "To set a list value you must have an integer key."
@@ -54,14 +66,14 @@ def randomString(stringLength=10):
 def to_kubernetes_valid_name(name, max_length=50, start_trim_offset=10):
     """Returns a kubernetes valid name, and truncates, after a start
     offset, any exccess chars.
-    
+
     Arguments:
         name {[type]} -- [description]
-    
+
     Keyword Arguments:
         max_length {int} -- [description] (default: {50})
         start_trim_offset {int} -- [description] (default: {10})
-    
+
     Returns:
         [type] -- [description]
     """

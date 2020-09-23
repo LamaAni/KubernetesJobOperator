@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: tester
+  labels:
+    name: tester
+spec:
+  containers:
+    - name: tester
+      image: ubuntu
+      command:
+        - sleep
+        - infinity
+      resources:
+        limits:
+          memory: '128Mi'
+          cpu: '500m'

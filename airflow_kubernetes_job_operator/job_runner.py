@@ -1,295 +1,342 @@
-import kubernetes
 import yaml
 import copy
+import logging
 import os
-from airflow_kubernetes_job_operator.threaded_kubernetes_resource_watchers import (
-    ThreadedKubernetesNamespaceResourcesWatcher,
-    ThreadedKubernetesResourcesWatcher,
+
+from logging import Logger
+from uuid import uuid4
+from typing import Callable, List, Type, Union
+from airflow_kubernetes_job_operator.kube_api.client import KubeApiRestQuery
+from airflow_kubernetes_job_operator.kube_api.utils import not_empty_string
+from airflow_kubernetes_job_operator.utils import randomString
+from airflow_kubernetes_job_operator.collections import JobRunnerDeletePolicy, JobRunnerException
+from airflow_kubernetes_job_operator.kube_api import (
+    KubeApiRestClient,
+    KubeObjectKind,
+    KubeObjectDescriptor,
+    NamespaceWatchQuery,
+    DeleteNamespaceObject,
+    CreateNamespaceObject,
+    ConfigureNamespaceObject,
+    KubeObjectState,
+    GetNamespaceObjects,
+    kube_logger,
 )
-from airflow_kubernetes_job_operator.event_handler import EventHandler
-from airflow_kubernetes_job_operator.utils import (
-    randomString,
-    get_yaml_path_value,
-)
-
-JOB_RUNNER_INSTANCE_ID_LABEL = "job-runner-instance-id"
-KUBERNETES_IN_CLUSTER_SERVICE_ACCOUNT_PATH = "/var/run/secrets/kubernetes.io/serviceaccount"
 
 
-class JobRunner(EventHandler):
-    def __init__(self):
-        """Holds methods for executing jobs on a cluster.
+class JobRunner:
+    job_runner_instance_id_label_name = "kubernetes-job-runner-instance-id"
+    custom_prepare_kinds: dict = {}
+    show_runner_id_on_logs: bool = None  # type:ignore
 
-        Example:
+    def __init__(
+        self,
+        body,
+        namespace: str = None,
+        logger: Logger = kube_logger,
+        show_pod_logs: bool = True,
+        show_operation_logs: bool = True,
+        show_watcher_logs: bool = True,
+        show_executor_logs: bool = True,
+        show_error_logs: bool = True,
+        delete_policy: JobRunnerDeletePolicy = JobRunnerDeletePolicy.IfSucceeded,
+        auto_load_kube_config=True,
+        random_name_postfix_length=8,
+        name_prefix: str = None,
+        name_postfix: str = None,
+    ):
+        assert isinstance(body, (list, dict, str)), ValueError(
+            "body must be a dictionary, a list of dictionaries with at least one value, or string yaml"
+        )
 
-            runner = JobRunner()
-            runner.on("log", lambda msg, sender: print(msg))
-            jobyaml = runner.prepare_job_yaml(
-                '...',
-                random_name_postfix_length=5
+        self._client = KubeApiRestClient(auto_load_kube_config=auto_load_kube_config)
+        self._is_body_ready = False
+        self._body = body
+        self.logger: Logger = logger
+        self._id = str(uuid4())
+
+        self.name_postfix = (
+            name_postfix or "" if random_name_postfix_length <= 0 else randomString((random_name_postfix_length))
+        )
+        self.name_prefix = name_prefix
+
+        self.namespace = namespace
+        self.show_pod_logs = show_pod_logs
+        self.show_operation_logs = show_operation_logs
+        self.show_watcher_logs = show_watcher_logs
+        self.show_executor_logs = show_executor_logs
+        self.show_error_logs = show_error_logs
+        self.delete_policy = delete_policy
+
+        if self.show_runner_id_on_logs is None:
+            self.show_runner_id_on_logs = (
+                os.environ.get("KUBERNETES_JOB_OPERATOR_SHOW_RUNNER_ID_IN_LOGS", "false").lower() == "true"
             )
-            info = runner.execute_job(jobyaml)
-            print(info.status)
-            print(info.yaml)
-        """
-        self._loaded_config_file = None
+
         super().__init__()
 
-    def load_kuberntes_configuration(
-        self, in_cluster: bool = None, config_file: str = None, context: str = None,
-    ):
-        """Loads the appropriate kubernetes configuration into the global
-        context.
+    @property
+    def id(self) -> str:
+        return self._id
 
-        Keyword Arguments:
+    @property
+    def body(self) -> List[dict]:
+        if not self._is_body_ready:
+            self.prepare_body()
+        return self._body
 
-            in_cluster {bool} -- If true, load the configuration from the cluster
-                (default: {None}, will try and autodetect)
-            config_file {str} -- the path to the file to load from,
-                if None, loads the kubernetes default ~/.kube. (default: {None})
-            context {str} -- The context to load. If None loads the current
-                context (default: {None})
-        """
-        in_cluster = in_cluster or os.environ.get("KUBERNETES_SERVICE_HOST", None) is not None
+    @property
+    def client(self) -> KubeApiRestClient:
+        return self._client
 
-        # loading the current config to use.
-        if in_cluster:
-            kubernetes.config.load_incluster_config()
-        else:
-            # load from file must have a config file,
-            assert config_file is None or os.path.exists(
-                config_file
-            ), f"Cannot find kubernetes configuration file @ {config_file}"
+    @property
+    def job_label_selector(self) -> str:
+        return f"{self.job_runner_instance_id_label_name}={self.id}"
 
-            # NOTE: When loading from a config file there is no way
-            # (as of the current kubernetes package) to retrieve the loaded
-            # configuration. As such, kubernetes.config.list_kube_config_contexts
-            # will not provide the last loaded configuration and will revert
-            # to the default config. Therefore if a config file is loaded
-            # into the runner it will be used to retrieve the default namespace
-            # (or other locations)
-            self._loaded_config_file = config_file
+    @classmethod
+    def register_custom_prepare_kind(cls, kind: Union[KubeObjectKind, str], preapre_kind: Callable):
+        if isinstance(kind, str):
+            kind = KubeObjectKind.get_kind(kind)
 
-            kubernetes.config.load_kube_config(config_file=config_file, context=context)
+        assert isinstance(kind, KubeObjectKind), ValueError("kind must be an instance of KubeObjectKind or string")
+        cls.custom_prepare_kinds[kind.name] = preapre_kind
 
-    def get_current_namespace(self):
-        """Returns the current namespace.
-        Returns:
-            str
-        """
-        namespace = ""
-        try:
-            in_cluster_namespace_fpath = os.path.join(KUBERNETES_IN_CLUSTER_SERVICE_ACCOUNT_PATH, "namespace")
-            if os.path.exists(in_cluster_namespace_fpath):
-                with open(in_cluster_namespace_fpath, "r", encoding="utf-8") as nsfile:
-                    namespace = nsfile.read()
+    @classmethod
+    def update_metadata_labels(cls, body: dict, labels: dict):
+        assert isinstance(body, dict), ValueError("Body must be a dictionary")
+        assert isinstance(labels, dict), ValueError("labels must be a dictionary")
+
+        if isinstance(body.get("spec", None), dict) or isinstance(body.get("metadata", None), dict):
+            body.setdefault("metadata", {})
+            metadata = body["metadata"]
+            if "labels" not in metadata:
+                metadata["labels"] = copy.deepcopy(labels)
             else:
-                (contexts, active_context,) = kubernetes.config.list_kube_config_contexts(
-                    config_file=self._loaded_config_file
-                )
-                namespace = (
-                    active_context["context"]["namespace"] if "namespace" in active_context["context"] else "default"
-                )
-        except Exception as e:
-            raise Exception(
-                "Could not resolve current namespace, you must provide a namespace or a context file", e,
-            )
-        return namespace
+                metadata["labels"].update(labels)
+        for o in body.values():
+            if isinstance(o, dict):
+                cls.update_metadata_labels(o, labels)
 
-    def prepare_job_yaml(self, job_yaml, random_name_postfix_length: int = 0, force_job_name: str = None,) -> dict:
-        """Pre-prepare the job yaml dictionary for execution,
-        can also accept a string input.
+    @classmethod
+    def custom_prepare_job_kind(cls, body: dict):
+        assert isinstance(body, dict), ValueError("Body must be a dictionary")
+        descriptor = KubeObjectDescriptor(body)
 
-        Arguments:
+        assert isinstance(descriptor.spec.get("template", None), dict), JobRunnerException(
+            "Cannot create a job without a template, 'spec.template' is missing or not a dictionary"
+        )
 
-            job_yaml {dict|str} -- The job yaml, either a string
-                or a dictionary.
+        assert isinstance(descriptor.metadata["template"].get("spec", None), dict), JobRunnerException(
+            "Cannot create a job without a template spec, 'spec.template.spec' is missing or not a dictionary"
+        )
 
-        Keyword Arguments:
+        descriptor.spec.setdefault("backoffLimit", 0)
+        descriptor.metadata.setdefault("finalizers", [])
+        descriptor.spec["template"]["spec"].setdefault("restartPolicy", "Never")
 
-            random_name_postfix_length {int} -- The number of random
-                characters to add to job name, if 0 then do not add.
-                allow for the rapid generation of random jobs. (default: {0})
-            force_job_name {str} -- If exist will replace the job name.
+        if "foregroundDeletion" not in descriptor.metadata["finalizers"]:
+            descriptor.metadata["finalizers"].append("foregroundDeletion")
 
-        Auto completed yaml values (if missing):
+    @classmethod
+    def custom_prepare_pod_kind(cls, body: dict):
+        assert isinstance(body, dict), ValueError("Body must be a dictionary")
+        descriptor = KubeObjectDescriptor(body)
+        descriptor.spec.setdefault("restartPolicy", "Never")
 
-            metadata.namespace - current namespace
-            spec.backOffLimit - 0
-            spec.template.spec.restartPolicy - Never
-
-        Added yaml values:
-
-            metadata.finalizers += foregroundDeletion
-
-        Returns:
-
-            dict -- The prepared job yaml dictionary.
-        """
-        if (
-            isinstance(job_yaml, dict)
-            and "metadata" in job_yaml
-            and "labels" in job_yaml["metadata"]
-            and JOB_RUNNER_INSTANCE_ID_LABEL in job_yaml["metadata"]["labels"]
-        ):
-            # already initialized.
+    def prepare_body(self, force=False):
+        if not force and self._is_body_ready:
             return
 
-        # make sure the yaml is an dict.
-        job_yaml = copy.deepcopy(job_yaml) if isinstance(job_yaml, dict) else yaml.safe_load(job_yaml)
+        body = self._body
+        if isinstance(body, str):
+            body = list(yaml.safe_load_all(body))
+        else:
+            body = copy.deepcopy(body)
+            if not isinstance(body, list):
+                body = [body]
 
-        def get(path_names, default=None):
-            try:
-                return get_yaml_path_value(job_yaml, path_names)
-            except Exception as e:
-                if default:
-                    return default
-                raise Exception("Error reading yaml: " + str(e)) from e
-
-        def assert_defined(path_names: list, def_name=None):
-            path_string = ".".join(map(lambda v: str(v), path_names))
-            assert get(path_names) is not None, f"job {def_name or path_names[-1]} must be defined @ {path_string}"
-
-        assert get(["kind"]) == "Job", "job_yaml resource must be of 'kind' 'Job', recived " + get(
-            ["kind"], "[unknown]"
+        assert all(isinstance(o, dict) for o in body), JobRunnerException(
+            "Failed to parse body, found errored collection values"
         )
 
-        assert_defined(["metadata", "name"])
-        assert_defined(["spec", "template"])
-        assert_defined(["spec", "template", "spec", "containers", 0], "main container")
+        for obj in body:
+            self._prepare_kube_object(obj)
+        self._body = body
+        self._is_body_ready = True
 
-        if force_job_name is not None:
-            job_yaml["metadata"]["name"] = force_job_name
+    def _prepare_kube_object(
+        self,
+        body: dict,
+    ):
+        assert isinstance(body, dict), ValueError("Body but be a dictionary")
 
-        if random_name_postfix_length > 0:
-            job_yaml["metadata"]["name"] += "-" + randomString(random_name_postfix_length)
+        kind_name: str = body.get("kind", None)
+        if kind_name is None or not KubeObjectKind.has_kind(kind_name.strip().lower()):
+            raise JobRunnerException(
+                f"Unrecognized kubernetes object kind: '{kind_name}', "
+                + f"Allowed core kinds are {KubeObjectKind.all_names()}. "
+                + "To register new kinds use: KubeObjectKind.register_global_kind(..), "
+                + "more information cab be found @ "
+                + "https://github.com/LamaAni/KubernetesJobOperator/docs/add_custom_kinds.md",
+            )
 
-        # assign current namespace if one is not defined.
-        if "namespace" not in job_yaml["metadata"]:
-            try:
-                job_yaml["metadata"]["namespace"] = self.get_current_namespace()
-            except Exception as ex:
-                raise Exception(
-                    "Namespace was not provided in yaml and auto namespace resolution failed.", ex,
-                )
+        descriptor = KubeObjectDescriptor(body)
+        assert descriptor.spec is not None, ValueError("body['spec'] is not defined")
 
-        # FIXME: Should be a better way to add missing values.
-        if "labels" not in job_yaml["metadata"]:
-            job_yaml["metadata"]["labels"] = dict()
+        descriptor.metadata.setdefault("namespace", self.namespace or self.client.get_default_namespace())
+        name_parts = [v for v in [self.name_prefix, descriptor.name, self.name_postfix] if not_empty_string(v)]
+        assert len(name_parts) > 0, JobRunnerException("Invalid name or auto generated name")
+        descriptor.name = "-".join(name_parts)
 
-        if "backoffLimit" not in job_yaml["spec"]:
-            job_yaml["spec"]["backoffLimit"] = 0
+        self.update_metadata_labels(
+            body,
+            {
+                self.job_runner_instance_id_label_name: self.id,
+            },
+        )
 
-        if "metadata" not in job_yaml["spec"]["template"]:
-            job_yaml["spec"]["template"]["metadata"] = dict()
+        if kind_name in self.custom_prepare_kinds:
+            self.custom_prepare_kinds[kind_name](body)
 
-        if "labels" not in job_yaml["spec"]["template"]["metadata"]:
-            job_yaml["spec"]["template"]["metadata"]["labels"] = dict()
+        return body
 
-        if "finalizers" not in job_yaml["metadata"]:
-            job_yaml["metadata"]["finalizers"] = []
+    def _create_body_operation_queries(self, operator: Type[ConfigureNamespaceObject]) -> List[KubeApiRestQuery]:
+        queries = []
+        for obj in self.body:
+            q = operator(obj)
+            queries.append(q)
+            if self.show_operation_logs:
+                q.pipe_to_logger(self.logger)
+        return queries
 
-        if "foregroundDeletion" not in set(job_yaml["metadata"]["finalizers"]):
-            job_yaml["metadata"]["finalizers"].append("foregroundDeletion")
-
-        if "restartPolicy" not in job_yaml["spec"]["template"]["spec"]:
-            job_yaml["spec"]["template"]["spec"]["restartPolicy"] = "Never"
-
-        instance_id = randomString(15)
-        job_yaml["metadata"]["labels"][JOB_RUNNER_INSTANCE_ID_LABEL] = instance_id
-        job_yaml["spec"]["template"]["metadata"]["labels"][JOB_RUNNER_INSTANCE_ID_LABEL] = instance_id
-
-        return job_yaml
+    def log(self, *args, level=logging.INFO):
+        marker = f"job-runner-{self.id}" if self.show_runner_id_on_logs else "job-runner"
+        if self.show_executor_logs:
+            self.logger.log(level, f"{{{marker}}}: {args[0] if len(args)>0 else ''}", *args[1:])
 
     def execute_job(
-        self, job_yaml: dict, start_timeout: int = None, read_logs: bool = True
-    ) -> (
-        ThreadedKubernetesResourcesWatcher,
-        ThreadedKubernetesNamespaceResourcesWatcher,
+        self,
+        timeout: int = 60 * 5,
+        watcher_start_timeout: int = 10,
     ):
-        """Executes a job with a pre-prepared job yaml,
-        to prepare the job yaml please call JobRunner.prepare_job_yaml
+        self.prepare_body()
 
-        Arguments:
+        # prepare the run objects.
+        namespaces: List[str] = []
 
-            job_yaml {dict} -- The dictionary of the job body.
-            Can only have one kubernetes element.
+        for obj in self.body:
+            namespaces.append(obj["metadata"]["namespace"])
 
-        Raises:
+        state_object = KubeObjectDescriptor(self.body[0])
 
-            Exception: [description]
-
-        Returns:
-
-            ThreadedKubernetesResourcesWatcher -- The run result
-            as a watch dict, holds the final yaml information
-            and the resource status.
-        """
-
-        assert (
-            "metadata" in job_yaml
-            and "labels" in job_yaml["metadata"]
-            and JOB_RUNNER_INSTANCE_ID_LABEL in job_yaml["metadata"]["labels"]
-        ), ("job_yaml is not configured correctly, " + "did you forget to call JobRunner.prepare_job_yaml?")
-
-        metadata = job_yaml["metadata"]
-        name = metadata["name"]
-        namespace = metadata["namespace"]
-        instance_id = metadata["labels"][JOB_RUNNER_INSTANCE_ID_LABEL]
-
-        # creating the client
-        coreClient = kubernetes.client.CoreV1Api()
-        batchClient = kubernetes.client.BatchV1Api()
-
-        # checking if job exists.
-        status = None
-        try:
-            status = batchClient.read_namespaced_job_status(name, namespace)
-        except Exception:
-            # FIXME: Specify the exception types. Otherwise but if
-            # lost connection
-            pass
-
-        if status is not None:
-            raise Exception(f"Job {name} already exists in namespace {namespace}, cannot exec.")
-
-        # starting the watcher.
-        watcher = ThreadedKubernetesNamespaceResourcesWatcher(coreClient)
-        watcher.auto_watch_pod_logs = read_logs
-        watcher.remove_deleted_kube_resources_from_memory = False
-        watcher.pipe(self)
-        watcher.watch_namespace(
-            namespace, label_selector=f"{JOB_RUNNER_INSTANCE_ID_LABEL}={instance_id}", watch_for_kinds=["Job", "Pod"],
+        assert state_object.kind is not None, JobRunnerException(
+            "The first object in the list of objects must have a recognizable object kind (obj['kind'] is not None)"
+        )
+        parseable_kinds = [k for k in KubeObjectKind.all() if k.parse_kind_state is not None]
+        assert state_object.kind.parse_kind_state is not None, JobRunnerException(
+            "The first object in the object list must have a kind with a parseable state, "
+            + "where the states Failed or Succeeded are returned when the object finishes execution."
+            + f"Active kinds with parseable states are: {[k.name for k in parseable_kinds]}. "
+            + "To register new kinds or add a parse_kind_state use "
+            + "KubeObjectKind.register_global_kind(..) and associated methods. "
+            + "more information cab be found @ "
+            + "https://github.com/LamaAni/KubernetesJobOperator/docs/add_custom_kinds.md",
         )
 
-        # starting the job
-        batchClient.create_namespaced_job(namespace, job_yaml)
+        # create the watcher
+        watcher = NamespaceWatchQuery(
+            namespace=list(set(namespaces)),  # type:ignore
+            timeout=timeout,
+            watch_pod_logs=self.show_pod_logs,
+            label_selector=self.job_label_selector,
+        )
 
-        # wait for job to start
-        job_watcher = watcher.waitfor_status("Job", name, namespace, status="Running", timeout=start_timeout)
-        self.emit("job_started", job_watcher, self)
+        # start the watcher
+        if self.show_watcher_logs:
+            watcher.pipe_to_logger(self.logger)
 
-        # waiting for the job to completed.
-        job_watcher = watcher.waitfor_status("Job", name, namespace, status_list=["Failed", "Succeeded", "Deleted"],)
+        self.client.query_async([watcher])
+        watcher.wait_until_running(timeout=watcher_start_timeout)
 
-        # not need to read status and logs anymore.
-        watcher.stop()
+        self.log(f"Started watcher for kinds: {', '.join(list(watcher.kinds.keys()))}")
+        self.log(f"Watching namespaces: {', '.join(namespaces)}")
 
-        if job_watcher.status == "Failed":
-            self.emit("job_failed", job_watcher, self)
+        # Creating the objects to run
+        run_query_handler = self.client.query_async(self._create_body_operation_queries(CreateNamespaceObject))
+        # binding the errors.
+        run_query_handler.on(run_query_handler.error_event_name, lambda sender, err: watcher.emit_error(err))
 
-        return job_watcher, watcher
+        self.log(f"Waiting for state object {state_object.namespace}/{state_object.name} to finish...")
 
-    def delete_job(self, job_yaml: dict):
+        try:
+            final_state = watcher.wait_for_state(
+                [KubeObjectState.Failed, KubeObjectState.Succeeded],  # type:ignore
+                kind=state_object.kind,
+                name=state_object.name,
+                namespace=state_object.namespace,
+                timeout=timeout,
+            )
+        except Exception as ex:
+            self.log("Execution timeout... deleting resources", level=logging.WARN)
+            self.abort()
+            raise ex
+
+        self.log(f"Job {final_state}")
+
+        if final_state == KubeObjectState.Failed and self.show_error_logs:
+            # print the object states.
+            kinds = [o.kind.name for o in watcher.watched_objects]
+            queries: List[GetNamespaceObjects] = []
+            for namespace in namespaces:
+                for kind in kinds:
+                    queries.append(GetNamespaceObjects(kind, namespace, label_selector=self.job_label_selector))
+            self.log("Reading result error (status)..")
+            descriptors = [KubeObjectDescriptor(o) for o in self.client.query(queries)]  # type:ignore
+            for descriptor in descriptors:
+                obj_state: KubeObjectState = KubeObjectState.Active
+                if descriptor.kind is not None:
+                    obj_state = descriptor.kind.parse_state(descriptor.body)
+                if descriptor.status is not None:
+                    self.logger.error(f"[{descriptor}]: {obj_state}, status:\n" + yaml.safe_dump(descriptor.status))
+                else:
+                    self.logger.error(f"[{descriptor}]: Has {obj_state} (status not provided)")
+
+        if (
+            self.delete_policy == JobRunnerDeletePolicy.Always
+            or (self.delete_policy == JobRunnerDeletePolicy.IfFailed and final_state == KubeObjectState.Failed)
+            or (self.delete_policy == JobRunnerDeletePolicy.IfSucceeded and final_state == KubeObjectState.Succeeded)
+        ):
+            self.log(f"Deleting resources due to policy: {str(self.delete_policy)}")
+            self.delete_job()
+
+        self.client.stop()
+        self.log("Client stopped, execution completed.")
+
+        return final_state
+
+    def delete_job(self):
         """Using a pre-prepared job yaml, deletes a currently executing job.
 
         Arguments:
 
-            job_yaml {dict} -- The job description yaml.
+            body {dict} -- The job description yaml.
         """
-        metadata = job_yaml["metadata"]
-        name = metadata["name"]
-        namespace = metadata["namespace"]
+        self.log(("Deleting job.."))
+        descriptors: List[KubeObjectDescriptor] = [KubeObjectDescriptor(o) for o in self.body]
+        descriptors = [d for d in descriptors if d.kind is not None and d.name is not None and d.namespace is not None]
 
-        batchClient = kubernetes.client.BatchV1Api()
-        batchClient.delete_namespaced_job(name, namespace)
+        self.log(
+            "Deleting objects: " + ", ".join([f"{d}" for d in descriptors]),
+        )
+        self.client.query(self._create_body_operation_queries(DeleteNamespaceObject))
+        self.log("Job deleted")
+
+    def abort(self):
+        self.log("Aborting job ...")
+        self.delete_job()
+        self.client.stop()
+        self.log("Client stopped, execution aborted.")
+
+
+JobRunner.register_custom_prepare_kind("pod", JobRunner.custom_prepare_pod_kind)
+JobRunner.register_custom_prepare_kind("job", JobRunner.custom_prepare_job_kind)

@@ -1,34 +1,50 @@
+from utils import resolve_file, default_args
+from datetime import timedelta
 from airflow import DAG
 from airflow_kubernetes_job_operator.kubernetes_job_operator import KubernetesJobOperator
-from airflow.utils.dates import days_ago
 
-default_args = {"owner": "tester", "start_date": days_ago(2), "retries": 0}
 dag = DAG(
-    "bjo", default_args=default_args, description="Test base job operator", schedule_interval=None
+    "bjo",
+    default_args=default_args,
+    description="Test base job operator",
+    schedule_interval=None,
+    catchup=False,
 )
 
+envs = {
+    "PASS_ARG": "a test",
+}
 
-def read_job_yaml(fpath):
-    job_yaml = ""
-    with open(fpath, "r", encoding="utf-8") as job_yaml_reader:
-        job_yaml = job_yaml_reader.read()
-    return job_yaml
-
-
-success_job_yaml = read_job_yaml(__file__ + ".success.yaml")
-fail_job_yaml = read_job_yaml(__file__ + ".fail.yaml")
-
-envs = {"PASS_ARG": "a test"}
-
-# BashOperator(bash_command="date", task_id="test-bash", dag=dag)
-
-KubernetesJobOperator(task_id="test-job-success", job_yaml=success_job_yaml, envs=envs, dag=dag)
-KubernetesJobOperator(task_id="test-job-fail", job_yaml=fail_job_yaml, envs=envs, dag=dag)
-KubernetesJobOperator(
+tj_success = KubernetesJobOperator(
+    task_id="test-job-success",
+    body_filepath=resolve_file(__file__ + ".success.yaml"),
+    envs=envs,
+    dag=dag,
+)
+tj_fail = KubernetesJobOperator(
+    task_id="test-job-fail",
+    body_filepath=resolve_file(__file__ + ".fail.yaml"),
+    envs=envs,
+    dag=dag,
+)
+tj_overrides = KubernetesJobOperator(
     task_id="test-job-overrides",
     dag=dag,
     image="ubuntu",
     envs=envs,
     command=["bash", "-c", 'echo "Starting $PASS_ARG"; sleep 10; echo end'],
 )
+ti_timeout = KubernetesJobOperator(
+    task_id="test-job-timeout",
+    body_filepath=resolve_file(__file__ + ".success.yaml"),
+    envs={
+        "TIC_COUNT": "100",
+        "PASS_ARG": "timeout",
+    },
+    dag=dag,
+    execution_timeout=timedelta(seconds=3),
+)
 
+if __name__ == "__main__":
+    dag.clear(reset_dag_runs=True)
+    dag.run()

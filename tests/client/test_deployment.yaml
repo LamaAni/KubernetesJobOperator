@@ -1,0 +1,41 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: test-deployment
+spec:
+  selector:
+    matchLabels:
+      app: test-deployment
+  template:
+    metadata:
+      labels:
+        app: test-deployment
+    spec:
+      containers:
+        - name: test-deployment
+          image: ubuntu
+          ports:
+            - containerPort: 8080
+          command:
+            - bash
+            - -c
+            - |
+              apt update
+              echo "lama 1"
+              while true; do
+                sleep 1
+                date
+              done
+          resources:
+            limits: {}
+# ---
+# apiVersion: v1
+# kind: Service
+# metadata:
+#   name: test-dev-svc
+# spec:
+#   selector:
+#     app: test-deployment
+#   ports:
+#     - port: 8080
+#       targetPort: 6000

@@ -8,20 +8,20 @@ dag = DAG(
 )
 
 
-def read_job_yaml(fpath):
-    job_yaml = ""
-    with open(fpath, "r", encoding="utf-8") as job_yaml_reader:
-        job_yaml = job_yaml_reader.read()
-    return job_yaml
+def read_body(fpath):
+    body = ""
+    with open(fpath, "r", encoding="utf-8") as body_reader:
+        body = body_reader.read()
+    return body
 
 
-success_job_yaml = read_job_yaml(__file__ + ".success.yaml")
-fail_job_yaml = read_job_yaml(__file__ + ".fail.yaml")
+success_body = read_body(__file__ + ".success.yaml")
+fail_body = read_body(__file__ + ".fail.yaml")
 
 # BashOperator(bash_command="date", task_id="test-bash", dag=dag)
 
-KubernetesJobOperator(task_id="test-job-success", job_yaml=success_job_yaml, dag=dag)
-KubernetesJobOperator(task_id="test-job-fail", job_yaml=fail_job_yaml, dag=dag)
+KubernetesJobOperator(task_id="test-job-success", body=success_body, dag=dag)
+KubernetesJobOperator(task_id="test-job-fail", body=fail_body, dag=dag)
 KubernetesJobOperator(
     task_id="test-job-overrides",
     dag=dag,
