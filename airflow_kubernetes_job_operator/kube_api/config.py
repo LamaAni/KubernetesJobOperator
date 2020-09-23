@@ -148,7 +148,7 @@ class KubeApiConfiguration:
             if os.path.exists(in_cluster_namespace_fpath):
                 with open(in_cluster_namespace_fpath, "r", encoding="utf-8") as nsfile:
                     namespace = nsfile.read()
-            elif configuration.default_namespace is not None:
+            elif hasattr(configuration, "default_namespace") and configuration.default_namespace is not None:
                 return configuration.default_namespace
             elif hasattr(configuration, "filepath") and configuration.filepath is not None:
                 (
