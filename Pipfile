@@ -7,10 +7,12 @@ verify_ssl = true
 pytest = "*"
 black = "*"
 flake8 = "*"
+apache-ariflow = "==1.10.9"
+airflow-kubernetes-job-operator = {path = "."}
 
 [packages]
 pyyaml = ">=5.0"
-kubernetes = ">=9.0.0"
+kubernetes = ">=8.0.1"
 urllib3 = ">=1.25.0"
 zthreading = ">=0.1.13"
 python-dateutil = "*"

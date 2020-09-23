@@ -4,9 +4,9 @@ import warnings
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
-# KubeObjectKind.register_global_kind(
-#     KubeObjectKind("HCJob", "hc.dto.cbsinteractive.com/v1alpha1", parse_kind_state=KubeObjectKind.parse_state_job)
-# )
+KubeObjectKind.register_global_kind(
+    KubeObjectKind("HCJob", "hc.dto.cbsinteractive.com/v1alpha1", parse_kind_state=KubeObjectKind.parse_state_job)
+)
 
 
 default_args = {"owner": "tester", "start_date": "1/1/2020", "retries": 0}
