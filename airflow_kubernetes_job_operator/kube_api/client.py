@@ -4,23 +4,23 @@ import os
 import json
 import traceback
 import time
+
 from typing import List, Callable, Set, Union
 from weakref import WeakSet
-from os.path import expanduser
 from zthreading.tasks import Task
 from zthreading.events import Event, EventHandler
 
-from airflow_kubernetes_job_operator.kube_api.utils import clean_dictionary_nulls, join_locations_list
+from airflow_kubernetes_job_operator.kube_api.utils import clean_dictionary_nulls
 
 from kubernetes.stream.ws_client import ApiException as KubernetesNativeApiException
 from kubernetes.client import ApiClient
 from urllib3.response import HTTPResponse
-from kubernetes.config import kube_config, incluster_config, list_kube_config_contexts
+from kubernetes.config import kube_config
+
 from airflow_kubernetes_job_operator.kube_api.utils import kube_logger
 from airflow_kubernetes_job_operator.kube_api.exceptions import KubeApiException, KubeApiClientException
 from airflow_kubernetes_job_operator.kube_api.config import (
-    DEFAULT_KUBE_CONFIG_LOCATIONS,
-    DEFAULT_SERVICE_ACCOUNT_PATH,
+    KubeApiConfiguration,
     DEFAULT_USE_ASYNCIO_ENV_NAME,
     DEFAULT_AUTO_RECONNECT_MAX_ATTEMPTS,
     DEFAULT_AUTO_RECONNECT_WAIT_BETWEEN_ATTEMPTS,
@@ -348,8 +348,6 @@ def kube_api_default_stream_process_event_data(ev: Event):
 
 
 class KubeApiRestClient:
-    default_kube_config: kube_config.Configuration = None
-
     def __init__(
         self,
         auto_load_kube_config: bool = True,
@@ -378,67 +376,7 @@ class KubeApiRestClient:
 
     @property
     def api_client(self) -> ApiClient:
-
         return self._api_client
-
-    @classmethod
-    def load_kubernetes_configuration_from_file(
-        cls,
-        config_file: str = None,
-        is_in_cluster: bool = None,
-        extra_config_locations: List[str] = None,
-        context: str = None,
-        persist: bool = False,
-    ):
-        """Loads a kubernetes configuration
-
-        Args:
-            config_file (str, optional): The configuration file path. Defaults to None = search for config.
-            is_in_cluster (bool, optional): If true, the client will expect to run inside a cluster
-                and to load the cluster config. Defaults to None = auto detect.
-            extra_config_locations (List[str], optional): Extra locations to search for a configuration.
-                Defaults to None.
-            context (str, optional): The context name to run in. Defaults to None = active context.
-            persist (bool, optional): If True, config file will be updated when changed (e.g GCP token refresh).
-        """
-        is_in_cluster = (
-            is_in_cluster
-            if is_in_cluster is not None
-            else os.environ.get(incluster_config.SERVICE_HOST_ENV_NAME, None) is not None
-        )
-
-        configuration = kube_config.Configuration()
-        configuration.filepath = None
-        if is_in_cluster and config_file is None:
-            # load from cluster.
-            loader = incluster_config.InClusterConfigLoader(
-                incluster_config.SERVICE_TOKEN_FILENAME, incluster_config.SERVICE_CERT_FILENAME
-            )
-            loader._load_config()
-
-            configuration.host = loader.host
-            configuration.ssl_ca_cert = loader.ssl_ca_cert
-            configuration.api_key["authorization"] = "bearer " + loader.token
-        else:
-            if config_file is None:
-                config_possible_locations = join_locations_list(
-                    extra_config_locations,
-                    DEFAULT_KUBE_CONFIG_LOCATIONS,
-                )
-                for loc in config_possible_locations:
-                    loc = expanduser(loc)
-                    if os.path.isfile(loc):
-                        config_file = loc
-
-            assert config_file is not None, "Kubernetes config file not provided and default config could not be found."
-
-            if config_file is not None:
-                kube_config.load_kube_config(
-                    config_file=config_file, context=context, client_configuration=configuration, persist_config=persist
-                )
-            configuration.filepath = config_file
-
-        return configuration
 
     def load_kube_config(
         self,
@@ -460,33 +398,26 @@ class KubeApiRestClient:
             persist (bool, optional): If True, config file will be updated when changed
                 (e.g GCP token refresh).
         """
-        self._kube_config: kube_config.Configuration = self.load_kubernetes_configuration_from_file(
-            config_file, is_in_cluster, extra_config_locations, context, persist
+        self._kube_config: kube_config.Configuration = KubeApiConfiguration.load_kubernetes_configuration_from_file(
+            config_file=config_file,
+            is_in_cluster=is_in_cluster,
+            extra_config_locations=extra_config_locations,
+            context=context,
+            persist=persist,
         )
+
+        assert self._kube_config is not None, KubeApiClientException(
+            "Failed to load kubernetes configuration. Not found."
+        )
+
         self._api_client: ApiClient = ApiClient(configuration=self.kube_config)
 
     def get_default_namespace(self) -> str:
         """Returns the default namespace for the current config."""
-        namespace: str = None  # type:ignore
-        try:
-            in_cluster_namespace_fpath = os.path.join(DEFAULT_SERVICE_ACCOUNT_PATH, "namespace")
-            if os.path.exists(in_cluster_namespace_fpath):
-                with open(in_cluster_namespace_fpath, "r", encoding="utf-8") as nsfile:
-                    namespace = nsfile.read()
-            elif self.kube_config.filepath is not None:
-                (
-                    contexts,
-                    active_context,
-                ) = list_kube_config_contexts(config_file=self.kube_config.filepath)
-                namespace = (
-                    active_context["context"]["namespace"] if "namespace" in active_context["context"] else "default"
-                )
-        except Exception as e:
-            raise Exception(
-                "Could not resolve current namespace, you must provide a namespace or a context file",
-                e,
-            )
-        return namespace
+        assert self.kube_config is not None, KubeApiException(
+            "Kubernetes configuration not loaded. use: [client].load_kube_config()"
+        )
+        return KubeApiConfiguration.get_default_namespace(self.kube_config)
 
     def stop(self):
         for q in list(self._active_queries):

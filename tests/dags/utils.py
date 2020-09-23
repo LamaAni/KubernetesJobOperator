@@ -1,15 +1,40 @@
 import os
-from airflow_kubernetes_job_operator.kube_api import KubeObjectKind
+from airflow_kubernetes_job_operator.kube_api.config import DEFAULT_KUBE_CONFIG_LOCATIONS
+from airflow_kubernetes_job_operator.kube_api import KubeApiConfiguration
+
+# import airflow.configuration
 import warnings
 import logging
 import sys
 
+logging.basicConfig(level=logging.INFO)
+DEFAULT_KUBE_CONFIG_LOCATIONS.append("/home/airflow/.kube/config")
+
+config = None
+config_host = None
+config_filepath = None
+
+
+config = KubeApiConfiguration.load_kubernetes_configuration_from_file()
+assert config is not None
+config_host = config.host
+config_filepath = config.filepath
+
+
+# pull_execution_cluster_config()
+
 print_version = str(sys.version).replace("\n", " ")
-logging.info(f"""
+logging.info(
+    f"""
 -----------------------------------------------------------------------
+home directory: {os.path.expanduser('~')}
+Config host: {config.host} 
+Config filepath: {config.filepath}
+Default namespace: {KubeApiConfiguration.get_default_namespace(config)}
 Executing dags in python version: {print_version}
 -----------------------------------------------------------------------
-""")
+"""
+)
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
