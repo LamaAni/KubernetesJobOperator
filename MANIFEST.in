@@ -1,3 +1,5 @@
 include README.rst
+include airflow_kubernetes_job_operator/templates/*.yaml
+include airflow_kubernetes_job_operator/templates/*.yml
 include airflow_kubernetes_job_operator/*.yaml
 include airflow_kubernetes_job_operator/*.yml
