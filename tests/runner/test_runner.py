@@ -4,9 +4,9 @@ from tests.utils import logging
 from airflow_kubernetes_job_operator.job_runner import JobRunner
 from airflow_kubernetes_job_operator.kube_api import KubeObjectKind
 
-KubeObjectKind.register_global_kind(
-    KubeObjectKind("HCJob", "hc.dto.cbsinteractive.com/v1alpha1", parse_kind_state=KubeObjectKind.parse_state_job)
-)
+# KubeObjectKind.register_global_kind(
+#     KubeObjectKind("HCJob", "hc.dto.cbsinteractive.com/v1alpha1", parse_kind_state=KubeObjectKind.parse_state_job)
+# )
 
 
 def load_yaml_obj_configs(fpath: str) -> dict:
@@ -21,9 +21,7 @@ def load_yaml_obj_configs(fpath: str) -> dict:
 
 
 def _exec_test(body: dict):
-    runner = JobRunner(body, auto_load_kube_config=True, delete_on_failure=True, logger=logging)  # type:ignore
-    runner.delete_on_failure = True
-    runner.delete_on_success = True
+    runner = JobRunner(body, auto_load_kube_config=True, logger=logging)  # type:ignore
     runner.execute_job()
 
 

@@ -147,6 +147,7 @@ class KubeApiRestQuery(Task):
         self.emit(self.query_started_event_name, self, client)
         self.pre_request(client)
         self.query_loop(client)
+        self._query_running = False
         self.post_request(client)
         self.emit(self.query_ended_event_name, self, client)
 
@@ -171,31 +172,33 @@ class KubeApiRestQuery(Task):
                 "Content-Type": self._get_method_content_type(),
             },
         )
-
+        total_reconnects = 0
         total_consecutive_reconnects = 0
 
-        def can_reconnect(wait=True, message=None):
+        def can_reconnect(message=None):
             # check for change in state
             if not self.auto_reconnect:
                 return False
 
             nonlocal total_consecutive_reconnects
+            nonlocal total_reconnects
             total_consecutive_reconnects += 1
+            total_reconnects += 1
 
             if total_consecutive_reconnects >= self.auto_reconnect_max_attempts:
                 return False
 
             kube_logger.debug(f"[{self.resource_path}][Reconnect] {message or ''}")
 
-            if wait:
-                time.sleep(self.auto_reconnect_wait_between_attempts)
             return True
 
         # starting query.
         is_first_call = True
-        while self.is_running and not self._is_being_stopped:
+        while self.is_running and not self._is_being_stopped and (is_first_call or self.auto_reconnect):
             try:
                 if not is_first_call:
+                    if self.auto_reconnect_wait_between_attempts > 0:
+                        time.sleep(self.auto_reconnect_wait_between_attempts)
                     self.on_reconnect(client)
                     if not self.auto_reconnect:
                         kube_logger.debug(f"[{self.resource_path}][Reconnect] Connection lost, aborted")
@@ -256,7 +259,8 @@ class KubeApiRestQuery(Task):
                         )
                     if can_reconnect(True, exception_message):
                         continue
-                    raise KubeApiClientException(exception_message, inner_exception=ex)
+                    if self.query_running and not self._is_being_stopped:
+                        raise KubeApiClientException(exception_message, inner_exception=ex)
                 else:
                     raise ex
             except Exception as ex:
@@ -297,6 +301,7 @@ class KubeApiRestQuery(Task):
                         pass
             super().stop(timeout=timeout, throw_error_if_not_running=throw_error_if_not_running)  # type:ignore
         finally:
+            self._query_running = False
             self._is_being_stopped = False
 
     def log_event(self, logger: Logger, ev: Event):

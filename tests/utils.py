@@ -1,6 +1,8 @@
 import sys
 import logging
 import os
+import yaml
+from airflow_kubernetes_job_operator.utils import repo_reslove
 
 
 def get_is_no_color():
@@ -15,6 +17,14 @@ def colorize(val, color, add_reset=True):
     if get_is_no_color():
         return val
     return color + val + ("\033[0m" if add_reset else "")
+
+
+def load_yaml_objects(fpath):
+    rslt = None
+    with open(repo_reslove(fpath, basepath=os.path.dirname(__file__)), "r") as raw:
+        yaml_string = raw.read()
+        rslt = yaml.safe_load_all(yaml_string)
+    return list(rslt)
 
 
 class style:

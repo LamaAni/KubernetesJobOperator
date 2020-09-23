@@ -1,3 +1,4 @@
+from datetime import timedelta
 from utils import resolve_file, default_args
 from airflow import DAG
 from airflow_kubernetes_job_operator.kubernetes_job_operator import KubernetesJobOperator
@@ -14,12 +15,14 @@ envs = {
     "PASS_ARG": "a test",
 }
 
-tj_success = KubernetesJobOperator(
+total_time_seconds = round(timedelta(hours=8).total_seconds())
+
+KubernetesJobOperator(
     task_id="test-long-job-success",
     body_filepath=resolve_file(__file__ + ".long.yaml"),
     envs={
         "PASS_ARG": "a long test",
-        "TIC_COUNT": "30",
+        "TIC_COUNT": str(total_time_seconds),
     },
     dag=dag,
 )

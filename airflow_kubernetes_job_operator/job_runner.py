@@ -326,7 +326,7 @@ class JobRunner:
         descriptors = [d for d in descriptors if d.kind is not None and d.name is not None and d.namespace is not None]
 
         self.log(
-            "Deleting job deployments for items: " + ", ".join([f"{d}" for d in descriptors]),
+            "Deleting objects: " + ", ".join([f"{d}" for d in descriptors]),
         )
         self.client.query(self._create_body_operation_queries(DeleteNamespaceObject))
         self.log("Job deleted")

@@ -5,12 +5,12 @@ import re
 REPO_PATH = os.path.dirname(__file__)
 
 
-def repo_reslove(src: str):
+def repo_reslove(src: str, basepath: str = REPO_PATH):
     if src.startswith("."):
         if src.startswith("./"):
-            src = os.path.join(REPO_PATH, src[2:])
+            src = os.path.join(basepath, src[2:])
         elif src.startswith("../"):
-            src = os.path.join(REPO_PATH, src)
+            src = os.path.join(basepath, src)
     return os.path.abspath(src)
 
 
