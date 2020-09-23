@@ -43,7 +43,7 @@ setup(
     license="LICENSE",
     install_requires=[
         "PyYAML>=5.0",
-        "kubernetes>=9.0.0",
+        "kubernetes>=8.0.1",
         "urllib3>=1.25.0",
         "zthreading>=0.1.13",
         "python-dateutil>=2.8.1",
