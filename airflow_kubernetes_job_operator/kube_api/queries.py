@@ -168,6 +168,7 @@ class GetNamespaceObjects(KubeApiRestQuery):
                 "watch": watch,
             },
             auto_reconnect=watch,
+            always_throw_on_first_api_call=name is None,
         )
         self.kind = kind
         self.namespace = namespace
