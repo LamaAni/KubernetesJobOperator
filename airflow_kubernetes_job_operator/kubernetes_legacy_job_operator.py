@@ -251,9 +251,9 @@ class KubernetesLegacyJobOperator(KubernetesJobOperator):
             all_labels = {}
             all_labels.update(self.labels)
             all_labels.update(job_obj["spec"]["template"]["metadata"].get("labels", {}))
-            image = self.image or job_obj["spec"]["template"]["spec"]["containers"][0]["image"]
-            cmds = self.cmds or job_obj["spec"]["template"]["spec"]["containers"][0]["command"]
-            arguments = self.arguments or job_obj["spec"]["template"]["spec"]["containers"][0]["args"]
+            image = self.image or job_obj["spec"]["template"]["spec"]["containers"][0].get("image", None)
+            cmds = self.cmds or job_obj["spec"]["template"]["spec"]["containers"][0].get("command", [])
+            arguments = self.arguments or job_obj["spec"]["template"]["spec"]["containers"][0].get("args", [])
 
             pod = gen.make_pod(
                 namespace=job_obj["metadata"]["namespace"],
