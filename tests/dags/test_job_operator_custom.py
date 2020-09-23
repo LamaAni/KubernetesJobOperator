@@ -4,7 +4,7 @@ from airflow_kubernetes_job_operator.kubernetes_job_operator import KubernetesJo
 
 
 dag = DAG(
-    "bjo-custom",
+    "kub-job-op-custom",
     default_args=default_args,
     description="Test base job operator",
     schedule_interval=None,
