@@ -170,10 +170,10 @@ class KubernetesJobOperator(BaseOperator):
                 if self.arguments:
                     main_container["args"] = self.arguments
                 if self.envs:
-                    envs = main_container.get("envs", [])
+                    env_list = main_container.get("env", [])
                     for k in self.envs.keys():
-                        envs.append({"name": k, "value": self.envs[k]})
-                    main_container["envs"] = envs
+                        env_list.append({"name": k, "value": self.envs[k]})
+                    main_container["env"] = env_list
                 if self.image:
                     main_container["image"] = self.image
                 if self.image_pull_policy:
