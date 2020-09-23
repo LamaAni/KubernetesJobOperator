@@ -5,6 +5,9 @@ import yaml
 from airflow_kubernetes_job_operator.utils import repo_reslove
 
 
+CUR_DIRECTORY = os.path.abspath(os.path.dirname(__file__))
+
+
 def get_is_no_color():
     val = os.environ.get("NO_COLOR", "--no-color" in sys.argv)
     if not isinstance(val, bool):
@@ -42,13 +45,13 @@ class style:
     RESET = lambda x: colorize(str(x), "\033[0m")  # noqa: E731
 
 
-logging.basicConfig(level="INFO", format=style.GRAY("[%(asctime)s][%(levelname)7s]") + " %(message)s")
-
-CUR_DIRECTORY = os.path.abspath(os.path.dirname(__file__))
-
-
 def load_raw_formatted_file(fpath):
     text = ""
     with open(fpath, "r", encoding="utf-8") as filedata:
         text = filedata.read()
     return text
+
+
+logging.basicConfig(level="INFO", format=style.GRAY("[%(asctime)s][%(levelname)7s]") + " %(message)s")
+print_version = str(sys.version).replace("\n", " ")
+logging.info(f"Running in python version: {print_version}")

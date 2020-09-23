@@ -1,6 +1,15 @@
 import os
 from airflow_kubernetes_job_operator.kube_api import KubeObjectKind
 import warnings
+import logging
+import sys
+
+print_version = str(sys.version).replace("\n", " ")
+logging.info(f"""
+-----------------------------------------------------------------------
+Executing dags in python version: {print_version}
+-----------------------------------------------------------------------
+""")
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 

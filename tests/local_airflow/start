@@ -13,6 +13,14 @@ REPO_PATH="$(realpath "$CUR_DIR/../../")"
 source "$CUR_DIR/configure" || exit $?
 
 if [ "$#" -eq 0 ]; then
+  echo "----------------------"
+  echo "Running python version:"
+  python --version
+  echo "----------------------"
+  echo "Running airflow version:"
+  airflow version
+  echo "----------------------"
+  sleep 1
   airflow scheduler &
   SCHEDULER_PID="$!"
   airflow webserver
