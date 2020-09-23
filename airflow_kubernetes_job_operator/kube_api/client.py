@@ -66,6 +66,7 @@ class KubeApiRestQuery(Task):
         auto_reconnect: bool = False,
         auto_reconnect_max_attempts: int = DEFAULT_AUTO_RECONNECT_MAX_ATTEMPTS,
         auto_reconnect_wait_between_attempts: float = DEFAULT_AUTO_RECONNECT_WAIT_BETWEEN_ATTEMPTS,
+        always_throw_on_first_api_call: bool = True,
     ):
         assert use_asyncio is not True, NotImplementedError("AsyncIO not yet implemented.")
         super().__init__(
@@ -87,6 +88,7 @@ class KubeApiRestQuery(Task):
         self.auto_reconnect = auto_reconnect
         self.auto_reconnect_max_attempts = auto_reconnect_max_attempts
         self.auto_reconnect_wait_between_attempts = auto_reconnect_wait_between_attempts
+        self.always_throw_on_first_api_call = always_throw_on_first_api_call
 
         # these event are object specific
         self.query_started_event_name = f"{self.query_started_event_name} {id(self)}"
@@ -257,9 +259,10 @@ class KubeApiRestQuery(Task):
                         exception_message = (
                             f"{ex.reason}, {exception_details.get('reason')}: {exception_details.get('message')}"
                         )
-                    if can_reconnect(True, exception_message):
+                    force_throw = self.always_throw_on_first_api_call and total_reconnects == 0
+                    if not force_throw and can_reconnect(exception_message):
                         continue
-                    if self.query_running and not self._is_being_stopped:
+                    if force_throw or self.query_running and not self._is_being_stopped:
                         raise KubeApiClientException(exception_message, inner_exception=ex)
                 else:
                     raise ex
@@ -405,7 +408,7 @@ class KubeApiRestClient:
         )
 
         configuration = kube_config.Configuration()
-
+        configuration.filepath = None
         if is_in_cluster and config_file is None:
             # load from cluster.
             loader = incluster_config.InClusterConfigLoader(
@@ -423,7 +426,8 @@ class KubeApiRestClient:
                     DEFAULT_KUBE_CONFIG_LOCATIONS,
                 )
                 for loc in config_possible_locations:
-                    if os.path.isfile(expanduser(loc)):
+                    loc = expanduser(loc)
+                    if os.path.isfile(loc):
                         config_file = loc
 
             assert config_file is not None, "Kubernetes config file not provided and default config could not be found."
