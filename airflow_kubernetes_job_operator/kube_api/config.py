@@ -7,10 +7,11 @@ from airflow_kubernetes_job_operator.kube_api.exceptions import KubeApiException
 from airflow_kubernetes_job_operator.kube_api.utils import join_locations_list, not_empty_string
 
 
-DEFAULT_KUBE_CONFIG_LOCATIONS = join_locations_list(
+DEFAULT_KUBE_CONFIG_LOCATIONS: List[str] = join_locations_list(
     [kube_config.KUBE_CONFIG_DEFAULT_LOCATION],
     os.environ.get("KUBERNETES_JOB_OPERATOR_DEFAULT_CONFIG_LOCATIONS", None),
 )
+
 DEFAULT_SERVICE_ACCOUNT_PATH = os.path.dirname(incluster_config.SERVICE_CERT_FILENAME)
 DEFAULT_USE_ASYNCIO_ENV_NAME = "KUBERNETES_API_CLIENT_USE_ASYNCIO"
 
@@ -46,6 +47,9 @@ class KubeApiConfiguration:
     def set_default_namespace(cls, namespace: str):
         assert not_empty_string(namespace), ValueError("namespace must be a non empty string")
         cls._default_namespace = namespace
+
+    def add_kube_config_search_location(file_path: str):
+        DEFAULT_KUBE_CONFIG_LOCATIONS.insert(0, file_path)
 
     @classmethod
     def find_default_config_file(cls, extra_config_locations: List[str] = None):
@@ -140,6 +144,11 @@ class KubeApiConfiguration:
         return configuration
 
     @classmethod
+    def get_active_context(cls, configuration: Configuration):
+        (contexts, active_context) = list_kube_config_contexts(config_file=configuration.filepath)
+        return active_context
+
+    @classmethod
     def get_default_namespace(cls, configuration: Configuration):
         """Returns the default namespace for the current config."""
         namespace: str = None  # type:ignore
@@ -151,10 +160,7 @@ class KubeApiConfiguration:
             elif hasattr(configuration, "default_namespace") and configuration.default_namespace is not None:
                 return configuration.default_namespace
             elif hasattr(configuration, "filepath") and configuration.filepath is not None:
-                (
-                    contexts,
-                    active_context,
-                ) = list_kube_config_contexts(config_file=configuration.filepath)
+                (contexts, active_context) = list_kube_config_contexts(config_file=configuration.filepath)
 
                 namespace = (
                     active_context.get("context", {}).get("namespace", "default")
