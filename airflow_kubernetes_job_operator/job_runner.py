@@ -256,7 +256,13 @@ class JobRunner:
             watcher.pipe_to_logger(self.logger)
 
         self.client.query_async([watcher])
-        watcher.wait_until_running(timeout=watcher_start_timeout)
+        try:
+            watcher.wait_until_running(timeout=watcher_start_timeout)
+        except TimeoutError as ex:
+            raise JobRunnerException(
+                "Failed while waiting for watcher to start. Unable to connect to cluster.",
+                ex,
+            )
 
         self.log(f"Started watcher for kinds: {', '.join(list(watcher.kinds.keys()))}")
         self.log(f"Watching namespaces: {', '.join(namespaces)}")

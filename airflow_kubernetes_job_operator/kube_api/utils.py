@@ -1,11 +1,12 @@
 from logging import Logger
+from typing import List
 from airflow_kubernetes_job_operator.kube_api.exceptions import KubeApiException
 import logging
 
 kube_logger: Logger = logging.getLogger(__name__)
 
 
-def clean_dictionary_nulls(d: dict):
+def clean_dictionary_nulls(d: dict) -> dict:
     if d is None:
         return {}
     for k in list(d.keys()):
@@ -15,7 +16,7 @@ def clean_dictionary_nulls(d: dict):
     return d
 
 
-def unqiue_with_order(lst):
+def unqiue_with_order(lst) -> list:
     ulst = []
     uvals = set()
     for v in lst:
@@ -41,7 +42,7 @@ def not_empty_string(val: str):
     return isinstance(val, str) and len(val) > 0
 
 
-def join_locations_list(*args):
+def join_locations_list(*args) -> List[str]:
     lcoations = []
     v = None
     for v in args:

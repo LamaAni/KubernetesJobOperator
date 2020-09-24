@@ -3,7 +3,7 @@ from airflow import DAG
 from airflow_kubernetes_job_operator.kubernetes_legacy_job_operator import KubernetesLegacyJobOperator
 
 dag = DAG(
-    "bjo-legacy",
+    "kub-job-op-legacy",
     default_args=default_args,
     description="Test base job operator",
     schedule_interval=None,
