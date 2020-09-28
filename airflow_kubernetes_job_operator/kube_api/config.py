@@ -170,7 +170,7 @@ class KubeApiConfiguration:
         if configuration is not None:
             configuration.filepath = configuration.filepath if hasattr(configuration, "filepath") else None
             configuration.default_namespace = (
-                default_namespace or configuration.default_namespace if hasattr(configuration, "filepath") else None
+                default_namespace or configuration.default_namespace if hasattr(configuration, "default_namespace") else None
             )
 
             if set_as_default:
