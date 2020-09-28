@@ -39,6 +39,12 @@ class KubeApiConfiguration:
 
     @classmethod
     def set_default_kube_config(cls, config: Configuration):
+        """Sets the default kube configuration. Will be chosen as
+        default.
+
+        Args:
+            config (Configuration): The config.
+        """
         assert isinstance(config, Configuration), ValueError(
             "Config must be of type kubernetes.config.kube_config.Configuration"
         )
@@ -46,19 +52,42 @@ class KubeApiConfiguration:
 
     @classmethod
     def set_default_namespace(cls, namespace: str):
+        """Set the global default namespace. Will be chosen if
+        a configuration namespace is not found.
+
+        Args:
+            namespace (str): The namespace
+        """
         assert not_empty_string(namespace), ValueError("namespace must be a non empty string")
         cls._default_namespace = namespace
 
     def add_kube_config_search_location(file_path: str):
+        """Add a global search location for kube configuration files.
+        The location will be added to the top of the list and would be
+        chosen first if exists.
+
+        Args:
+            file_path (str): The path to the configuration file.
+        """
         DEFAULT_KUBE_CONFIG_LOCATIONS.insert(0, file_path)
 
     @classmethod
-    def find_default_config_file(cls, extra_config_locations: List[str] = None):
-        default_config_file = None
+    def find_default_config_file(cls, extra_config_locations: List[str] = None) -> str:
+        """Returns the first valid config file.
+
+        Args:
+            extra_config_locations (List[str], optional): Extra search locations. Defaults to None.
+
+        Returns:
+            str: The config file path.
+        """
         config_possible_locations = join_locations_list(
             extra_config_locations,
             DEFAULT_KUBE_CONFIG_LOCATIONS,
         )
+
+        default_config_file = None
+
         for loc in config_possible_locations:
             loc = loc if "~" not in loc else os.path.expanduser(loc)
             if os.path.isfile(loc):
@@ -130,7 +159,7 @@ class KubeApiConfiguration:
             configuration = cls._default_kube_config
         # search for config.
         else:
-            default_config_file = cls.find_default_config_file()
+            default_config_file = cls.find_default_config_file(extra_config_locations=extra_config_locations)
             if default_config_file is not None:
                 configuration = load_from_file(default_config_file)
             elif os.path.isfile(incluster_config.SERVICE_TOKEN_FILENAME):
@@ -147,6 +176,21 @@ class KubeApiConfiguration:
 
     @classmethod
     def get_active_context_info(cls, configuration: Configuration):
+        """Returns the current configuration info from the config file
+
+        Args:
+            configuration (Configuration): The configuration.
+
+        Returns:
+            dict: The context info.
+        """
+        if (
+            not hasattr(configuration, "filepath")
+            or configuration.filepath is None
+            or not os.path.isfile(configuration.filepath)
+        ):
+            return {}
+
         (contexts, active_context) = list_kube_config_contexts(config_file=configuration.filepath)
         return active_context or {}
 
