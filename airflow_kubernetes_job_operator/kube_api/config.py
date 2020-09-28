@@ -130,7 +130,7 @@ class KubeApiConfiguration:
             configuration.ssl_ca_cert = loader.ssl_ca_cert
             configuration.api_key["authorization"] = "bearer " + loader.token
             default_namespace_file = os.path.join(DEFAULT_SERVICE_ACCOUNT_PATH, "namespace")
-            if os.path.exists(default_namespace):
+            if os.path.exists(default_namespace_file):
                 with open(default_namespace_file, "r") as raw:
                     configuration.default_namespace = raw.read()
             return configuration
