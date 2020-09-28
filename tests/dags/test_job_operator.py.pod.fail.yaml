@@ -1,0 +1,34 @@
+# the code in this file is augmented by an ejs template
+# and by loading the yaml into memory.
+# some of these values will be replaced.
+apiVersion: batch/v1
+kind: Pod
+metadata:
+  finalizers:
+    - foregroundDeletion
+spec:
+  restartPolicy: Never
+  containers:
+    - name: job-executor
+      image: ubuntu
+      command:
+        - bash
+        - -c
+        - |
+          #/usr/bin/env bash
+          echo "Starting $PASS_ARG"
+          cur_count=0
+          while true; do
+              cur_count=$((cur_count + 1))
+              if [ "$cur_count" -ge "$TIC_COUNT" ]; then
+                  break
+              fi
+              date
+              sleep 1
+          done
+
+          echo "Force throw error:"
+          exit 99
+      env:
+        - name: TIC_COUNT
+          value: '2'

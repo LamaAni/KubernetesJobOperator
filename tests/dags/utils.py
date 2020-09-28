@@ -12,31 +12,49 @@ logging.basicConfig(level=logging.INFO)
 #     KubeObjectKind("HCJob", "hc.dto.cbsinteractive.com/v1alpha1", parse_kind_state=KubeObjectKind.parse_state_job)
 # )
 
-# KubeApiConfiguration.add_kube_config_search_location("~/other_config.yaml")
+# TODO:
+# 1. move register_global_kind to KubeApiConfiguration
+# 2. figure out why load_kubernetes_configuration_from_file is not giving the right error.
+# 3. Add ability to ignore invalid kinds in the runner if the kind is not the main kind.
+# 4. Add cluster info to the execution log.
+# 5. Check error in pod execution.
 
+KubeApiConfiguration.add_kube_config_search_location("~/composer_kube_config")  # second
+KubeApiConfiguration.add_kube_config_search_location("~/gcs/dags/config/hcjobs-kubeconfig.yaml")  # first
+KubeApiConfiguration.set_default_namespace("cdm-hcjobs")
 config = None
 config_host = None
 config_filepath = None
 
 
-config = KubeApiConfiguration.load_kubernetes_configuration_from_file()
-assert config is not None
-config_host = config.host
-config_filepath = config.filepath
+try:
+    config = KubeApiConfiguration.load_kubernetes_configuration_from_file()
+    assert config is not None
+    config_host = config.host
+    config_filepath = config.filepath
 
-print_version = str(sys.version).replace("\n", " ")
-logging.info(
-    f"""
+    print_version = str(sys.version).replace("\n", " ")
+    logging.info(
+        f"""
+    -----------------------------------------------------------------------
+    Context: {KubeApiConfiguration.get_active_context(config)}
+    home directory: {os.path.expanduser('~')}
+    Config host: {config.host} 
+    Config filepath: {config.filepath}
+    Default namespace: {KubeApiConfiguration.get_default_namespace(config)}
+    Executing dags in python version: {print_version}
+    -----------------------------------------------------------------------
+    """
+    )
+except Exception:
+    logging.error(
+        """
 -----------------------------------------------------------------------
-Context: {KubeApiConfiguration.get_active_context(config)}
-home directory: {os.path.expanduser('~')}
-Config host: {config.host} 
-Config filepath: {config.filepath}
-Default namespace: {KubeApiConfiguration.get_default_namespace(config)}
-Executing dags in python version: {print_version}
------------------------------------------------------------------------
-"""
-)
+Failed to retrive config, kube config could not be loaded.
+----------------------------------------------------------------------
+""",
+        ex,
+    )
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 

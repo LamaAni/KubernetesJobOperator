@@ -11,31 +11,44 @@ dag = DAG(
     catchup=False,
 )
 
+namespace = "cdm-hcjobs"
+
 envs = {
     "PASS_ARG": "a test",
 }
 
 tj_success = KubernetesJobOperator(
     task_id="test-job-success",
+    namespace=namespace,
     body_filepath=resolve_file(__file__ + ".success.yaml"),
     envs=envs,
     dag=dag,
 )
 tj_fail = KubernetesJobOperator(
     task_id="test-job-fail",
+    namespace=namespace,
     body_filepath=resolve_file(__file__ + ".fail.yaml"),
+    envs=envs,
+    dag=dag,
+)
+tj_pod_fail = KubernetesJobOperator(
+    task_id="test-pod-fail",
+    namespace=namespace,
+    body_filepath=resolve_file(__file__ + ".pod.fail.yaml"),
     envs=envs,
     dag=dag,
 )
 tj_overrides = KubernetesJobOperator(
     task_id="test-job-overrides",
     dag=dag,
+    namespace=namespace,
     image="ubuntu",
     envs=envs,
     command=["bash", "-c", 'echo "Starting $PASS_ARG"; sleep 10; echo end'],
 )
 ti_timeout = KubernetesJobOperator(
     task_id="test-job-timeout",
+    namespace=namespace,
     body_filepath=resolve_file(__file__ + ".success.yaml"),
     envs={
         "TIC_COUNT": "100",
