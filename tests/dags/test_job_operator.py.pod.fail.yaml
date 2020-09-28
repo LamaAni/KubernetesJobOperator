@@ -1,7 +1,7 @@
 # the code in this file is augmented by an ejs template
 # and by loading the yaml into memory.
 # some of these values will be replaced.
-apiVersion: batch/v1
+apiVersion: v1
 kind: Pod
 metadata:
   finalizers:

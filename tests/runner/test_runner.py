@@ -39,5 +39,5 @@ def test_custom():
 
 
 if __name__ == "__main__":
-    # test_job()
+    test_job()
     test_pod()

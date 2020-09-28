@@ -11,7 +11,7 @@ dag = DAG(
     catchup=False,
 )
 
-namespace = "cdm-hcjobs"
+namespace = None
 
 envs = {
     "PASS_ARG": "a test",
