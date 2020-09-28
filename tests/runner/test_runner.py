@@ -2,11 +2,12 @@ import os
 import yaml
 from tests.utils import logging
 from airflow_kubernetes_job_operator.job_runner import JobRunner
-from airflow_kubernetes_job_operator.kube_api import KubeObjectKind
+from airflow_kubernetes_job_operator.kube_api import KubeObjectKind, KubeApiConfiguration
 
-# KubeObjectKind.register_global_kind(
-#     KubeObjectKind("HCJob", "hc.dto.cbsinteractive.com/v1alpha1", parse_kind_state=KubeObjectKind.parse_state_job)
-# )
+
+KubeApiConfiguration.register_kind(
+    "HCJob", "hc.dto.cbsinteractive.com/v1alpha1", parse_kind_state=KubeObjectKind.parse_state_job
+)
 
 
 def load_yaml_obj_configs(fpath: str) -> dict:
@@ -29,10 +30,14 @@ def test_job():
     _exec_test(load_yaml_obj_configs("./test_job.yaml"))
 
 
+def test_pod():
+    _exec_test(load_yaml_obj_configs("./test_pod.yaml"))
+
+
 def test_custom():
     _exec_test(load_yaml_obj_configs("../../.local/test_custom.yaml"))
 
 
 if __name__ == "__main__":
     # test_job()
-    test_job()
+    test_pod()

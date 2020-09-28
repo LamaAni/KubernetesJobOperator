@@ -398,7 +398,7 @@ class KubeApiRestClient:
             persist (bool, optional): If True, config file will be updated when changed
                 (e.g GCP token refresh).
         """
-        self._kube_config: kube_config.Configuration = KubeApiConfiguration.load_kubernetes_configuration_from_file(
+        self._kube_config: kube_config.Configuration = KubeApiConfiguration.load_kubernetes_configuration(
             config_file=config_file,
             is_in_cluster=is_in_cluster,
             extra_config_locations=extra_config_locations,

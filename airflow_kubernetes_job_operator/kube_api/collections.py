@@ -1,7 +1,10 @@
 import re
 from enum import Enum
 from typing import Callable, List
-from airflow_kubernetes_job_operator.kube_api.utils import not_empty_string
+
+
+def not_empty_string(val: str):
+    return isinstance(val, str) and len(val) > 0
 
 
 class KubeObjectState(Enum):
@@ -32,7 +35,7 @@ class KubeObjectKind:
         self,
         name: str,
         api_version: str,
-        parse_kind_state: Callable = parse_kind_state_default,
+        parse_kind_state: Callable = None,
         auto_include_in_watch: bool = True,
     ):
         super().__init__()
@@ -124,7 +127,7 @@ class KubeObjectKind:
         return kinds_collection.values()
 
     @classmethod
-    def watchable(cls) -> List["KubeObjectKind"]:
+    def parseable(cls) -> List["KubeObjectKind"]:
         return list(filter(lambda k: k.auto_include_in_watch, cls.all()))
 
     @classmethod
@@ -179,6 +182,14 @@ class KubeObjectKind:
         elif pod_phase == "Failed":
             return KubeObjectState.Failed
         return pod_phase
+
+    def __eq__(self, o: "KubeObjectKind") -> bool:
+        if not isinstance(o, KubeObjectKind):
+            return False
+        return o.api_version == self.api_version and o.name == self.name
+
+    def __str__(self) -> str:
+        return f"{self.api_version}/{self.plural}"
 
 
 for kind in [

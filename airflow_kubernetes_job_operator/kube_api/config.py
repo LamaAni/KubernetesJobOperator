@@ -1,10 +1,11 @@
 import os
-from typing import List
+from typing import List, Callable
 from kubernetes.config import kube_config, incluster_config, load_kube_config, list_kube_config_contexts
 from kubernetes.config.kube_config import Configuration
 
 from airflow_kubernetes_job_operator.kube_api.exceptions import KubeApiException
 from airflow_kubernetes_job_operator.kube_api.utils import join_locations_list, not_empty_string
+from airflow_kubernetes_job_operator.kube_api.collections import KubeObjectKind
 
 
 DEFAULT_KUBE_CONFIG_LOCATIONS: List[str] = join_locations_list(
@@ -66,7 +67,7 @@ class KubeApiConfiguration:
         return default_config_file
 
     @classmethod
-    def load_kubernetes_configuration_from_file(
+    def load_kubernetes_configuration(
         cls,
         config_file: str = None,
         is_in_cluster: bool = None,
@@ -99,6 +100,7 @@ class KubeApiConfiguration:
             configuration.host = loader.host
             configuration.ssl_ca_cert = loader.ssl_ca_cert
             configuration.api_key["authorization"] = "bearer " + loader.token
+            configuration.filepath = os.path.join(DEFAULT_SERVICE_ACCOUNT_PATH, "namespace")
 
             return configuration
 
@@ -144,29 +146,23 @@ class KubeApiConfiguration:
         return configuration
 
     @classmethod
-    def get_active_context(cls, configuration: Configuration):
+    def get_active_context_info(cls, configuration: Configuration):
         (contexts, active_context) = list_kube_config_contexts(config_file=configuration.filepath)
-        return active_context
+        return active_context or {}
 
     @classmethod
     def get_default_namespace(cls, configuration: Configuration):
-        """Returns the default namespace for the current config."""
-        namespace: str = None  # type:ignore
+        """Returns the default namespace for the config."""
         try:
-            in_cluster_namespace_fpath = os.path.join(DEFAULT_SERVICE_ACCOUNT_PATH, "namespace")
-            if os.path.exists(in_cluster_namespace_fpath):
-                with open(in_cluster_namespace_fpath, "r", encoding="utf-8") as nsfile:
-                    namespace = nsfile.read()
-            elif hasattr(configuration, "default_namespace") and configuration.default_namespace is not None:
+            if hasattr(configuration, "default_namespace") and configuration.default_namespace is not None:
                 return configuration.default_namespace
-            elif hasattr(configuration, "filepath") and configuration.filepath is not None:
-                (contexts, active_context) = list_kube_config_contexts(config_file=configuration.filepath)
-
-                namespace = (
-                    active_context.get("context", {}).get("namespace", "default")
-                    if isinstance(active_context, dict)
-                    else "default"
-                )
+            elif (
+                hasattr(configuration, "filepath")
+                and configuration.filepath is not None
+                and os.path.isfile(configuration.filepath)
+            ):
+                context_info = cls.get_active_context_info(configuration)
+                return context_info.get("context", {}).get("namespace", "default")
             elif cls._default_namespace is not None:
                 return cls._default_namespace
             else:
@@ -176,4 +172,36 @@ class KubeApiConfiguration:
                 "Could not resolve current namespace, you must provide a namespace or a context file",
                 e,
             )
-        return namespace
+
+    @classmethod
+    def register_kind(
+        cls,
+        name: str,
+        api_version: str,
+        parse_kind_state: Callable = None,
+        auto_include_in_watch: bool = True,
+    ):
+        """Register a new kubernetes kind that will be used by the kube_api. If the object
+        kind has a pase_kind_state, this would be a traceable kind. i.e. you could
+        create jobs with it.
+
+        Args:
+            name (str): The name of the kind (Pod,Job, ??)
+            api_version (str): The api (api/v1, batch)
+            parse_kind_state (Callable, optional)->KubeObjectState: Method to transcribe the current
+                status to a KubeObjectState. Defaults to None. An object is watchable if it returns three
+                states at lease, KubeObjectState.Running, KubeObjectState.Succeeded, KubeObjectState.Failed
+            auto_include_in_watch (bool, optional): If true, auto watch changes in this kind when
+                watching a namespace. Defaults to True.
+
+        Note:
+            There are default parse methods available as static methods on KubeObjectKind class.
+        """
+        return KubeObjectKind.register_global_kind(
+            KubeObjectKind(
+                name=name,
+                api_version=api_version,
+                parse_kind_state=parse_kind_state,
+                auto_include_in_watch=auto_include_in_watch,
+            )
+        )
