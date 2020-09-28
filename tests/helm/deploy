@@ -1,13 +1,33 @@
 #!/usr/bin/env bash
+command -v realpath >/dev/null
+if [ ! $? ]; then
+    # resolve for mac
+    function realpath() {
+        python3 -c "import os; print(os.path.abspath('$1'))"
+    }
+fi
+
+CUR_DIR=$(dirname "$(realpath "${BASH_SOURCE[0]}")")
+export REPO_PATH="$(realpath "$CUR_DIR/../../")"
+
+cd "$CUR_DIR"
+
 echo "Building the docker image.."
-docker build -f ./Dockerfile ../.. -t kube_job_operator_tester
+docker build -f ./Dockerfile ../.. -t lamaani/zairflow:local
 
 echo "Deploying helm.."
 if [ "$1" != "delete" ] && [ "$1" != "-d" ]; then
     BRANCH="$(git rev-parse --abbrev-ref HEAD)"
     : "${BRANCH:="master"}"
     echo "Applying changes on branch: $BRANCH"
-    helmfile apply --set envs.ZAIRFLOW_GIT_AUTOSYNC_BRANCH=$BRANCH || exit $?
+    APPLY_COMMAND="helmfile apply --set envs.ZAIRFLOW_GIT_AUTOSYNC_BRANCH=$BRANCH"
+
+    ${APPLY_COMMAND}
+    if [ $? -ne 0 ]; then
+        echo "------------------------------"
+        echo "Apply failed, replacing deployment"
+        ${APPLY_COMMAND} --args "--atomic"
+    fi
 else
     helmfile delete || exit $?
 fi

@@ -228,4 +228,19 @@ class GetAPIVersions(KubeApiRestQuery):
         )
 
     def parse_data(self, data):
-        return json.loads(data)
+        rslt = json.loads(data)
+        prased = {}
+        for grp in rslt.get("groups", []):
+            group_name = grp.get("name")
+            preferred = grp.get("preferredVersion", {}).get("version")
+            for ver_info in grp.get("versions", []):
+                group_version = ver_info.get("groupVersion")
+                version = ver_info.get("version")
+                assert group_version is not None, KubeApiException("Invalid group version returned from the api")
+                prased[group_version] = {
+                    "group_name": group_name,
+                    "is_preferred": preferred == version,
+                    "version": version,
+                    "group": grp,
+                }
+        return prased

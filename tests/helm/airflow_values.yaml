@@ -3,13 +3,16 @@ envs:
   AIRFLOW__CORE__LOAD_EXAMPLES: 'False'
 
   # Git auto-sync
-  ZAIRFLOW_GIT_AUTOSYNC_URI: "https://github.com/LamaAni/KubernetesJobOperator.git"
+  ZAIRFLOW_GIT_AUTOSYNC_URI: 'https://github.com/LamaAni/KubernetesJobOperator.git'
+  ZAIRFLOW_GIT_AUTOSYNC_BRANCH: fixes_for_composer_2
   AIRFLOW__CORE__DAGS_FOLDER: '/app/tests/dags'
   AIRFLOW__CORE__PLUGINS_FOLDER: '/app/tests/plugins'
 
+  AIRFLOW__WEBSERVER__EXPOSE_CONFIG: 'True'
+
 image:
-  repository: kube_job_operator_tester
-  pullPolicy: Never
+  tag: local
+  pullPolicy: 'Never'
 
 executor:
   type: LocalExecutor

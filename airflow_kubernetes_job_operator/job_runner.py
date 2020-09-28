@@ -6,11 +6,13 @@ import os
 from logging import Logger
 from uuid import uuid4
 from typing import Callable, List, Type, Union
-from airflow_kubernetes_job_operator.kube_api.client import KubeApiRestQuery
 from airflow_kubernetes_job_operator.kube_api.utils import not_empty_string
 from airflow_kubernetes_job_operator.utils import randomString
 from airflow_kubernetes_job_operator.collections import JobRunnerDeletePolicy, JobRunnerException
 from airflow_kubernetes_job_operator.kube_api import (
+    KubeApiConfiguration,
+    GetAPIVersions,
+    KubeApiRestQuery,
     KubeApiRestClient,
     KubeObjectKind,
     KubeObjectDescriptor,
@@ -214,6 +216,11 @@ class JobRunner:
         if self.show_executor_logs:
             self.logger.log(level, f"{{{marker}}}: {args[0] if len(args)>0 else ''}", *args[1:])
 
+    def _get_watchable_kinds(self) -> List[KubeObjectKind]:
+        kinds = KubeObjectKind.all()
+        apis = self.client.query(GetAPIVersions())
+        return [k for k in kinds if k.api_version == "v1" or k.api_version in apis]
+
     def execute_job(
         self,
         timeout: int = 60 * 5,
@@ -232,19 +239,35 @@ class JobRunner:
         assert state_object.kind is not None, JobRunnerException(
             "The first object in the list of objects must have a recognizable object kind (obj['kind'] is not None)"
         )
-        parseable_kinds = [k for k in KubeObjectKind.all() if k.parse_kind_state is not None]
         assert state_object.kind.parse_kind_state is not None, JobRunnerException(
             "The first object in the object list must have a kind with a parseable state, "
             + "where the states Failed or Succeeded are returned when the object finishes execution."
-            + f"Active kinds with parseable states are: {[k.name for k in parseable_kinds]}. "
+            + f"Active kinds with parseable states are: {[k.name for k in KubeObjectKind.parseable()]}. "
             + "To register new kinds or add a parse_kind_state use "
             + "KubeObjectKind.register_global_kind(..) and associated methods. "
             + "more information cab be found @ "
             + "https://github.com/LamaAni/KubernetesJobOperator/docs/add_custom_kinds.md",
         )
 
+        # scan the api and get all current watchable kinds.
+        watchable_kinds = self._get_watchable_kinds()
+
+        assert state_object.kind in watchable_kinds, JobRunnerException(
+            "The first object in the collection must be watchable and createable, to allow the runner to "
+            + f"properly execute. The kind {str(state_object.kind)} was not found in the api."
+        )
+
+        for kind in KubeObjectKind.all():
+            if kind not in watchable_kinds:
+                self.log(f"Could not find kind '{kind}' in the api server. This kind was not watched.")
+
+        context_info = KubeApiConfiguration.get_active_context_info(self.client.kube_config)
+        self.log(f"Executing context: {context_info.get('name','unknown')}")
+        self.log(f"Executing cluster: {context_info.get('context',{}).get('cluster')}")
+
         # create the watcher
         watcher = NamespaceWatchQuery(
+            kinds=watchable_kinds,
             namespace=list(set(namespaces)),  # type:ignore
             timeout=timeout,
             watch_pod_logs=self.show_pod_logs,
@@ -272,7 +295,7 @@ class JobRunner:
         # binding the errors.
         run_query_handler.on(run_query_handler.error_event_name, lambda sender, err: watcher.emit_error(err))
 
-        self.log(f"Waiting for state object {state_object.namespace}/{state_object.name} to finish...")
+        self.log(f"Waiting for {state_object.namespace}/{state_object.name} to finish...")
 
         try:
             final_state = watcher.wait_for_state(

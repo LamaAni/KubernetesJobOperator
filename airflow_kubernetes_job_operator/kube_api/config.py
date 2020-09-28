@@ -1,10 +1,11 @@
 import os
-from typing import List
+from typing import List, Callable
 from kubernetes.config import kube_config, incluster_config, load_kube_config, list_kube_config_contexts
 from kubernetes.config.kube_config import Configuration
 
 from airflow_kubernetes_job_operator.kube_api.exceptions import KubeApiException
 from airflow_kubernetes_job_operator.kube_api.utils import join_locations_list, not_empty_string
+from airflow_kubernetes_job_operator.kube_api.collections import KubeObjectKind
 
 
 DEFAULT_KUBE_CONFIG_LOCATIONS: List[str] = join_locations_list(
@@ -38,6 +39,12 @@ class KubeApiConfiguration:
 
     @classmethod
     def set_default_kube_config(cls, config: Configuration):
+        """Sets the default kube configuration. Will be chosen as
+        default.
+
+        Args:
+            config (Configuration): The config.
+        """
         assert isinstance(config, Configuration), ValueError(
             "Config must be of type kubernetes.config.kube_config.Configuration"
         )
@@ -45,19 +52,42 @@ class KubeApiConfiguration:
 
     @classmethod
     def set_default_namespace(cls, namespace: str):
+        """Set the global default namespace. Will be chosen if
+        a configuration namespace is not found.
+
+        Args:
+            namespace (str): The namespace
+        """
         assert not_empty_string(namespace), ValueError("namespace must be a non empty string")
         cls._default_namespace = namespace
 
     def add_kube_config_search_location(file_path: str):
+        """Add a global search location for kube configuration files.
+        The location will be added to the top of the list and would be
+        chosen first if exists.
+
+        Args:
+            file_path (str): The path to the configuration file.
+        """
         DEFAULT_KUBE_CONFIG_LOCATIONS.insert(0, file_path)
 
     @classmethod
-    def find_default_config_file(cls, extra_config_locations: List[str] = None):
-        default_config_file = None
+    def find_default_config_file(cls, extra_config_locations: List[str] = None) -> str:
+        """Returns the first valid config file.
+
+        Args:
+            extra_config_locations (List[str], optional): Extra search locations. Defaults to None.
+
+        Returns:
+            str: The config file path.
+        """
         config_possible_locations = join_locations_list(
             extra_config_locations,
             DEFAULT_KUBE_CONFIG_LOCATIONS,
         )
+
+        default_config_file = None
+
         for loc in config_possible_locations:
             loc = loc if "~" not in loc else os.path.expanduser(loc)
             if os.path.isfile(loc):
@@ -66,7 +96,7 @@ class KubeApiConfiguration:
         return default_config_file
 
     @classmethod
-    def load_kubernetes_configuration_from_file(
+    def load_kubernetes_configuration(
         cls,
         config_file: str = None,
         is_in_cluster: bool = None,
@@ -99,7 +129,10 @@ class KubeApiConfiguration:
             configuration.host = loader.host
             configuration.ssl_ca_cert = loader.ssl_ca_cert
             configuration.api_key["authorization"] = "bearer " + loader.token
-
+            default_namespace_file = os.path.join(DEFAULT_SERVICE_ACCOUNT_PATH, "namespace")
+            if os.path.exists(default_namespace_file):
+                with open(default_namespace_file, "r") as raw:
+                    configuration.default_namespace = raw.read()
             return configuration
 
         def load_from_file(fpath):
@@ -128,7 +161,7 @@ class KubeApiConfiguration:
             configuration = cls._default_kube_config
         # search for config.
         else:
-            default_config_file = cls.find_default_config_file()
+            default_config_file = cls.find_default_config_file(extra_config_locations=extra_config_locations)
             if default_config_file is not None:
                 configuration = load_from_file(default_config_file)
             elif os.path.isfile(incluster_config.SERVICE_TOKEN_FILENAME):
@@ -136,7 +169,9 @@ class KubeApiConfiguration:
 
         if configuration is not None:
             configuration.filepath = configuration.filepath if hasattr(configuration, "filepath") else None
-            configuration.default_namespace = default_namespace
+            configuration.default_namespace = (
+                default_namespace or configuration.default_namespace if hasattr(configuration, "filepath") else None
+            )
 
             if set_as_default:
                 cls.set_default_kube_config(configuration)
@@ -144,29 +179,38 @@ class KubeApiConfiguration:
         return configuration
 
     @classmethod
-    def get_active_context(cls, configuration: Configuration):
+    def get_active_context_info(cls, configuration: Configuration):
+        """Returns the current configuration info from the config file
+
+        Args:
+            configuration (Configuration): The configuration.
+
+        Returns:
+            dict: The context info.
+        """
+        if (
+            not hasattr(configuration, "filepath")
+            or configuration.filepath is None
+            or not os.path.isfile(configuration.filepath)
+        ):
+            return {}
+
         (contexts, active_context) = list_kube_config_contexts(config_file=configuration.filepath)
-        return active_context
+        return active_context or {}
 
     @classmethod
     def get_default_namespace(cls, configuration: Configuration):
-        """Returns the default namespace for the current config."""
-        namespace: str = None  # type:ignore
+        """Returns the default namespace for the config."""
         try:
-            in_cluster_namespace_fpath = os.path.join(DEFAULT_SERVICE_ACCOUNT_PATH, "namespace")
-            if os.path.exists(in_cluster_namespace_fpath):
-                with open(in_cluster_namespace_fpath, "r", encoding="utf-8") as nsfile:
-                    namespace = nsfile.read()
-            elif hasattr(configuration, "default_namespace") and configuration.default_namespace is not None:
+            if hasattr(configuration, "default_namespace") and configuration.default_namespace is not None:
                 return configuration.default_namespace
-            elif hasattr(configuration, "filepath") and configuration.filepath is not None:
-                (contexts, active_context) = list_kube_config_contexts(config_file=configuration.filepath)
-
-                namespace = (
-                    active_context.get("context", {}).get("namespace", "default")
-                    if isinstance(active_context, dict)
-                    else "default"
-                )
+            elif (
+                hasattr(configuration, "filepath")
+                and configuration.filepath is not None
+                and os.path.isfile(configuration.filepath)
+            ):
+                context_info = cls.get_active_context_info(configuration)
+                return context_info.get("context", {}).get("namespace", "default")
             elif cls._default_namespace is not None:
                 return cls._default_namespace
             else:
@@ -176,4 +220,36 @@ class KubeApiConfiguration:
                 "Could not resolve current namespace, you must provide a namespace or a context file",
                 e,
             )
-        return namespace
+
+    @classmethod
+    def register_kind(
+        cls,
+        name: str,
+        api_version: str,
+        parse_kind_state: Callable = None,
+        auto_include_in_watch: bool = True,
+    ):
+        """Register a new kubernetes kind that will be used by the kube_api. If the object
+        kind has a pase_kind_state, this would be a traceable kind. i.e. you could
+        create jobs with it.
+
+        Args:
+            name (str): The name of the kind (Pod,Job, ??)
+            api_version (str): The api (api/v1, batch)
+            parse_kind_state (Callable, optional)->KubeObjectState: Method to transcribe the current
+                status to a KubeObjectState. Defaults to None. An object is watchable if it returns three
+                states at lease, KubeObjectState.Running, KubeObjectState.Succeeded, KubeObjectState.Failed
+            auto_include_in_watch (bool, optional): If true, auto watch changes in this kind when
+                watching a namespace. Defaults to True.
+
+        Note:
+            There are default parse methods available as static methods on KubeObjectKind class.
+        """
+        return KubeObjectKind.register_global_kind(
+            KubeObjectKind(
+                name=name,
+                api_version=api_version,
+                parse_kind_state=parse_kind_state,
+                auto_include_in_watch=auto_include_in_watch,
+            )
+        )
