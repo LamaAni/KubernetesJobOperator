@@ -2,6 +2,7 @@ import sys
 import logging
 import os
 import yaml
+from airflow_kubernetes_job_operator.kube_api import KubeApiConfiguration
 from airflow_kubernetes_job_operator.utils import repo_reslove
 
 
@@ -50,6 +51,35 @@ def load_raw_formatted_file(fpath):
     with open(fpath, "r", encoding="utf-8") as filedata:
         text = filedata.read()
     return text
+
+
+def load_default_kube_config():
+    try:
+        config = KubeApiConfiguration.load_kubernetes_configuration()
+        assert config is not None
+
+        print_version = str(sys.version).replace("\n", " ")
+        logging.info(
+            f"""
+        -----------------------------------------------------------------------
+        Context: {KubeApiConfiguration.get_active_context_info(config)}
+        home directory: {os.path.expanduser('~')}
+        Config host: {config.host} 
+        Config filepath: {config.filepath}
+        Default namespace: {KubeApiConfiguration.get_default_namespace(config)}
+        Executing dags in python version: {print_version}
+        -----------------------------------------------------------------------
+        """
+        )
+    except Exception as ex:
+        logging.error(
+            """
+    -----------------------------------------------------------------------
+    Failed to retrive config, kube config could not be loaded.
+    ----------------------------------------------------------------------
+    """,
+            ex,
+        )
 
 
 logging.basicConfig(level="INFO", format=style.GRAY("[%(asctime)s][%(levelname)7s]") + " %(message)s")

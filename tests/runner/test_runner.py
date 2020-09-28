@@ -1,9 +1,10 @@
 import os
 import yaml
-from tests.utils import logging
+from tests.utils import logging, load_default_kube_config
 from airflow_kubernetes_job_operator.job_runner import JobRunner
 from airflow_kubernetes_job_operator.kube_api import KubeObjectKind, KubeApiConfiguration
 
+load_default_kube_config()
 
 KubeApiConfiguration.register_kind(
     "HCJob", "hc.dto.cbsinteractive.com/v1alpha1", parse_kind_state=KubeObjectKind.parse_state_job

@@ -8,8 +8,11 @@ envs:
   AIRFLOW__CORE__DAGS_FOLDER: '/app/tests/dags'
   AIRFLOW__CORE__PLUGINS_FOLDER: '/app/tests/plugins'
 
+  AIRFLOW__WEBSERVER__EXPOSE_CONFIG: 'True'
+
 image:
-  pullPolicy: "Always"
+  tag: local
+  pullPolicy: 'Never'
 
 executor:
   type: LocalExecutor

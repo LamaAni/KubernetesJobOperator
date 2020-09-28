@@ -6,6 +6,38 @@ import warnings
 import logging
 import sys
 
+
+def load_default_kube_config():
+    try:
+        config = KubeApiConfiguration.load_kubernetes_configuration()
+        assert config is not None
+
+        print_version = str(sys.version).replace("\n", " ")
+        logging.info(
+            f"""
+        -----------------------------------------------------------------------
+        Context: {KubeApiConfiguration.get_active_context_info(config)}
+        home directory: {os.path.expanduser('~')}
+        Config host: {config.host} 
+        Config filepath: {config.filepath}
+        Default namespace: {KubeApiConfiguration.get_default_namespace(config)}
+        Executing dags in python version: {print_version}
+        -----------------------------------------------------------------------
+        """
+        )
+    except Exception as ex:
+        logging.error(
+            """
+    -----------------------------------------------------------------------
+    Failed to retrive config, kube config could not be loaded.
+    ----------------------------------------------------------------------
+    """,
+            ex,
+        )
+
+
+load_default_kube_config()
+
 logging.basicConfig(level=logging.INFO)
 
 KubeApiConfiguration.register_kind(
@@ -25,39 +57,7 @@ KubeApiConfiguration.register_kind(
 KubeApiConfiguration.add_kube_config_search_location("~/composer_kube_config")  # second
 KubeApiConfiguration.add_kube_config_search_location("~/gcs/dags/config/hcjobs-kubeconfig.yaml")  # first
 KubeApiConfiguration.set_default_namespace("cdm-hcjobs")
-config = None
-config_host = None
-config_filepath = None
 
-
-try:
-    config = KubeApiConfiguration.load_kubernetes_configuration()
-    assert config is not None
-    config_host = config.host
-    config_filepath = config.filepath
-
-    print_version = str(sys.version).replace("\n", " ")
-    logging.info(
-        f"""
-    -----------------------------------------------------------------------
-    Context: {KubeApiConfiguration.get_active_context_info(config)}
-    home directory: {os.path.expanduser('~')}
-    Config host: {config.host} 
-    Config filepath: {config.filepath}
-    Default namespace: {KubeApiConfiguration.get_default_namespace(config)}
-    Executing dags in python version: {print_version}
-    -----------------------------------------------------------------------
-    """
-    )
-except Exception as ex:
-    logging.error(
-        """
------------------------------------------------------------------------
-Failed to retrive config, kube config could not be loaded.
-----------------------------------------------------------------------
-""",
-        ex,
-    )
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
