@@ -195,7 +195,6 @@ class KubeApiConfiguration:
         ):
             return {}
 
-        print(configuration.filepath)
         (contexts, active_context) = list_kube_config_contexts(config_file=configuration.filepath)
         return active_context or {}
 
