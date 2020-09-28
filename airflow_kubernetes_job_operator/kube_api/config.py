@@ -129,8 +129,10 @@ class KubeApiConfiguration:
             configuration.host = loader.host
             configuration.ssl_ca_cert = loader.ssl_ca_cert
             configuration.api_key["authorization"] = "bearer " + loader.token
-            configuration.filepath = os.path.join(DEFAULT_SERVICE_ACCOUNT_PATH, "namespace")
-
+            default_namespace_file = os.path.join(DEFAULT_SERVICE_ACCOUNT_PATH, "namespace")
+            if os.path.exists(default_namespace):
+                with open(default_namespace_file, "r") as raw:
+                    configuration.default_namespace = raw.read()
             return configuration
 
         def load_from_file(fpath):
@@ -167,7 +169,9 @@ class KubeApiConfiguration:
 
         if configuration is not None:
             configuration.filepath = configuration.filepath if hasattr(configuration, "filepath") else None
-            configuration.default_namespace = default_namespace
+            configuration.default_namespace = (
+                default_namespace or configuration.default_namespace if hasattr(configuration, "filepath") else None
+            )
 
             if set_as_default:
                 cls.set_default_kube_config(configuration)
