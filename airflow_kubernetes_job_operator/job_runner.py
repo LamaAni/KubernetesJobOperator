@@ -326,16 +326,20 @@ class JobRunner:
             for namespace in namespaces:
                 for kind in kinds:
                     queries.append(GetNamespaceObjects(kind, namespace, label_selector=self.job_label_selector))
-            self.log("Reading result error (status)..")
-            descriptors = [KubeObjectDescriptor(o) for o in self.client.query(queries)]  # type:ignore
-            for descriptor in descriptors:
+            self.log("Reading result error (status) objects..")
+            resources = [KubeObjectDescriptor(o) for o in self.client.query(queries)]
+            self.log(
+                f"Found {len(resources)} resources related to this run:\n"
+                + "\n".join(f" - {str(r)}" for r in resources)
+            )
+            for resource in resources:
                 obj_state: KubeObjectState = KubeObjectState.Active
-                if descriptor.kind is not None:
-                    obj_state = descriptor.kind.parse_state(descriptor.body)
-                if descriptor.status is not None:
-                    self.logger.error(f"[{descriptor}]: {obj_state}, status:\n" + yaml.safe_dump(descriptor.status))
+                if resource.kind is not None:
+                    obj_state = resource.kind.parse_state(resource.body)
+                if resource.status is not None:
+                    self.logger.error(f"[{resource}]: {obj_state}, status:\n" + yaml.safe_dump(resource.status))
                 else:
-                    self.logger.error(f"[{descriptor}]: Has {obj_state} (status not provided)")
+                    self.logger.error(f"[{resource}]: Has {obj_state} (status not provided)")
 
         if (
             self.delete_policy == JobRunnerDeletePolicy.Always

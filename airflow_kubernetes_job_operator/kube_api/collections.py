@@ -153,20 +153,22 @@ class KubeObjectKind:
     def parse_state_job(yaml: dict) -> KubeObjectState:
         status = yaml.get("status", {})
         spec = yaml.get("spec", {})
-        back_off_limit = int(spec.get("backoffLimit", 1))
+        back_off_limit = int(spec.get("backoffLimit", 0))
 
         job_status = KubeObjectState.Pending
-        if "startTime" in status:
+        if "failed" in status and int(status.get("failed", 0)) > back_off_limit:
+            job_status = KubeObjectState.Failed
+        elif "startTime" in status:
             if "completionTime" in status:
                 job_status = KubeObjectState.Succeeded
-            elif "failed" in status and int(status.get("failed", 0)) > back_off_limit:
-                job_status = KubeObjectState.Failed
             else:
                 job_status = KubeObjectState.Running
+
         return job_status
 
     @staticmethod
     def parse_state_pod(yaml: dict) -> KubeObjectState:
+
         status = yaml.get("status", {})
         pod_phase = status["phase"]
         container_status = status.get("containerStatuses", [])
@@ -241,6 +243,10 @@ class KubeObjectDescriptor:
             self.metadata["namespace"] = namespace or self.namespace
         if name or self.name:
             self.metadata["name"] = name or self.name
+
+    @property
+    def self_link(self) -> str:
+        return self.metadata["self-link"]
 
     @property
     def body(self) -> dict:

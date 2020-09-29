@@ -1,6 +1,6 @@
 import os
 import yaml
-from utils import logging, load_default_kube_config
+from tests.utils import logging, load_default_kube_config
 from airflow_kubernetes_job_operator.job_runner import JobRunner
 from airflow_kubernetes_job_operator.kube_api import KubeObjectKind, KubeApiConfiguration
 
@@ -36,9 +36,8 @@ def test_pod():
 
 
 def test_custom():
-    _exec_test(load_yaml_obj_configs("../../.local/test_custom.yaml"))
+    _exec_test(load_yaml_obj_configs("../../.local/test_custom.fail.yaml"))
 
 
 if __name__ == "__main__":
-    test_job()
-    test_pod()
+    test_custom()
