@@ -301,16 +301,21 @@ class JobRunner:
 
         try:
             final_state = watcher.wait_for_state(
-                [KubeObjectState.Failed, KubeObjectState.Succeeded],  # type:ignore
+                [KubeObjectState.Failed, KubeObjectState.Succeeded, KubeObjectState.Deleted],  # type:ignore
                 kind=state_object.kind,
                 name=state_object.name,
                 namespace=state_object.namespace,
                 timeout=timeout,
             )
         except Exception as ex:
-            self.log("Execution timeout... deleting resources", level=logging.WARN)
+            self.log("Execution timeout... deleting resources", level=logging.ERROR)
             self.abort()
             raise ex
+
+        if final_state == KubeObjectState.Deleted:
+            self.log(f"Failed to execute. Main resource {state_object} was delete", level=logging.ERROR)
+            self.abort()
+            raise JobRunnerException("Resource was deleted while execution was running, execution failed.")
 
         self.log(f"Job {final_state}")
 
