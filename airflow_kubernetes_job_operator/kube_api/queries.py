@@ -93,21 +93,32 @@ class GetPodLogs(KubeApiRestQuery):
             "timestamps": True,
         }
 
-        self.update_since(since=since)
-
+        self.since = since
         self._last_timestamp = None
         self._active_namespace = None
 
-    def update_since(self, since: datetime, last_timestamp: datetime = None):
-        self.query_params["sinceSeconds"] = (
-            None if since is None else ((last_timestamp or datetime.now()) - since).total_seconds()
-        )
+    def pre_request(self, client: "KubeApiRestClient"):
+        super().pre_request(client)
+
+        # Updating the since argument.
+        last_ts = self.since if self.since is not None and self.since > self._last_timestamp else self._last_timestamp
+
+        since_seconds = None
+        if last_ts is not None:
+            since_seconds = (datetime.now() - last_ts).total_seconds()
+            if since_seconds < 0:
+                since_seconds = 0
+
+        self.query_params["sinceSeconds"] = since_seconds
 
     def on_reconnect(self, client: KubeApiRestClient):
         # updating the since property.
-        self.update_since(datetime.now(), self._last_timestamp)
-        if not self.auto_reconnect:
+        if not self.query_running or not self.auto_reconnect:
+            # if the query is not running then we have reached the pods log end.
+            # we should disconnect, otherwise we should have had an error.
+            self.auto_reconnect = False
             return
+
         try:
             pod = client.query(
                 GetNamespaceObjects(
@@ -168,7 +179,7 @@ class GetNamespaceObjects(KubeApiRestQuery):
                 "watch": watch,
             },
             auto_reconnect=watch,
-            always_throw_on_first_api_call=name is None,
+            throw_on_if_first_api_call_fails=name is None,
         )
         self.kind = kind
         self.namespace = namespace
@@ -197,7 +208,7 @@ class GetNamespaceObjects(KubeApiRestQuery):
         try:
             return super().query_loop(client)
         except KubeApiClientException as ex:
-            if ex.inner_exception.status == 404:
+            if ex.rest_api_exception.status == 404:
                 raise KubeApiException(
                     f"Resource {self.resource_path} of kind '{self.kind.api_version}/{self.kind.name}' not found"
                 )

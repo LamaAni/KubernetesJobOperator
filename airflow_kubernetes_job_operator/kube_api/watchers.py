@@ -8,7 +8,11 @@ from zthreading.tasks import Task
 
 from airflow_kubernetes_job_operator.kube_api.utils import kube_logger
 from airflow_kubernetes_job_operator.kube_api.exceptions import KubeApiException
-from airflow_kubernetes_job_operator.kube_api.collections import KubeObjectState, KubeObjectKind
+from airflow_kubernetes_job_operator.kube_api.collections import (
+    KubeObjectState,
+    KubeObjectKind,
+    KubeApiRestQueryConnectionState,
+)
 from airflow_kubernetes_job_operator.kube_api.client import KubeApiRestQuery, KubeApiRestClient
 from airflow_kubernetes_job_operator.kube_api.queries import (
     GetNamespaceObjects,
@@ -293,8 +297,13 @@ class NamespaceWatchQuery(KubeApiRestQuery):
                 queries.append(q)
                 self._executing_queries.add(q)
 
+        self._set_connection_state(KubeApiRestQueryConnectionState.Connecting)
+
+        # Starting the queries.
         client.query_async(queries)
         for q in queries:
             q.wait_until_running(timeout=None)
-        self._emit_running()
+
+        # State changed to running.
+        self._set_connection_state(KubeApiRestQueryConnectionState.Streaming)
         Task.wait_for_all(queries)

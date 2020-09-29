@@ -22,6 +22,15 @@ class KubeObjectState(Enum):
         return str(self)
 
 
+class KubeApiRestQueryConnectionState(Enum):
+    Disconnected = "Disconnected"
+    Connecting = "Connecting"
+    Streaming = "Streaming"
+
+    def __str__(self) -> str:
+        return self.value
+
+
 def parse_kind_state_default(yaml: dict) -> "KubeObjectState":
     return KubeObjectState.Active
 

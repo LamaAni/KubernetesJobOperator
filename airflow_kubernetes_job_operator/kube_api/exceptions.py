@@ -14,6 +14,6 @@ class KubeApiWatcherParseException(KubeApiWatcherException):
 
 
 class KubeApiClientException(KubeApiException):
-    def __init__(self, *args, inner_exception: KubernetesNativeApiException = None, **kwargs) -> None:
+    def __init__(self, *args, rest_api_exception: KubernetesNativeApiException = None, **kwargs) -> None:
         super().__init__(*args, **kwargs)
-        self.inner_exception: KubernetesNativeApiException = inner_exception
+        self.rest_api_exception: KubernetesNativeApiException = rest_api_exception

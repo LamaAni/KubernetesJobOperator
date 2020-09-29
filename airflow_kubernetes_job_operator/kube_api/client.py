@@ -19,6 +19,7 @@ from kubernetes.config import kube_config
 
 from airflow_kubernetes_job_operator.kube_api.utils import kube_logger
 from airflow_kubernetes_job_operator.kube_api.exceptions import KubeApiException, KubeApiClientException
+from airflow_kubernetes_job_operator.kube_api.collections import KubeApiRestQueryConnectionState
 from airflow_kubernetes_job_operator.kube_api.config import (
     KubeApiConfiguration,
     DEFAULT_USE_ASYNCIO_ENV_NAME,
@@ -47,7 +48,7 @@ class KubeApiRestQuery(Task):
     default_use_asyncio = False
 
     query_started_event_name = "kube_api_query_started"
-    query_running_event_name = "kube_api_query_running"
+    connection_state_changed_event_name = "kube_api_connection_state"
     query_ended_event_name = "kube_api_query_ended"
     query_before_reconnect_event_name = "kube_api_query_before_reconnect"
 
@@ -66,7 +67,7 @@ class KubeApiRestQuery(Task):
         auto_reconnect: bool = False,
         auto_reconnect_max_attempts: int = DEFAULT_AUTO_RECONNECT_MAX_ATTEMPTS,
         auto_reconnect_wait_between_attempts: float = DEFAULT_AUTO_RECONNECT_WAIT_BETWEEN_ATTEMPTS,
-        always_throw_on_first_api_call: bool = True,
+        throw_on_if_first_api_call_fails: bool = True,
     ):
         assert use_asyncio is not True, NotImplementedError("AsyncIO not yet implemented.")
         super().__init__(
@@ -88,20 +89,32 @@ class KubeApiRestQuery(Task):
         self.auto_reconnect = auto_reconnect
         self.auto_reconnect_max_attempts = auto_reconnect_max_attempts
         self.auto_reconnect_wait_between_attempts = auto_reconnect_wait_between_attempts
-        self.always_throw_on_first_api_call = always_throw_on_first_api_call
+        self.throw_on_if_first_api_call_fails = throw_on_if_first_api_call_fails
 
         # these event are object specific
         self.query_started_event_name = f"{self.query_started_event_name} {id(self)}"
         self.query_ended_event_name = f"{self.query_started_event_name} {id(self)}"
-        self.query_running_event_name = f"{self.query_running_event_name} {id(self)}"
+        self.connection_state_changed_event_name = f"{self.connection_state_changed_event_name} {id(self)}"
 
-        self._query_running: bool = False
         self._active_responses: Set[HTTPResponse] = WeakSet()  # type:ignore
         self._is_being_stopped: bool = False
+        self._connection_state: KubeApiRestQueryConnectionState = KubeApiRestQueryConnectionState.Disconnected
 
     @property
     def query_running(self) -> bool:
-        return self._query_running and self.is_running
+        return self.connection_state != KubeApiRestQueryConnectionState.Disconnected
+
+    @property
+    def connection_state(self) -> KubeApiRestQueryConnectionState:
+        return self._connection_state
+
+    def _set_connection_state(self, state: KubeApiRestQueryConnectionState, emit_event: bool = True):
+        if self._connection_state == state:
+            return
+        self._connection_state = state
+        kube_logger.debug(f"[{self.resource_path}] {self._connection_state}")
+        if emit_event:
+            self.emit(self.connection_state_changed_event_name, state)
 
     def _get_method_content_type(self) -> str:
         if self.method == "PATCH":
@@ -146,10 +159,15 @@ class KubeApiRestQuery(Task):
         pass
 
     def _exdcute_query(self, client: "KubeApiRestClient"):
+        self._set_connection_state(KubeApiRestQueryConnectionState.Disconnected, False)
         self.emit(self.query_started_event_name, self, client)
         self.pre_request(client)
-        self.query_loop(client)
-        self._query_running = False
+
+        try:
+            self.query_loop(client)
+        finally:
+            self._set_connection_state(KubeApiRestQueryConnectionState.Disconnected)
+
         self.post_request(client)
         self.emit(self.query_ended_event_name, self, client)
 
@@ -174,10 +192,11 @@ class KubeApiRestQuery(Task):
                 "Content-Type": self._get_method_content_type(),
             },
         )
+
         total_reconnects = 0
         total_consecutive_reconnects = 0
 
-        def can_reconnect(message=None):
+        def can_reconnect():
             # check for change in state
             if not self.auto_reconnect:
                 return False
@@ -190,24 +209,32 @@ class KubeApiRestQuery(Task):
             if total_consecutive_reconnects >= self.auto_reconnect_max_attempts:
                 return False
 
-            kube_logger.debug(f"[{self.resource_path}][Reconnect] {message or ''}")
-
             return True
 
         # starting query.
-        is_first_call = True
-        while self.is_running and not self._is_being_stopped and (is_first_call or self.auto_reconnect):
+        is_first_connect_attempt = True
+        while self.is_running and not self._is_being_stopped and (is_first_connect_attempt or self.auto_reconnect):
             try:
-                if not is_first_call:
-                    if self.auto_reconnect_wait_between_attempts > 0:
+                if not is_first_connect_attempt:
+                    # error while running and has wait time
+                    if self.query_running and self.auto_reconnect_wait_between_attempts > 0:
+                        kube_logger.debug(
+                            f"[{self.resource_path}][Reconnect] Sleeping for "
+                            + f"{self.auto_reconnect_wait_between_attempts}"
+                        )
                         time.sleep(self.auto_reconnect_wait_between_attempts)
+
+                    # alert reconnection event.
                     self.on_reconnect(client)
+
+                    # Reset the connection state.
+                    self._set_connection_state(KubeApiRestQueryConnectionState.Disconnected)
+
+                    # Case auto_reconnect has changed.
                     if not self.auto_reconnect:
-                        kube_logger.debug(f"[{self.resource_path}][Reconnect] Connection lost, aborted")
                         break
-                    else:
-                        kube_logger.debug(f"[{self.resource_path}][Reconnect] Connection lost, reconnecting")
-                is_first_call = False
+
+                    kube_logger.debug(f"[{self.resource_path}] Connection lost, reconnecting..")
 
                 # generating the query params
                 path_params = validate_dictionary(self.path_params)
@@ -220,6 +247,7 @@ class KubeApiRestQuery(Task):
                     query_params_array.append((k, query_params[k]))
 
                 # connecting
+                self._set_connection_state(KubeApiRestQueryConnectionState.Connecting)
                 request_info = client.api_client.call_api(
                     resource_path=self.resource_path,
                     method=self.method,
@@ -238,32 +266,54 @@ class KubeApiRestQuery(Task):
                     collection_formats={},
                 )
 
+                # Connection successful.
+                is_first_connect_attempt = False
+
                 response: HTTPResponse = request_info[0]  # type:ignore
                 self._active_responses.add(response)
-                self._emit_running()
                 total_consecutive_reconnects = 0
 
                 # parsing data
+                self._set_connection_state(KubeApiRestQueryConnectionState.Streaming)
                 for line in self.read_response_stream_lines(response):
                     data = self.parse_data(line)  # type:ignore
                     self.emit_data(data)
 
-                # if possible will do a quite attempt to reconnect.
-                # event is still triggered.
+                # Proper disconnect.
+                self._set_connection_state(KubeApiRestQueryConnectionState.Disconnected)
 
             except KubernetesNativeApiException as ex:
+                # We throw errors in the following cases:
+                # 1. Fail to reconnect on first go.
+                # 2. Fail while streaming with a non rest api error (otherwise disconnect)
+                # 3. Failed too many times.
                 if ex.body is not None:
-                    exception_message = f"{ex.reason}: {ex.body}"
+                    # Proper API error should be handled internally and checked for events.
+                    try:
+                        ex.body = json.loads(ex.body)
+                    except Exception:
+                        pass
+
+                    exeuctor_name = f"{self.__class__.__module__}.{self.__class__.__name__}"
+
                     if isinstance(ex.body, dict):
-                        exception_details: dict = json.loads(ex.body or {})  # type:ignore
-                        exception_message = (
-                            f"{ex.reason}, {exception_details.get('reason')}: {exception_details.get('message')}"
-                        )
-                    force_throw = self.always_throw_on_first_api_call and total_reconnects == 0
-                    if not force_throw and can_reconnect(exception_message):
+                        exception_message = f"{exeuctor_name}, {ex.reason}: {ex.body.get('message')}"
+                    else:
+                        exception_message = f"{exeuctor_name}, {ex.reason}: {ex.body}"
+
+                    err = KubeApiClientException(exception_message, rest_api_exception=ex)
+
+                    if is_first_connect_attempt and self.throw_on_if_first_api_call_fails:
+                        raise err
+
+                    # check if can reconnect.
+                    if can_reconnect():
+                        kube_logger.debug(f"[{self.resource_path}] {exception_message}")
                         continue
-                    if force_throw or self.query_running and not self._is_being_stopped:
-                        raise KubeApiClientException(exception_message, inner_exception=ex)
+
+                    # check if is currently being stopped or already stopped.
+                    if self.is_running and not self._is_being_stopped:
+                        raise err
                 else:
                     raise ex
             except Exception as ex:
@@ -286,11 +336,15 @@ class KubeApiRestQuery(Task):
     def wait_until_running(self, timeout: float = 5, ignore_if_running=True):
         if ignore_if_running and self.query_running:
             return
-        self.wait_for(self.query_running_event_name, timeout=timeout)
 
-    def _emit_running(self):
-        self._query_running = True
-        self.emit(self.query_running_event_name)
+        def predict_is_running(handler, event: Event):
+            if event.name != self.connection_state_changed_event_name:
+                return False
+            if event.args[0] != KubeApiRestQueryConnectionState.Streaming:
+                return False
+            return True
+
+        self.wait_for(predict_is_running, timeout=timeout)
 
     def stop(self, timeout: float = None, throw_error_if_not_running: bool = None):
         try:

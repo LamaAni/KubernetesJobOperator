@@ -259,7 +259,9 @@ class JobRunner:
 
         for kind in KubeObjectKind.all():
             if kind not in watchable_kinds:
-                self.log(f"Could not find kind '{kind}' in the api server. This kind was not watched.")
+                self.log(
+                    f"Could not find kind '{kind}' in the api server. This kind was not watched.", level=logging.WARNING
+                )
 
         context_info = KubeApiConfiguration.get_active_context_info(self.client.kube_config)
         self.log(f"Executing context: {context_info.get('name','unknown')}")

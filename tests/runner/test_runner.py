@@ -1,6 +1,6 @@
 import os
 import yaml
-from tests.utils import logging, load_default_kube_config
+from utils import logging, load_default_kube_config
 from airflow_kubernetes_job_operator.job_runner import JobRunner
 from airflow_kubernetes_job_operator.kube_api import KubeObjectKind, KubeApiConfiguration
 
