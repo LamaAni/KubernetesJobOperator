@@ -234,6 +234,8 @@ class JobRunner:
         for obj in self.body:
             namespaces.append(obj["metadata"]["namespace"])
 
+        namespaces = list(set(namespaces))
+
         state_object = KubeObjectDescriptor(self.body[0])
 
         assert state_object.kind is not None, JobRunnerException(
@@ -259,7 +261,9 @@ class JobRunner:
 
         for kind in KubeObjectKind.all():
             if kind not in watchable_kinds:
-                self.log(f"Could not find kind '{kind}' in the api server. This kind was not watched.")
+                self.log(
+                    f"Could not find kind '{kind}' in the api server. This kind was not watched.", level=logging.WARNING
+                )
 
         context_info = KubeApiConfiguration.get_active_context_info(self.client.kube_config)
         self.log(f"Executing context: {context_info.get('name','unknown')}")
@@ -299,16 +303,21 @@ class JobRunner:
 
         try:
             final_state = watcher.wait_for_state(
-                [KubeObjectState.Failed, KubeObjectState.Succeeded],  # type:ignore
+                [KubeObjectState.Failed, KubeObjectState.Succeeded, KubeObjectState.Deleted],  # type:ignore
                 kind=state_object.kind,
                 name=state_object.name,
                 namespace=state_object.namespace,
                 timeout=timeout,
             )
         except Exception as ex:
-            self.log("Execution timeout... deleting resources", level=logging.WARN)
+            self.log("Execution timeout... deleting resources", level=logging.ERROR)
             self.abort()
             raise ex
+
+        if final_state == KubeObjectState.Deleted:
+            self.log(f"Failed to execute. Main resource {state_object} was delete", level=logging.ERROR)
+            self.abort()
+            raise JobRunnerException("Resource was deleted while execution was running, execution failed.")
 
         self.log(f"Job {final_state}")
 
@@ -317,18 +326,22 @@ class JobRunner:
             kinds = [o.kind.name for o in watcher.watched_objects]
             queries: List[GetNamespaceObjects] = []
             for namespace in namespaces:
-                for kind in kinds:
+                for kind in set(kinds):
                     queries.append(GetNamespaceObjects(kind, namespace, label_selector=self.job_label_selector))
-            self.log("Reading result error (status)..")
-            descriptors = [KubeObjectDescriptor(o) for o in self.client.query(queries)]  # type:ignore
-            for descriptor in descriptors:
+            self.log("Reading result error (status) objects..")
+            resources = [KubeObjectDescriptor(o) for o in self.client.query(queries)]
+            self.log(
+                f"Found {len(resources)} resources related to this run:\n"
+                + "\n".join(f" - {str(r)}" for r in resources)
+            )
+            for resource in resources:
                 obj_state: KubeObjectState = KubeObjectState.Active
-                if descriptor.kind is not None:
-                    obj_state = descriptor.kind.parse_state(descriptor.body)
-                if descriptor.status is not None:
-                    self.logger.error(f"[{descriptor}]: {obj_state}, status:\n" + yaml.safe_dump(descriptor.status))
+                if resource.kind is not None:
+                    obj_state = resource.kind.parse_state(resource.body)
+                if resource.status is not None:
+                    self.logger.error(f"[{resource}]: {obj_state}, status:\n" + yaml.safe_dump(resource.status))
                 else:
-                    self.logger.error(f"[{descriptor}]: Has {obj_state} (status not provided)")
+                    self.logger.error(f"[{resource}]: Has {obj_state} (status not provided)")
 
         if (
             self.delete_policy == JobRunnerDeletePolicy.Always

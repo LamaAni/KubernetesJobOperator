@@ -29,5 +29,5 @@ spec:
               echo "Complete"
           env:
             - name: TIC_COUNT
-              value: '5'
+              value: '2'
   backoffLimit: 0

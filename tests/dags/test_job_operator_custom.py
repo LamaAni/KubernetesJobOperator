@@ -1,4 +1,5 @@
-from utils import resolve_file, default_args
+import os
+from utils import default_args, resolve_file
 from airflow import DAG
 from airflow_kubernetes_job_operator.kubernetes_job_operator import KubernetesJobOperator
 
@@ -11,13 +12,16 @@ dag = DAG(
     catchup=False,
 )
 
+basepath = os.path.dirname(__file__)
+template_path = "templates"
+
 envs = {
     "PASS_ARG": "a test",
 }
 
 KubernetesJobOperator(
     task_id="test-job-custom-success",
-    body_filepath=resolve_file("./.local/test_custom.yaml"),
+    body_filepath=resolve_file("./.local/test_custom.success.yaml"),
     envs=envs,
     dag=dag,
 )
