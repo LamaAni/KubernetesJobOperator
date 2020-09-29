@@ -2,6 +2,7 @@ import sys
 import logging
 import os
 import yaml
+import inspect
 from airflow_kubernetes_job_operator.kube_api import KubeApiConfiguration
 from airflow_kubernetes_job_operator.utils import repo_reslove
 
@@ -80,6 +81,20 @@ def load_default_kube_config():
     """,
             ex,
         )
+
+
+def resolve_file(fpath: str, offset=1):
+    offset = offset if offset > -1 else 0
+
+    frame = inspect.stack()[offset]
+    cur_path = os.path.dirname(frame.filename)
+    
+    if fpath.startswith("."):
+        if fpath.startswith("./"):
+            fpath = os.path.join(cur_path, fpath[2:])
+        else:
+            fpath = os.path.join(cur_path, fpath)
+    return os.path.abspath(fpath)
 
 
 logging.basicConfig(level="INFO", format=style.GRAY("[%(asctime)s][%(levelname)7s]") + " %(message)s")

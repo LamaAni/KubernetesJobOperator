@@ -1,5 +1,5 @@
 import os
-from utils import default_args
+from utils import default_args, resolve_file
 from airflow import DAG
 from airflow_kubernetes_job_operator.kubernetes_job_operator import KubernetesJobOperator
 
@@ -21,14 +21,14 @@ envs = {
 
 KubernetesJobOperator(
     task_id="test-job-custom-success",
-    body_filepath=os.path.join(basepath, template_path, "test_custom.yaml"),
+    body_filepath=resolve_file("./.local/test_custom.success.yaml"),
     envs=envs,
     dag=dag,
 )
 
 KubernetesJobOperator(
     task_id="test-job-custom-fail",
-    body_filepath=os.path.join(basepath, template_path, "test_custom.fail.yaml"),
+    body_filepath=resolve_file("./.local/test_custom.fail.yaml"),
     envs=envs,
     dag=dag,
 )

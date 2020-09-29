@@ -196,6 +196,10 @@ class NamespaceWatchQuery(KubeApiRestQuery):
                 )
 
                 def handle_error(sender, *args):
+                    # Don't throw error if not running.
+                    if not self.is_running:
+                        return
+
                     if len(args) == 0:
                         self.emit_error(KubeApiException("Unknown error from sender", sender))
                     else:
@@ -207,11 +211,26 @@ class NamespaceWatchQuery(KubeApiRestQuery):
                 self._executing_pod_loggers[uid] = read_logs
                 client.query_async(read_logs)
 
-    def stop(self, timeout: float = None, throw_error_if_not_running: bool = None):
+    def _stop_all_loggers(
+        self,
+        timeout: float = None,
+        throw_error_if_not_running: bool = None,
+    ):
+        for q in list(self._executing_pod_loggers.values()):
+            q.stop(timeout=timeout, throw_error_if_not_running=throw_error_if_not_running)
+
+    def stop(
+        self,
+        timeout: float = None,
+        throw_error_if_not_running: bool = None,
+    ):
         for q in self._executing_queries:
             q.stop(timeout=timeout, throw_error_if_not_running=throw_error_if_not_running)
-        for q in self._executing_pod_loggers.values():
-            q.stop(timeout=timeout, throw_error_if_not_running=throw_error_if_not_running)
+
+        self._stop_all_loggers(
+            timeout=timeout,
+            throw_error_if_not_running=throw_error_if_not_running,
+        )
 
         return super().stop(timeout=timeout, throw_error_if_not_running=throw_error_if_not_running)
 
@@ -307,3 +326,6 @@ class NamespaceWatchQuery(KubeApiRestQuery):
         # State changed to running.
         self._set_connection_state(KubeApiRestQueryConnectionState.Streaming)
         Task.wait_for_all(queries)
+
+        # Stopping any leftover loggers.
+        self._stop_all_loggers(timeout=self.timeout, throw_error_if_not_running=False)

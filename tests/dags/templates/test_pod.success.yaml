@@ -1,7 +1,11 @@
+# the code in this file is augmented by an ejs template
+# and by loading the yaml into memory.
+# some of these values will be replaced.
 apiVersion: v1
 kind: Pod
 metadata:
-  name: test-pod
+  finalizers:
+    - foregroundDeletion
 spec:
   restartPolicy: Never
   containers:
@@ -22,19 +26,6 @@ spec:
               date
               sleep 1
           done
-
-          echo "Complete"
       env:
         - name: TIC_COUNT
-          value: '2'
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: test-job-service
-spec:
-  selector:
-    app: test-job-pod
-  ports:
-    - port: 8080
-      targetPort: 8080
+          value: "2"

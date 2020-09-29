@@ -1,10 +1,21 @@
 import os
-from airflow_kubernetes_job_operator.kube_api import KubeApiConfiguration
+from airflow_kubernetes_job_operator.kube_api import KubeApiConfiguration, KubeObjectKind
 
 # import airflow.configuration
 import warnings
 import logging
 import sys
+
+KubeApiConfiguration.add_kube_config_search_location("~/composer_kube_config")  # second
+KubeApiConfiguration.add_kube_config_search_location("~/gcs/dags/config/hcjobs-kubeconfig.yaml")  # first
+KubeApiConfiguration.set_default_namespace("cdm-hcjobs")
+
+KubeApiConfiguration.register_kind(
+    name="HCJob",
+    api_version="hc.dto.cbsinteractive.com/v1alpha1",
+    parse_kind_state=KubeObjectKind.parse_state_job,
+)
+
 
 logging.basicConfig(level=logging.INFO)
 warnings.filterwarnings("ignore", category=DeprecationWarning)
@@ -39,10 +50,11 @@ def print_default_kube_configuration():
         )
 
 
+print_default_kube_configuration()
+
 default_args = {"owner": "tester", "start_date": "1/1/2020", "retries": 0}
 
-REPO_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
-DAGS_PATH = os.path.join(REPO_PATH, "tests", "dags")
+DAGS_PATH = os.path.dirname(__file__)
 
 
 def resolve_file(fpath: str):

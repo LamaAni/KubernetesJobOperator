@@ -1,14 +1,10 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: test-job
   finalizers:
     - foregroundDeletion
 spec:
   template:
-    metadata:
-      labels:
-        app: test-job-service
     spec:
       restartPolicy: Never
       containers:
@@ -30,21 +26,19 @@ spec:
                   sleep 1
               done
 
-              exit 22
-
               echo "Complete"
           env:
             - name: TIC_COUNT
-              value: '0'
+              value: '2'
   backoffLimit: 0
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: test-job-service
+  name: test-service
 spec:
   selector:
-    app: test-job-pod
+    app: myapp
   ports:
-    - port: 8080
-      targetPort: 8080
+    - port: 9999
+      targetPort: 9999
