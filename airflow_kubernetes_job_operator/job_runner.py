@@ -234,6 +234,8 @@ class JobRunner:
         for obj in self.body:
             namespaces.append(obj["metadata"]["namespace"])
 
+        namespaces = list(set(namespaces))
+
         state_object = KubeObjectDescriptor(self.body[0])
 
         assert state_object.kind is not None, JobRunnerException(
@@ -324,7 +326,7 @@ class JobRunner:
             kinds = [o.kind.name for o in watcher.watched_objects]
             queries: List[GetNamespaceObjects] = []
             for namespace in namespaces:
-                for kind in kinds:
+                for kind in set(kinds):
                     queries.append(GetNamespaceObjects(kind, namespace, label_selector=self.job_label_selector))
             self.log("Reading result error (status) objects..")
             resources = [KubeObjectDescriptor(o) for o in self.client.query(queries)]

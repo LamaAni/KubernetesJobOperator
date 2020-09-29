@@ -30,10 +30,12 @@ spec:
                   sleep 1
               done
 
+              exit 22
+
               echo "Complete"
           env:
             - name: TIC_COUNT
-              value: '2'
+              value: '0'
   backoffLimit: 0
 ---
 apiVersion: v1

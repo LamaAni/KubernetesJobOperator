@@ -40,4 +40,5 @@ def test_custom():
 
 
 if __name__ == "__main__":
-    test_custom()
+    test_job()
+    # test_custom()
