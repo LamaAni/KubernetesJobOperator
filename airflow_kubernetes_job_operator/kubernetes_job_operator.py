@@ -3,7 +3,7 @@ from typing import List, Union
 from airflow import configuration
 from airflow.utils.decorators import apply_defaults
 from airflow.operators import BaseOperator
-from airflow_kubernetes_job_operator.kube_api import KubeObjectState
+from airflow_kubernetes_job_operator.kube_api import KubeResourceState
 from airflow_kubernetes_job_operator.utils import (
     to_kubernetes_valid_name,
 )
@@ -229,7 +229,7 @@ class KubernetesJobOperator(BaseOperator):
                 timeout=self._internal_wait_kuberentes_object_timeout,
             )
 
-            if rslt == KubeObjectState.Failed:
+            if rslt == KubeResourceState.Failed:
                 raise KubernetesJobOperatorException(
                     f"Task {self.task_id} failed. See log for kubernetes execution details."
                 )

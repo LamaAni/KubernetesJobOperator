@@ -29,6 +29,15 @@ from airflow_kubernetes_job_operator.kube_api.config import (
 
 
 def set_asyncio_mode(is_active: bool):
+    """NOT_IMPLEMENTED. Sets the global (default) asyncio mode for all queries.
+    This method is currently not implemented.
+
+    Args:
+        is_active (bool): [description]
+
+    Raises:
+        NotImplementedError: [description]
+    """
     if is_active:
         raise NotImplementedError("AsyncIO not yet implemented.")
     KubeApiRestQuery.default_use_asyncio = is_active
@@ -69,6 +78,28 @@ class KubeApiRestQuery(Task):
         auto_reconnect_wait_between_attempts: float = DEFAULT_AUTO_RECONNECT_WAIT_BETWEEN_ATTEMPTS,
         throw_on_if_first_api_call_fails: bool = True,
     ):
+        """Implements a self containing query task (thread) which handles the retrieval
+        of data from the kubernetes api.
+
+        Args:
+            resource_path (str): The api resource path. (Without the server, i.e. api/v1/pods)
+            method (str, optional): The http method. Defaults to "GET".
+            path_params (dict, optional): A dictionary of path parts to send to the server. Defaults to None.
+            query_params (dict, optional): A dictionary of query params (the api request params). Defaults to None.
+            form_params (list, optional): A dictionary of forms params to send to the server. Defaults to None.
+            files (dict, optional): A list of files to send to the server. Defaults to None.
+            body (dict, optional): The request body (usual the PUT element). Defaults to None.
+            headers (dict, optional): The request headers/override headers. Defaults to None.
+            timeout (float, optional): The request timeout. Defaults to None.
+            use_asyncio (bool, optional): Not implemented yet! Defaults to None.
+            auto_reconnect (bool, optional): If true attempts to auto reconnect if connection is lost. Defaults to False.
+            auto_reconnect_max_attempts (int, optional): Max number of consecutive auto reconnect requests.
+                Defaults to DEFAULT_AUTO_RECONNECT_MAX_ATTEMPTS.
+            auto_reconnect_wait_between_attempts (float, optional): Wait time in seconds.
+                Defaults to DEFAULT_AUTO_RECONNECT_WAIT_BETWEEN_ATTEMPTS.
+            throw_on_if_first_api_call_fails (bool, optional): If true the and the first attempt to connect fails,
+                throws an error. Defaults to True.
+        """
         assert use_asyncio is not True, NotImplementedError("AsyncIO not yet implemented.")
         super().__init__(
             self._exdcute_query,
@@ -102,10 +133,12 @@ class KubeApiRestQuery(Task):
 
     @property
     def query_running(self) -> bool:
+        """True if the query is executing (connecting or streaming)"""
         return self.connection_state != KubeApiRestQueryConnectionState.Disconnected
 
     @property
     def connection_state(self) -> KubeApiRestQueryConnectionState:
+        """The state of the connection"""
         return self._connection_state
 
     def _set_connection_state(self, state: KubeApiRestQueryConnectionState, emit_event: bool = True):
@@ -124,13 +157,27 @@ class KubeApiRestQuery(Task):
         return None
 
     def parse_data(self, line: str):
+        """Overridable, parse the query line data from string to some other
+        object.
+
+        Args:
+            line (str): The data line.
+
+        Returns:
+            any: Parsed object.
+        """
         return line
 
     def emit_data(self, data):
+        """Overridable. Called to emit a new data element as event.
+
+        Args:
+            data (any): The data element, as returned from parse_data
+        """
         self.emit(self.data_event_name, data)
 
     @classmethod
-    def read_response_stream_lines(cls, response: HTTPResponse):
+    def _read_response_stream_lines(cls, response: HTTPResponse):
         """INTERNAL. Helper yield method. Parses the streaming http response
         to lines (can by async!)
 
@@ -153,10 +200,31 @@ class KubeApiRestQuery(Task):
                     yield line
 
     def pre_request(self, client: "KubeApiRestClient"):
+        """Called before the request stars
+
+        Args:
+            client (KubeApiRestClient): The client
+        """
         pass
 
     def post_request(self, client: "KubeApiRestClient"):
+        """Called after the request ends.
+
+        Args:
+            client (KubeApiRestClient): The client.
+        """
         pass
+
+    def on_reconnect(self, client: "KubeApiRestClient"):
+        """Called before the connection is reestablished.
+
+        Args:
+            client (KubeApiRestClient): The client
+
+        Returns:
+            False if not to emit the reconnect event.
+        """
+        return True
 
     def _exdcute_query(self, client: "KubeApiRestClient"):
         self._set_connection_state(KubeApiRestQueryConnectionState.Disconnected, False)
@@ -171,10 +239,13 @@ class KubeApiRestQuery(Task):
         self.post_request(client)
         self.emit(self.query_ended_event_name, self, client)
 
-    def on_reconnect(self, client):
-        self.emit(self.query_before_reconnect_event_name)
-
     def query_loop(self, client: "KubeApiRestClient"):
+        """Overridable. The main query loop. Called to execute the query.
+
+        Args:
+            client (KubeApiRestClient): The client.
+        """
+
         def validate_dictionary(d: dict, default: dict = None):
             if default is not None:
                 update_with = d or {}
@@ -224,14 +295,16 @@ class KubeApiRestQuery(Task):
                         )
                         time.sleep(self.auto_reconnect_wait_between_attempts)
 
-                    # alert reconnection event.
-                    self.on_reconnect(client)
+                    # check reconnect
+                    do_reconnect = self.on_reconnect(client) is not False
+                    if do_reconnect:
+                        self.emit(self.query_before_reconnect_event_name)
 
                     # Reset the connection state.
                     self._set_connection_state(KubeApiRestQueryConnectionState.Disconnected)
 
                     # Case auto_reconnect has changed.
-                    if not self.auto_reconnect:
+                    if not self.auto_reconnect and do_reconnect:
                         break
 
                     kube_logger.debug(f"[{self.resource_path}] Connection lost, reconnecting..")
@@ -275,7 +348,7 @@ class KubeApiRestQuery(Task):
 
                 # parsing data
                 self._set_connection_state(KubeApiRestQueryConnectionState.Streaming)
-                for line in self.read_response_stream_lines(response):
+                for line in self._read_response_stream_lines(response):
                     data = self.parse_data(line)  # type:ignore
                     self.emit_data(data)
 
@@ -334,6 +407,13 @@ class KubeApiRestQuery(Task):
         return self
 
     def wait_until_running(self, timeout: float = 5, ignore_if_running=True):
+        """Waits until the query is running. (Thread block)
+
+        Args:
+            timeout (float, optional): The wait timeout. Defaults to 5.
+            ignore_if_running (bool, optional): If true, do not attempt to wait for the
+            start event if query is already running (Streaming or Connecting). Defaults to True.
+        """
         if ignore_if_running and self.query_running:
             return
 
@@ -346,7 +426,13 @@ class KubeApiRestQuery(Task):
 
         self.wait_for(predict_is_running, timeout=timeout)
 
-    def stop(self, timeout: float = None, throw_error_if_not_running: bool = None):
+    def stop(self, timeout: float = None, throw_error_if_not_running: bool = False):
+        """Stops the query execution.
+
+        Args:
+            timeout (float, optional): Stop timeout (see Task). Defaults to None.
+            throw_error_if_not_running (bool, optional): If true, throws an error if not running. Defaults to False.
+        """
         try:
             self._is_being_stopped = True
             self.stop_all_streams()
@@ -362,9 +448,25 @@ class KubeApiRestQuery(Task):
             self._is_being_stopped = False
 
     def log_event(self, logger: Logger, ev: Event):
+        """Overridable. Called on a log event.
+
+        Args:
+            logger (Logger): The logger to log to.
+            ev (Event): The log event.
+        """
         pass
 
     def pipe_to_logger(self, logger: Logger = kube_logger, allowed_event_names=None) -> EventHandler:
+        """Called to pipe logging events to a specific logger. The log_event method
+        will be called when a message is emitted.
+
+        Args:
+            logger (Logger, optional): The logger to pipe to. Defaults to kube_logger.
+            allowed_event_names (str|List[str]|Enum|list[Enum], optional): The allowed events to log on. Defaults to None.
+
+        Returns:
+            EventHandler: The handler which is the event pipe.
+        """
         allowed_event_names = set(
             allowed_event_names
             or [
@@ -395,6 +497,14 @@ class KubeApiRestQuery(Task):
 
 
 def kube_api_default_stream_process_event_data(ev: Event):
+    """Default method for streaming.
+
+    Args:
+        ev (Event): The event.
+
+    Returns:
+        the first event argument if ev.name == ev.sender.data_event_name else the event.
+    """
     if isinstance(ev.sender, KubeApiRestQuery) and ev.name == ev.sender.data_event_name:
         return ev.args[0]
     else:
@@ -421,6 +531,11 @@ class KubeApiRestClient:
 
     @property
     def kube_config(self) -> kube_config.Configuration:
+        """The kubernetes configuration. Use load_kube_config to load
+
+        Returns:
+            kube_config.Configuration: The configuration
+        """
         if self._kube_config is None:
             if not self.auto_load_kube_config:
                 raise KubeApiException("Kubernetes configuration not loaded and auto load is set to false.")
@@ -430,6 +545,11 @@ class KubeApiRestClient:
 
     @property
     def api_client(self) -> ApiClient:
+        """The underlining rest api client. Will be null if no config has loaded.
+
+        Returns:
+            ApiClient: The api client.
+        """
         return self._api_client
 
     def load_kube_config(
@@ -509,6 +629,15 @@ class KubeApiRestClient:
             query.start(self)
 
     def query_async(self, queries: Union[List[KubeApiRestQuery], KubeApiRestQuery]) -> EventHandler:
+        """Asynchronous querying. The queries will be called in the background. Use wait_until_running
+        for each query to wait for the queries to start.
+
+        Args:
+            queries (Union[List[KubeApiRestQuery], KubeApiRestQuery]): The queries to execute.
+
+        Returns:
+            EventHandler: An event handler where all query events are piped.
+        """
         if isinstance(queries, KubeApiRestQuery):
             queries = [queries]
 
@@ -526,6 +655,21 @@ class KubeApiRestClient:
         process_event_data: Callable = kube_api_default_stream_process_event_data,
         throw_errors: bool = True,
     ):
+        """Stream events from multiple queries. The queries will be started if they are not.
+
+        Args:
+            queries (Union[List[KubeApiRestQuery], KubeApiRestQuery]): The queries to execute/stream.
+            event_name (Union[List[str], str], optional): The name of the event to stream. If none will stream
+                 query.data_event_name. Defaults to None.
+            timeout ([type], optional): The streaming timeout. Errors if the stream has not ended before the timeout
+                Defaults to None.
+            process_event_data (Callable, optional): post process event data before exiting. Lambda (data)->val
+                Defaults to kube_api_default_stream_process_event_data.
+            throw_errors (bool, optional): If true throws errors if occur. Defaults to True.
+
+        Yields:
+            any: The query result or query events.
+        """
         if isinstance(queries, KubeApiRestQuery):
             queries = [queries]
 
@@ -552,6 +696,20 @@ class KubeApiRestClient:
         timeout=None,
         throw_errors: bool = True,
     ) -> Union[List[object], object]:
+        """Executes the queries and returns the query results. If a single query is sent returns
+        a single result. If a list is sent returns a list of query results.
+
+        Args:
+            queries (Union[List[KubeApiRestQuery], KubeApiRestQuery]): The queries to execute.
+            event_name (Union[List[str], str], optional): The name of the data event, if none defaults to query.data_event_name
+                Defaults to None.
+            timeout ([type], optional): The query timeout. Defaults to None.
+            throw_errors (bool, optional): If true throw error if they occur. Defaults to True.
+
+        Returns:
+            Union[List[object], object]: A single query if a single query is sent. A list if a
+                list is sent
+        """
         strm = self.stream(queries, event_name=event_name, timeout=timeout, throw_errors=throw_errors)
         rslt = [v for v in strm]
         if not isinstance(queries, list):

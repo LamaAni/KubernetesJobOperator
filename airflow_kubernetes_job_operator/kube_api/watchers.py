@@ -9,8 +9,8 @@ from zthreading.tasks import Task
 from airflow_kubernetes_job_operator.kube_api.utils import kube_logger
 from airflow_kubernetes_job_operator.kube_api.exceptions import KubeApiException
 from airflow_kubernetes_job_operator.kube_api.collections import (
-    KubeObjectState,
-    KubeObjectKind,
+    KubeResourceState,
+    KubeResourceKind,
     KubeApiRestQueryConnectionState,
 )
 from airflow_kubernetes_job_operator.kube_api.client import KubeApiRestQuery, KubeApiRestClient
@@ -35,9 +35,9 @@ class NamespaceWatchQueryObjectState(EventHandler):
         self.status_changed_event_name = status_changed_event_name
         self.deleted_event_name = deleted_event_name
         self.state_changed_event_name = state_changed_event_name
-        self._last_state: KubeObjectState = None
-        self._state: KubeObjectState = None
-        self._kind: KubeObjectKind = None
+        self._last_state: KubeResourceState = None
+        self._state: KubeResourceState = None
+        self._kind: KubeResourceKind = None
 
     @classmethod
     def detect(cls, yaml: dict):
@@ -50,11 +50,11 @@ class NamespaceWatchQueryObjectState(EventHandler):
         return self.metadata["uid"]
 
     @property
-    def kind(self) -> KubeObjectKind:
+    def kind(self) -> KubeResourceKind:
         if self._kind is None:
             if "kind" not in self.body:
                 return None
-            self._kind = KubeObjectKind.create_from_existing(
+            self._kind = KubeResourceKind.create_from_existing(
                 self.body.get("kind", "{undefined}"),
                 self.body.get("apiVersion", None),
             )
@@ -85,7 +85,7 @@ class NamespaceWatchQueryObjectState(EventHandler):
         return self.body.get("status", {})
 
     @property
-    def state(self) -> KubeObjectState:
+    def state(self) -> KubeResourceState:
         if self._state is None:
             if self.kind is None:
                 return None
@@ -137,7 +137,7 @@ class NamespaceWatchQuery(KubeApiRestQuery):
         )
 
         # update kinds
-        kinds = KubeObjectKind.parseable()
+        kinds = KubeResourceKind.watchable()
 
         self.watch = watch
         self.namespaces = [] if namespace is None else namespace if isinstance(namespace, list) else [namespace]
@@ -150,7 +150,7 @@ class NamespaceWatchQuery(KubeApiRestQuery):
 
         self.kinds = {}
         for kind in kinds:
-            kind: KubeObjectKind = kind if isinstance(kind, KubeObjectKind) else KubeObjectKind.get_kind(kind)
+            kind: KubeResourceKind = kind if isinstance(kind, KubeResourceKind) else KubeResourceKind.get_kind(kind)
             self.kinds[kind.name] = kind
 
         self._executing_queries: List[KubeApiRestQuery] = WeakSet()  # type:ignore
@@ -262,12 +262,12 @@ class NamespaceWatchQuery(KubeApiRestQuery):
 
     def wait_for_state(
         self,
-        state: KubeObjectState,
-        kind: KubeObjectKind,
+        state: KubeResourceState,
+        kind: KubeResourceKind,
         name: str,
         namespace: str,
         timeout: float = None,
-    ) -> KubeObjectState:
+    ) -> KubeResourceState:
         if not isinstance(state, list):
             state = [state]
 

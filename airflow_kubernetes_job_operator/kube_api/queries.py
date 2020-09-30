@@ -3,13 +3,17 @@ import logging
 from datetime import datetime
 import os
 import json
-from typing import Union
+from typing import Union, List
 import dateutil.parser
 from zthreading.events import Event
 
 from airflow_kubernetes_job_operator.kube_api.exceptions import KubeApiClientException, KubeApiException
 from airflow_kubernetes_job_operator.kube_api.utils import kube_logger, not_empty_string
-from airflow_kubernetes_job_operator.kube_api.collections import KubeObjectKind, KubeObjectState, KubeObjectDescriptor
+from airflow_kubernetes_job_operator.kube_api.collections import (
+    KubeResourceKind,
+    KubeResourceState,
+    KubeResourceDescriptor,
+)
 from airflow_kubernetes_job_operator.kube_api.client import KubeApiRestQuery, KubeApiRestClient
 
 
@@ -75,7 +79,7 @@ class GetPodLogs(KubeApiRestQuery):
         assert not_empty_string(name), ValueError("name must be a non empty string")
         assert not_empty_string(namespace), ValueError("namespace must be a non empty string")
 
-        kind: KubeObjectKind = KubeObjectKind.get_kind("Pod")
+        kind: KubeResourceKind = KubeResourceKind.get_kind("Pod")
         super().__init__(
             resource_path=kind.compose_resource_path(namespace=namespace, name=name, suffix="log"),
             method="GET",
@@ -117,7 +121,7 @@ class GetPodLogs(KubeApiRestQuery):
             # if the query is not running then we have reached the pods log end.
             # we should disconnect, otherwise we should have had an error.
             self.auto_reconnect = False
-            return
+            return False
 
         try:
             pod = client.query(
@@ -127,9 +131,8 @@ class GetPodLogs(KubeApiRestQuery):
                     name=self.name,
                 )
             )
-            self.auto_reconnect = pod is not None and KubeObjectDescriptor(pod).state == KubeObjectState.Running
-            if self.auto_reconnect:
-                super().on_reconnect(client)
+            self.auto_reconnect = pod is not None and KubeResourceDescriptor(pod).state == KubeResourceState.Running
+            return self.auto_reconnect
         except Exception as ex:
             self.auto_reconnect = False
             raise ex
@@ -158,7 +161,7 @@ class GetPodLogs(KubeApiRestQuery):
 class GetNamespaceObjects(KubeApiRestQuery):
     def __init__(
         self,
-        kind: Union[str, KubeObjectState],  # type:ignore
+        kind: Union[str, KubeResourceState],  # type:ignore
         namespace: str,
         name: str = None,
         api_version: str = None,
@@ -166,8 +169,8 @@ class GetNamespaceObjects(KubeApiRestQuery):
         label_selector: str = None,
         field_selector: str = None,
     ):
-        kind: KubeObjectKind = (
-            kind if isinstance(kind, KubeObjectKind) else KubeObjectKind.get_kind(kind)  # type:ignore
+        kind: KubeResourceKind = (
+            kind if isinstance(kind, KubeResourceKind) else KubeResourceKind.get_kind(kind)  # type:ignore
         )
         super().__init__(
             resource_path=kind.compose_resource_path(namespace=namespace, name=name, api_version=api_version),
@@ -255,3 +258,19 @@ class GetAPIVersions(KubeApiRestQuery):
                     "group": grp,
                 }
         return prased
+
+    @classmethod
+    def get_existing_api_kinds(cls, client: KubeApiRestClient, all_kinds: List[KubeResourceKind] = None):
+        """Filter the list of kinds an returns only the api kinds
+        found on the server.
+
+        Args:
+            all_kinds (List[KubeResourceKind], optional): The resource kinds to check. If none
+            checks all available kinds. Defaults to None.
+
+        Returns:
+            List[KubeResourceKind]: The list of kinds that exist on the server.
+        """
+        all_kinds = all_kinds or KubeResourceKind.all()
+        apis = client.query(GetAPIVersions())
+        return [k for k in all_kinds if k.api_version == "v1" or k.api_version in apis]

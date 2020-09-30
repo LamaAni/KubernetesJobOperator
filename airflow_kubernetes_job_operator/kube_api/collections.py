@@ -4,10 +4,20 @@ from typing import Callable, List
 
 
 def not_empty_string(val: str):
+    """Returns true if the string is not empty (len>0) and not None """
     return isinstance(val, str) and len(val) > 0
 
 
-class KubeObjectState(Enum):
+class KubeResourceState(Enum):
+    """Represents the state of an resource.
+
+    Args:
+        Enum ([type]): [description]
+
+    Returns:
+        [type]: [description]
+    """
+
     Pending = "Pending"
     Active = "Active"
     Succeeded = "Succeeded"
@@ -31,15 +41,16 @@ class KubeApiRestQueryConnectionState(Enum):
         return self.value
 
 
-def parse_kind_state_default(yaml: dict) -> "KubeObjectState":
-    return KubeObjectState.Active
+def parse_kind_state_default(yaml: dict) -> "KubeResourceState":
+    return KubeResourceState.Active
 
 
 global kinds_collection
+
 kinds_collection = {}
 
 
-class KubeObjectKind:
+class KubeResourceKind:
     def __init__(
         self,
         name: str,
@@ -47,6 +58,16 @@ class KubeObjectKind:
         parse_kind_state: Callable = None,
         auto_include_in_watch: bool = True,
     ):
+        """Represents a kubernetes resource kind.
+
+        Args:
+            name (str): The kind name (Pod, Job, Service ...)
+            api_version (str): The resource api version.
+            parse_kind_state (Callable, optional): A method, lambda yaml: object -> KubeResourceState. If exists
+            will be used to parse the state of the object. Defaults to None.
+            auto_include_in_watch (bool, optional): When a watcher is called, should this object be included.
+                Defaults to True.
+        """
         super().__init__()
 
         assert isinstance(name, str) and len(name.strip()) > 0, ValueError("Invalid kind name: " + name)
@@ -70,16 +91,42 @@ class KubeObjectKind:
     def plural(self) -> str:
         return self.name + "s"
 
-    def parse_state(self, body: dict, was_deleted: bool = False) -> KubeObjectState:
+    def parse_state(self, body: dict, was_deleted: bool = False) -> KubeResourceState:
+        """Parses the state of the kind given the object body.
+
+        Args:
+            body (dict): Returns the kind state.
+            was_deleted (bool, optional): If true, will return KubeResourceState.Deleted. Defaults to False.
+
+        Returns:
+            KubeResourceState: The state of the current object.
+        """
         if was_deleted:
-            return KubeObjectState.Deleted
+            return KubeResourceState.Deleted
         else:
             state = (self.parse_kind_state or parse_kind_state_default)(body)
-            if not isinstance(state, KubeObjectState):
-                state = KubeObjectState(state)
+            if not isinstance(state, KubeResourceState):
+                state = KubeResourceState(state)
             return state
 
-    def compose_resource_path(self, namespace: str, name: str = None, api_version: str = None, suffix: str = None):
+    def compose_resource_path(
+        self,
+        namespace: str,
+        name: str = None,
+        api_version: str = None,
+        suffix: str = None,
+    ) -> str:
+        """Create a resource path from the kind.
+
+        Args:
+            namespace (str): The kind namespace to add.
+            name (str, optional): The resource name to add. Defaults to None.
+            api_version (str, optional): Override the kind api_version. Defaults to None.
+            suffix (str, optional): The additional resource suffix (like 'logs'). Defaults to None.
+
+        Returns:
+            str: The resource path.
+        """
         api_version = api_version or self.api_version
         version_header = "apis"
         if re.match(r"v[0-9]+", api_version):
@@ -104,40 +151,46 @@ class KubeObjectKind:
         assert not_empty_string(name), ValueError("name cannot be null")
         name = name.lower()
         if name.lower() not in kinds_collection:
-            return KubeObjectKind(name, api_version, parse_kind_state)
+            return KubeResourceKind(name, api_version, parse_kind_state)
         global_kind = cls.get_kind(name)
 
-        return KubeObjectKind(
+        return KubeResourceKind(
             name,
             api_version or global_kind.api_version,
             parse_kind_state or global_kind.parse_kind_state,
         )
 
     @classmethod
-    def has_kind(cls, kind: str) -> bool:
+    def has_kind(cls, name: str) -> bool:
         global kinds_collection
-        return kind in kinds_collection
+        return name in kinds_collection
 
     @classmethod
-    def get_kind(cls, kind: str) -> "KubeObjectKind":
+    def get_kind(cls, name: str) -> "KubeResourceKind":
         global kinds_collection
-        assert isinstance(kind, str) and len(kind) > 0, ValueError("Kind must be a non empty string")
-        kind = kind.lower()
-        assert kind in kinds_collection, ValueError(
-            f"Unknown kubernetes object kind: {kind},"
-            + " you can use KubeObjectKind.register_global_kind to add new ones."
-            + " (airflow_kubernetes_job_operator.kube_api.KubeObjectKind)"
+        assert isinstance(name, str) and len(name) > 0, ValueError("Kind must be a non empty string")
+        name = name.lower()
+        assert name in kinds_collection, ValueError(
+            f"Unknown kubernetes object kind: {name},"
+            + " you can use KubeResourceKind.register_global_kind to add new ones."
+            + " (airflow_kubernetes_job_operator.kube_api.KubeResourceKind)"
         )
-        return kinds_collection[kind]
+        return kinds_collection[name]
 
     @classmethod
-    def all(cls) -> List["KubeObjectKind"]:
+    def all(cls) -> List["KubeResourceKind"]:
         global kinds_collection
         return kinds_collection.values()
 
     @classmethod
-    def parseable(cls) -> List["KubeObjectKind"]:
-        return list(filter(lambda k: k.auto_include_in_watch, cls.all()))
+    def parseable(cls) -> List["KubeResourceKind"]:
+        """Returns all parseable kinds (i.e. have parse_kind_state not None)"""
+        return [k for k in cls.all() if k.parse_kind_state is not None]
+
+    @classmethod
+    def watchable(cls) -> List["KubeResourceKind"]:
+        """Returns all the kinds that have auto_include_in_watch as true"""
+        return [k for k in cls.all() if k.auto_include_in_watch is True]
 
     @classmethod
     def all_names(cls) -> List[str]:
@@ -145,29 +198,29 @@ class KubeObjectKind:
         return kinds_collection.keys()
 
     @classmethod
-    def register_global_kind(cls, kind: "KubeObjectKind"):
+    def register_global_kind(cls, kind: "KubeResourceKind"):
         global kinds_collection
         kinds_collection[kind.name] = kind
 
     @staticmethod
-    def parse_state_job(yaml: dict) -> KubeObjectState:
+    def parse_state_job(yaml: dict) -> KubeResourceState:
         status = yaml.get("status", {})
         spec = yaml.get("spec", {})
         back_off_limit = int(spec.get("backoffLimit", 0))
 
-        job_status = KubeObjectState.Pending
+        job_status = KubeResourceState.Pending
         if "failed" in status and int(status.get("failed", 0)) > back_off_limit:
-            job_status = KubeObjectState.Failed
+            job_status = KubeResourceState.Failed
         elif "startTime" in status:
             if "completionTime" in status:
-                job_status = KubeObjectState.Succeeded
+                job_status = KubeResourceState.Succeeded
             else:
-                job_status = KubeObjectState.Running
+                job_status = KubeResourceState.Running
 
         return job_status
 
     @staticmethod
-    def parse_state_pod(yaml: dict) -> KubeObjectState:
+    def parse_state_pod(yaml: dict) -> KubeResourceState:
 
         status = yaml.get("status", {})
         pod_phase = status["phase"]
@@ -180,22 +233,22 @@ class KubeObjectKind:
                     and "reason" in container_status["state"]["waiting"]
                     and "BackOff" in container_status["state"]["waiting"]["reason"]
                 ):
-                    return KubeObjectState.Failed
+                    return KubeResourceState.Failed
                 if "error" in container_status["state"]:
-                    return KubeObjectState.Failed
+                    return KubeResourceState.Failed
 
         if pod_phase == "Pending":
-            return KubeObjectState.Pending
+            return KubeResourceState.Pending
         elif pod_phase == "Running":
-            return KubeObjectState.Running
+            return KubeResourceState.Running
         elif pod_phase == "Succeeded":
-            return KubeObjectState.Succeeded
+            return KubeResourceState.Succeeded
         elif pod_phase == "Failed":
-            return KubeObjectState.Failed
+            return KubeResourceState.Failed
         return pod_phase
 
-    def __eq__(self, o: "KubeObjectKind") -> bool:
-        if not isinstance(o, KubeObjectKind):
+    def __eq__(self, o: "KubeResourceKind") -> bool:
+        if not isinstance(o, KubeResourceKind):
             return False
         return o.api_version == self.api_version and o.name == self.name
 
@@ -204,16 +257,16 @@ class KubeObjectKind:
 
 
 for kind in [
-    KubeObjectKind(api_version="v1", name="Pod", parse_kind_state=KubeObjectKind.parse_state_pod),
-    KubeObjectKind(api_version="v1", name="Service"),
-    KubeObjectKind(api_version="v1", name="Event", auto_include_in_watch=False),
-    KubeObjectKind(api_version="batch/v1", name="Job", parse_kind_state=KubeObjectKind.parse_state_job),
-    KubeObjectKind(api_version="apps/v1", name="Deployment"),
+    KubeResourceKind(api_version="v1", name="Pod", parse_kind_state=KubeResourceKind.parse_state_pod),
+    KubeResourceKind(api_version="v1", name="Service"),
+    KubeResourceKind(api_version="v1", name="Event", auto_include_in_watch=False),
+    KubeResourceKind(api_version="batch/v1", name="Job", parse_kind_state=KubeResourceKind.parse_state_job),
+    KubeResourceKind(api_version="apps/v1", name="Deployment"),
 ]:
-    KubeObjectKind.register_global_kind(kind)
+    KubeResourceKind.register_global_kind(kind)
 
 
-class KubeObjectDescriptor:
+class KubeResourceDescriptor:
     def __init__(
         self,
         body: dict,
@@ -223,13 +276,13 @@ class KubeObjectDescriptor:
         assert_metadata: bool = True,
     ):
         super().__init__()
-        assert isinstance(body, dict), ValueError("body must be a dictionary")
+        assert isinstance(body, dict), ValueError("Error while parsing resource: body must be a dictionary", body)
 
         self._body = body
         self._kind = (
             None
             if self.body.get("kind", None) is None
-            else KubeObjectKind.create_from_existing(
+            else KubeResourceKind.create_from_existing(
                 self.body.get("kind"),
                 api_version or self.body.get("apiVersion"),
             )
@@ -253,7 +306,7 @@ class KubeObjectDescriptor:
         return self._body
 
     @property
-    def kind(self) -> KubeObjectKind:
+    def kind(self) -> KubeResourceKind:
         return self._kind
 
     @property
@@ -275,7 +328,7 @@ class KubeObjectDescriptor:
         return self.body.get("status")
 
     @property
-    def state(self) -> KubeObjectState:
+    def state(self) -> KubeResourceState:
         return self.kind.parse_state(self.body, False)
 
     @property

@@ -8,16 +8,16 @@ from airflow_kubernetes_job_operator.kube_api import (
     NamespaceWatchQuery,
     CreateNamespaceObject,
     DeleteNamespaceObject,
-    KubeObjectDescriptor,
-    KubeObjectState,
-    KubeObjectKind,
+    KubeResourceDescriptor,
+    KubeResourceState,
+    KubeResourceKind,
 )
 
 
 kubernetes.client.CoreV1Api().delete_namespaced_service
 
-KubeObjectKind.register_global_kind(
-    KubeObjectKind("HCjob", "hc.dto.cbsinteractive.com/v1alpha1", parse_kind_state=KubeObjectKind.parse_state_job)
+KubeResourceKind.register_global_kind(
+    KubeResourceKind("HCjob", "hc.dto.cbsinteractive.com/v1alpha1", parse_kind_state=KubeResourceKind.parse_state_job)
 )
 
 
@@ -39,7 +39,7 @@ label_selector = None
 label_selector = f"task-id={task_id}"
 
 obj_definitions = load_yaml_obj_configs("../../.local/test_custom.yaml")
-task = KubeObjectDescriptor(obj_definitions[0])
+task = KubeResourceDescriptor(obj_definitions[0])
 obj: dict = None
 kinds = set()
 
@@ -75,7 +75,7 @@ client.query_async(apply_on_objects(CreateNamespaceObject))
 
 logging.info(f"Waiting for {task} of kind {task.kind.name} to succeed or fail ...")
 final_state = watcher.wait_for_state(
-    [KubeObjectState.Failed, KubeObjectState.Succeeded],
+    [KubeResourceState.Failed, KubeResourceState.Succeeded],
     kind=task.kind,
     namespace=task.namespace,
     name=task.name,

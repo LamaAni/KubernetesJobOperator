@@ -1,7 +1,7 @@
 from logging import Logger
 from zthreading.events import Event
 
-from airflow_kubernetes_job_operator.kube_api.collections import KubeObjectDescriptor
+from airflow_kubernetes_job_operator.kube_api.collections import KubeResourceDescriptor
 from airflow_kubernetes_job_operator.kube_api.client import KubeApiRestQuery
 
 
@@ -18,7 +18,7 @@ class ConfigureNamespaceObject(KubeApiRestQuery):
         query_params: dict = None,
         include_body_in_query: bool = True,
     ):
-        self._descriptor = KubeObjectDescriptor(body, namespace=namespace, name=name)
+        self._descriptor = KubeResourceDescriptor(body, namespace=namespace, name=name)
         assert self._descriptor.namespace is not None, ValueError(
             "namespace cannot be none, you must send a name in variable or in body"
         )
