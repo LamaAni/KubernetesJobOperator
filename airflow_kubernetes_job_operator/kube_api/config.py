@@ -5,7 +5,7 @@ from kubernetes.config.kube_config import Configuration
 
 from airflow_kubernetes_job_operator.kube_api.exceptions import KubeApiException
 from airflow_kubernetes_job_operator.kube_api.utils import join_locations_list, not_empty_string
-from airflow_kubernetes_job_operator.kube_api.collections import KubeResourceKind
+from airflow_kubernetes_job_operator.kube_api.collections import KubeObjectKind
 
 
 DEFAULT_KUBE_CONFIG_LOCATIONS: List[str] = join_locations_list(
@@ -170,7 +170,9 @@ class KubeApiConfiguration:
         if configuration is not None:
             configuration.filepath = configuration.filepath if hasattr(configuration, "filepath") else None
             configuration.default_namespace = (
-                default_namespace or configuration.default_namespace if hasattr(configuration, "default_namespace") else None
+                default_namespace or configuration.default_namespace
+                if hasattr(configuration, "default_namespace")
+                else None
             )
 
             if set_as_default:
@@ -243,10 +245,10 @@ class KubeApiConfiguration:
                 watching a namespace. Defaults to True.
 
         Note:
-            There are default parse methods available as static methods on KubeResourceKind class.
+            There are default parse methods available as static methods on KubeObjectKind class.
         """
-        return KubeResourceKind.register_global_kind(
-            KubeResourceKind(
+        return KubeObjectKind.register_global_kind(
+            KubeObjectKind(
                 name=name,
                 api_version=api_version,
                 parse_kind_state=parse_kind_state,

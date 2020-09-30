@@ -7,6 +7,7 @@ from airflow_kubernetes_job_operator.kube_api import KubeResourceState
 from airflow_kubernetes_job_operator.utils import (
     to_kubernetes_valid_name,
 )
+from airflow_kubernetes_job_operator.utils import resolve_relative_path
 from airflow_kubernetes_job_operator.job_runner import JobRunner, JobRunnerDeletePolicy
 from airflow_kubernetes_job_operator.exceptions import KubernetesJobOperatorException
 from airflow_kubernetes_job_operator.config import (
@@ -86,7 +87,9 @@ class KubernetesJobOperator(BaseOperator):
             "body is None, body_filepath is None and an image was not defined. Unknown image to execute."
         )
 
-        body = body or self._read_body(body_filepath or DEFAULT_EXECUTION_OBJECT_PATHS[DEFAULT_EXECTION_OBJECT])
+        body = body or self._read_body(
+            resolve_relative_path(body_filepath, 1) or DEFAULT_EXECUTION_OBJECT_PATHS[DEFAULT_EXECTION_OBJECT]
+        )
 
         assert body is not None and (isinstance(body, (dict, str))), ValueError(
             "body must either be a yaml string or a dict"

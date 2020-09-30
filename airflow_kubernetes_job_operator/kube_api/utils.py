@@ -1,12 +1,12 @@
 from logging import Logger
 from typing import List
-from airflow_kubernetes_job_operator.kube_api.exceptions import KubeApiException
 import logging
 
 kube_logger: Logger = logging.getLogger(__name__)
 
 
 def clean_dictionary_nulls(d: dict) -> dict:
+    """Removes all null values from the dictionary"""
     if d is None:
         return {}
     for k in list(d.keys()):
@@ -17,6 +17,7 @@ def clean_dictionary_nulls(d: dict) -> dict:
 
 
 def unqiue_with_order(lst) -> list:
+    """Returns only the unique values while keeping order"""
     ulst = []
     uvals = set()
     for v in lst:
@@ -27,18 +28,8 @@ def unqiue_with_order(lst) -> list:
     return ulst
 
 
-def get_apply_uri_from_kind(kind: str, namespace: str):
-    if kind == "Job":
-        return f"/apis/batch/v1/namespaces/{namespace}/jobs"
-    elif kind == "Pod":
-        return f"/apis/batch/v1/namespaces/{namespace}/pods"
-    elif kind == "Deployment":
-        return f"/apis/batch/v1/namespaces/{namespace}/deployments"
-    else:
-        raise KubeApiException("Unable to resolve kind: " + kind)
-
-
 def not_empty_string(val: str):
+    """Returns true if the string is not empty (len>0) and not None """
     return isinstance(val, str) and len(val) > 0
 
 

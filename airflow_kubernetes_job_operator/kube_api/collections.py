@@ -146,7 +146,23 @@ class KubeResourceKind:
         return resource_path
 
     @classmethod
-    def create_from_existing(cls, name: str, api_version: str = None, parse_kind_state: Callable = None):
+    def create_from_existing(
+        cls,
+        name: str,
+        api_version: str = None,
+        parse_kind_state: Callable = None,
+    ) -> "KubeResourceKind":
+        """Create an object kind and fill the default values from the one existing in
+        global collection.
+
+        Args:
+            name (str): The kind name
+            api_version (str, optional): The api version. Defaults to None.
+            parse_kind_state (Callable, optional): The method to use to parse the resource state. Defaults to None.
+
+        Returns:
+            KubeResourceKind: The new kind
+        """
         global kinds_collection
         assert not_empty_string(name), ValueError("name cannot be null")
         name = name.lower()
@@ -199,6 +215,7 @@ class KubeResourceKind:
 
     @classmethod
     def register_global_kind(cls, kind: "KubeResourceKind"):
+        """Add a kind to the global kinds collection"""
         global kinds_collection
         kinds_collection[kind.name] = kind
 
@@ -278,6 +295,16 @@ class KubeResourceDescriptor:
         name: str = None,
         assert_metadata: bool = True,
     ):
+        """A resource descriptor. Parses the body dictionary for values.
+
+        Args:
+            body (dict): The resource body.
+            api_version (str, optional): The resource api_version_override/fill. Defaults to None.
+            namespace (str, optional): The resource namespace override/fill. Defaults to None.
+            name (str, optional): The resource name override/fill. Defaults to None.
+            assert_metadata (bool, optional): If true, fills the metadata collection if it dose not exist.
+                Defaults to True.
+        """
         super().__init__()
         assert isinstance(body, dict), ValueError("Error while parsing resource: body must be a dictionary", body)
 

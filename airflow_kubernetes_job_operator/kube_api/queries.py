@@ -41,6 +41,14 @@ KUBE_API_SHOW_SERVER_DETECT_LOG_LEVEL_METHOD = do_detect_log_level
 
 class LogLine:
     def __init__(self, pod_name: str, namespace: str, message: str, timestamp: datetime):
+        """GetPodLogs log line generated info object.
+
+        Args:
+            pod_name (str): The name of the pod
+            namespace (str): The namespace of the pod
+            message (str): The message
+            timestamp (datetime): The log timestamp.
+        """
         super().__init__()
         self.pod_name = pod_name
         self.namespace = namespace
@@ -76,6 +84,18 @@ class GetPodLogs(KubeApiRestQuery):
         follow: bool = False,
         timeout: int = None,
     ):
+        """Returns the pod logs for a pod. Can follow the pod logs
+        in real time.
+
+        Args:
+            name (str): The name of the pod.
+            namespace (str, optional): The pod namespace. Defaults to None.
+            since (datetime, optional): Since when to start the log read. If None -> all logs.
+                Defaults to None.
+            follow (bool, optional): If true, keep streaming pod logs. Defaults to False.
+            timeout (int, optional): The read timeout, if specified will error if logs were not
+                returned in time. Defaults to None.
+        """
         assert not_empty_string(name), ValueError("name must be a non empty string")
         assert not_empty_string(namespace), ValueError("namespace must be a non empty string")
 
@@ -125,7 +145,7 @@ class GetPodLogs(KubeApiRestQuery):
 
         try:
             pod = client.query(
-                GetNamespaceObjects(
+                GetNamespaceResources(
                     kind=self.kind,
                     namespace=self.namespace,
                     name=self.name,
@@ -158,7 +178,7 @@ class GetPodLogs(KubeApiRestQuery):
         super().log_event(logger, ev)
 
 
-class GetNamespaceObjects(KubeApiRestQuery):
+class GetNamespaceResources(KubeApiRestQuery):
     def __init__(
         self,
         kind: Union[str, KubeResourceState],  # type:ignore
@@ -169,6 +189,16 @@ class GetNamespaceObjects(KubeApiRestQuery):
         label_selector: str = None,
         field_selector: str = None,
     ):
+        """Returns a collection of api resources. Can watch for changes in a namespace.
+
+        Args:
+            kind (Union[str, KubeResourceState]): The resource kind to look for.
+            name (str, optional): The resource name to look for. If none then all resources. Defaults to None.
+            api_version (str, optional): The resource api_version. Defaults to None.
+            watch (bool, optional): If true, continue watching for changes. Defaults to False.
+            label_selector (str, optional): A kubernetes label selector to filter resources. Defaults to None.
+            field_selector (str, optional): A kubernetes field selector to filter resources. Defaults to None.
+        """
         kind: KubeResourceKind = (
             kind if isinstance(kind, KubeResourceKind) else KubeResourceKind.get_kind(kind)  # type:ignore
         )
@@ -224,6 +254,11 @@ class GetAPIResources(KubeApiRestQuery):
         self,
         api="apps/v1",
     ):
+        """Returns a dictionary of api resources
+
+        Args:
+            api (str, optional): The api name. Defaults to "apps/v1".
+        """
         super().__init__(
             f"/apis/{api}",
         )
@@ -236,12 +271,14 @@ class GetAPIVersions(KubeApiRestQuery):
     def __init__(
         self,
     ):
+        """Returns a dictionary of api versions."""
         super().__init__(
             "/apis",
             method="GET",
         )
 
     def parse_data(self, data):
+        """ Override data parse """
         rslt = json.loads(data)
         prased = {}
         for grp in rslt.get("groups", []):

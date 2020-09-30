@@ -6,8 +6,8 @@ from tests.utils import logging
 from airflow_kubernetes_job_operator.kube_api import (
     KubeApiRestClient,
     NamespaceWatchQuery,
-    CreateNamespaceObject,
-    DeleteNamespaceObject,
+    CreateNamespaceResource,
+    DeleteNamespaceResource,
     KubeResourceDescriptor,
     KubeResourceState,
     KubeResourceKind,
@@ -71,7 +71,7 @@ watcher.wait_until_running()
 logging.info(f"Watcher started for {task_id}, watch kinds: " + ", ".join(watcher.kinds.keys()))
 
 logging.info(f"Sending {task} to server with dependencies...")
-client.query_async(apply_on_objects(CreateNamespaceObject))
+client.query_async(apply_on_objects(CreateNamespaceResource))
 
 logging.info(f"Waiting for {task} of kind {task.kind.name} to succeed or fail ...")
 final_state = watcher.wait_for_state(
@@ -83,5 +83,5 @@ final_state = watcher.wait_for_state(
 
 logging.info(f"Finalized state with: {final_state}")
 logging.info("Deleting leftovers..")
-client.query(apply_on_objects(DeleteNamespaceObject))
+client.query(apply_on_objects(DeleteNamespaceResource))
 client.stop()

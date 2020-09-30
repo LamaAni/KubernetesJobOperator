@@ -2,7 +2,7 @@ import json
 from datetime import datetime
 from logging import Logger
 from weakref import WeakSet, WeakValueDictionary
-from typing import List, Dict
+from typing import List, Dict, Tuple, Union
 from zthreading.events import EventHandler, Event
 from zthreading.tasks import Task
 
@@ -15,13 +15,13 @@ from airflow_kubernetes_job_operator.kube_api.collections import (
 )
 from airflow_kubernetes_job_operator.kube_api.client import KubeApiRestQuery, KubeApiRestClient
 from airflow_kubernetes_job_operator.kube_api.queries import (
-    GetNamespaceObjects,
+    GetNamespaceResources,
     GetPodLogs,
     LogLine,
 )
 
 
-class NamespaceWatchQueryObjectState(EventHandler):
+class NamespaceWatchQueryResourceState(EventHandler):
     def __init__(
         self,
         uid: str,
@@ -29,6 +29,16 @@ class NamespaceWatchQueryObjectState(EventHandler):
         state_changed_event_name="state_changed",
         deleted_event_name="deleted",
     ) -> None:
+        """Maintains the state information about a kubernetes resources.
+
+        This object is created and used internally.
+
+        Args:
+            uid (str): The kubernetes resource uid.
+            status_changed_event_name (str, optional): The event name for status changed. Defaults to "status_changed".
+            state_changed_event_name (str, optional): The event name for state changed. Defaults to "state_changed".
+            deleted_event_name (str, optional): The event name for deleted. Defaults to "deleted".
+        """
         super().__init__()
         self.body = {"metadata": {"uid": uid}}
         self._deleted = False
@@ -40,7 +50,8 @@ class NamespaceWatchQueryObjectState(EventHandler):
         self._kind: KubeResourceKind = None
 
     @classmethod
-    def detect(cls, yaml: dict):
+    def get_identifiers(cls, yaml: dict) -> Tuple[str, str]:
+        """Returns the kind and the uid of a resource"""
         uid = yaml.get("metadata", {}).get("uid", None)
         kind = yaml.get("kind", "[unknown kube element]").lower()
         return uid, kind
@@ -92,16 +103,21 @@ class NamespaceWatchQueryObjectState(EventHandler):
             self._state = self.kind.parse_state(self.body, self.deleted)
         return self._state
 
-    def update(self, object_yaml):
-        if object_yaml.get("event_type", None) == "DELETED":
+    def update(self, body: dict):
+        """Updates the object state information given its (new) body.
+
+        Args:
+            object_yaml (dict): The object body.
+        """
+        if body.get("event_type", None) == "DELETED":
             self._deleted = True
             self.emit(self.deleted_event_name)
 
-        has_status_changed = json.dumps(self.status) != json.dumps(object_yaml.get("status", {}))
+        has_status_changed = json.dumps(self.status) != json.dumps(body.get("status", {}))
         if has_status_changed:
             self.emit(self.status_changed_event_name)
 
-        self.body.update(object_yaml)
+        self.body.update(body)
 
         # reset the state.
         self._state = None
@@ -120,16 +136,30 @@ class NamespaceWatchQuery(KubeApiRestQuery):
     def __init__(
         self,
         kinds: list = None,
-        namespace: str = None,
-        watch: bool = True,
+        namespace: Union[str, List[str]] = None,
         label_selector: str = None,
         field_selector: str = None,
         watch_pod_logs: bool = True,
         timeout: float = None,
-        collect_kube_object_state: bool = True,
+        collect_resource_state: bool = True,
         pod_log_event_name: str = "log",
         pod_log_since: datetime = None,
     ):
+        """A namespace watcher that tracks the state and logs of namespace(s) elements.
+
+        Args:
+            kinds (list, optional): The object kinds to watch. If None defaults to KubeResourceKind.watchable()
+            . Defaults to None.
+            namespace (Union[str, List[str]], optional): A namespace or list of namespaces to watch
+            . Defaults to None.
+            label_selector (str, optional): Kubernetes label selector. Defaults to None.
+            field_selector (str, optional): Kubernetes field selector to filter resources. Defaults to None.
+            watch_pod_logs (bool, optional): If true, also follow all pod logs. Defaults to True.
+            timeout (float, optional): Startup timeout. Defaults to None.
+            collect_resource_state (bool, optional): If true, collects and tracks the resources state. Defaults to True.
+            pod_log_event_name (str, optional): Event name for logging. Defaults to "log".
+            pod_log_since (datetime, optional): Watch pod logs since. See GetPodLogs. Defaults to None.
+        """
         super().__init__(
             None,
             method="GET",
@@ -139,14 +169,13 @@ class NamespaceWatchQuery(KubeApiRestQuery):
         # update kinds
         kinds = kinds or KubeResourceKind.watchable()
 
-        self.watch = watch
         self.namespaces = [] if namespace is None else namespace if isinstance(namespace, list) else [namespace]
         self.label_selector = label_selector
         self.field_selector = field_selector
         self.watch_pod_logs = watch_pod_logs
         self.pod_log_event_name = pod_log_event_name
         self.pod_log_since = pod_log_since
-        self.collect_kube_object_state = collect_kube_object_state
+        self.collect_resource_state = collect_resource_state
 
         self.kinds = {}
         for kind in kinds:
@@ -155,10 +184,10 @@ class NamespaceWatchQuery(KubeApiRestQuery):
 
         self._executing_queries: List[KubeApiRestQuery] = WeakSet()  # type:ignore
         self._executing_pod_loggers: Dict[str, GetPodLogs] = WeakValueDictionary()  # type:ignore
-        self._object_states: Dict[str, NamespaceWatchQueryObjectState] = dict()
+        self._object_states: Dict[str, NamespaceWatchQueryResourceState] = dict()
 
     @property
-    def watched_objects(self) -> List[NamespaceWatchQueryObjectState]:
+    def watched_objects(self) -> List[NamespaceWatchQueryResourceState]:
         return list(self._object_states.values())
 
     def emit_log(self, data):
@@ -167,10 +196,10 @@ class NamespaceWatchQuery(KubeApiRestQuery):
     def process_data_state(self, data: dict, client: KubeApiRestClient):
         if not self.is_running:
             return
-        uid, kind = NamespaceWatchQueryObjectState.detect(data)
-        if self.collect_kube_object_state and kind in self.kinds:
+        uid, kind = NamespaceWatchQueryResourceState.get_identifiers(data)
+        if self.collect_resource_state and kind in self.kinds:
             if uid not in self._object_states:
-                self._object_states[uid] = NamespaceWatchQueryObjectState(
+                self._object_states[uid] = NamespaceWatchQueryResourceState(
                     uid,
                     self.status_changed_event_name,
                     self.state_changed_event_name,
@@ -236,14 +265,14 @@ class NamespaceWatchQuery(KubeApiRestQuery):
 
     def log_event(self, logger: Logger, ev: Event):
         if ev.name == self.query_before_reconnect_event_name:
-            if isinstance(ev.sender, GetNamespaceObjects):
-                get_ns_objs: GetNamespaceObjects = ev.sender
+            if isinstance(ev.sender, GetNamespaceResources):
+                get_ns_objs: GetNamespaceResources = ev.sender
                 logger.info(
                     f"[{get_ns_objs.namespace}/{get_ns_objs.kind.plural}] "
                     + f"Watch collection for {get_ns_objs.kind.plural} lost, attempting to reconnect..."
                 )
         if ev.name == self.state_changed_event_name:
-            osw: NamespaceWatchQueryObjectState = ev.sender
+            osw: NamespaceWatchQueryResourceState = ev.sender
             logger.info(f"[{osw.namespace}/{osw.kind_name.lower()}s/{osw.name}]" + f" {osw.state}")
         elif ev.name == self.pod_log_event_name:
             line: LogLine = ev.args[0]
@@ -262,12 +291,24 @@ class NamespaceWatchQuery(KubeApiRestQuery):
 
     def wait_for_state(
         self,
-        state: KubeResourceState,
+        state: Union[KubeResourceState, List[KubeResourceState]],
         kind: KubeResourceKind,
         name: str,
         namespace: str,
         timeout: float = None,
     ) -> KubeResourceState:
+        """Wait for a resource to reach a state. Dose not look in past events.
+
+        Args:
+            state (Union[KubeResourceState, List[KubeResourceState]]): The state to wait for.
+            kind (KubeResourceKind): The resource kind.
+            name (str): The resource name
+            namespace (str): The resource namespace.
+            timeout (float, optional): Wait timeout. Defaults to None.
+
+        Returns:
+            KubeResourceState: The final resource state.
+        """
         if not isinstance(state, list):
             state = [state]
 
@@ -276,10 +317,10 @@ class NamespaceWatchQuery(KubeApiRestQuery):
         def state_reached(sender: EventHandler, event: Event):
             if event.name != self.state_changed_event_name:
                 return False
-            if not isinstance(event.sender, NamespaceWatchQueryObjectState):
+            if not isinstance(event.sender, NamespaceWatchQueryResourceState):
                 return False
 
-            osw: NamespaceWatchQueryObjectState = event.sender
+            osw: NamespaceWatchQueryResourceState = event.sender
             if osw.name != name or osw.namespace != namespace or osw.kind.name != kind.name:
                 return False
 
@@ -296,17 +337,17 @@ class NamespaceWatchQuery(KubeApiRestQuery):
     def query_loop(self, client: KubeApiRestClient):
         # specialized loop. Uses the event handler to read multiple sourced events,
         # and waits for the stream to stop.
-        queries: List[GetNamespaceObjects] = []
+        queries: List[GetNamespaceResources] = []
         namespaces = set(self.namespaces)
         if len(namespaces) == 0:
             namespaces = set([client.get_default_namespace()])
 
         for namespace in namespaces:
             for kind in list(self.kinds.values()):
-                q = GetNamespaceObjects(
+                q = GetNamespaceResources(
                     kind=kind,
                     namespace=namespace,
-                    watch=self.watch,
+                    watch=True,
                     field_selector=self.field_selector,
                     label_selector=self.label_selector,
                 )

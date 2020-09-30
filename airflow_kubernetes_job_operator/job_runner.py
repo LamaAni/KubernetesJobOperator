@@ -7,7 +7,7 @@ from logging import Logger
 from uuid import uuid4
 from typing import Callable, List, Type, Union, Set
 from airflow_kubernetes_job_operator.kube_api.utils import not_empty_string
-from airflow_kubernetes_job_operator.utils import randomString
+from airflow_kubernetes_job_operator.utils import random_string
 from airflow_kubernetes_job_operator.collections import JobRunnerDeletePolicy, JobRunnerException
 from airflow_kubernetes_job_operator.kube_api import (
     KubeApiConfiguration,
@@ -17,11 +17,11 @@ from airflow_kubernetes_job_operator.kube_api import (
     KubeResourceKind,
     KubeResourceDescriptor,
     NamespaceWatchQuery,
-    DeleteNamespaceObject,
-    CreateNamespaceObject,
-    ConfigureNamespaceObject,
+    DeleteNamespaceResource,
+    CreateNamespaceResource,
+    ConfigureNamespaceResource,
     KubeResourceState,
-    GetNamespaceObjects,
+    GetNamespaceResources,
     kube_logger,
 )
 
@@ -33,7 +33,7 @@ class JobRunner:
 
     def __init__(
         self,
-        body,
+        body: Union[str, dict, List[dict]],
         namespace: str = None,
         logger: Logger = kube_logger,
         show_pod_logs: bool = True,
@@ -43,11 +43,35 @@ class JobRunner:
         show_error_logs: bool = True,
         delete_policy: JobRunnerDeletePolicy = JobRunnerDeletePolicy.IfSucceeded,
         auto_load_kube_config=True,
-        random_name_postfix_length=8,
+        random_name_postfix_length: int = 8,
         name_prefix: str = None,
         name_postfix: str = None,
     ):
-        assert isinstance(body, (list, dict, str)), ValueError(
+        """A kubernetes job runner. Creates a collection of resources and waits for the
+        first resource to reach one of KubeResourceState.Succeeded/KubeResourceState.Failed/KubeResourceState.Deleted
+
+        Args:
+            body (Union[str, dict, List[dict]]): The execution body (kubernetes definition). If string then yaml is
+                expected.
+            namespace (str, optional): The default namespace to execute in. Defaults to None.
+            logger (Logger, optional): The logger to write to. Defaults to kube_logger.
+            show_pod_logs (bool, optional): If true, follow all pod logs. Defaults to True.
+            show_operation_logs (bool, optional): If true shows the operation logs (runner). Defaults to True.
+            show_watcher_logs (bool, optional): If true, shows the watcher events. Defaults to True.
+            show_executor_logs (bool, optional): If true, shows the create event events. Defaults to True.
+            show_error_logs (bool, optional): If true, shows errors in the log. Defaults to True.
+            delete_policy (JobRunnerDeletePolicy, optional): Determines when to delete the job resources upon finishing
+            . Defaults to JobRunnerDeletePolicy.IfSucceeded.
+            auto_load_kube_config (bool, optional): If true, and kube_config is None, load it. Defaults to True.
+            random_name_postfix_length (int, optional): Add a random string to all resource names if > 0. Defaults to 8.
+            name_prefix (str, optional): The prefix for the all resource names. Defaults to None.
+            name_postfix (str, optional): The postfix for all resource name. Defaults to None.
+        """
+
+        body = body if not isinstance(body, str) else yaml.safe_load_all(body)
+        body = body if isinstance(body, list) else [body]
+
+        assert all(isinstance(r, dict) for r in body), ValueError(
             "body must be a dictionary, a list of dictionaries with at least one value, or string yaml"
         )
 
@@ -58,7 +82,7 @@ class JobRunner:
         self._id = str(uuid4())
 
         self.name_postfix = (
-            name_postfix or "" if random_name_postfix_length <= 0 else randomString((random_name_postfix_length))
+            name_postfix or "" if random_name_postfix_length <= 0 else random_string((random_name_postfix_length))
         )
         self.name_prefix = name_prefix
 
@@ -97,6 +121,12 @@ class JobRunner:
 
     @classmethod
     def register_custom_prepare_kind(cls, kind: Union[KubeResourceKind, str], preapre_kind: Callable):
+        """Register a global kind preparation method. Runs before execution on a copy.
+
+        Args:
+            kind (Union[KubeResourceKind, str]): The object kind.
+            preapre_kind (Callable): The preparation method. lambda(runner=self, resource)
+        """
         if isinstance(kind, str):
             kind = KubeResourceKind.get_kind(kind)
 
@@ -104,7 +134,7 @@ class JobRunner:
         cls.custom_prepare_kinds[kind.name] = preapre_kind
 
     @classmethod
-    def update_metadata_labels(cls, body: dict, labels: dict):
+    def _update_metadata_labels(cls, body: dict, labels: dict):
         assert isinstance(body, dict), ValueError("Body must be a dictionary")
         assert isinstance(labels, dict), ValueError("labels must be a dictionary")
 
@@ -117,7 +147,7 @@ class JobRunner:
                 metadata["labels"].update(labels)
         for o in body.values():
             if isinstance(o, dict):
-                cls.update_metadata_labels(o, labels)
+                cls._update_metadata_labels(o, labels)
 
     @classmethod
     def custom_prepare_job_kind(cls, body: dict):
@@ -146,6 +176,11 @@ class JobRunner:
         descriptor.spec.setdefault("restartPolicy", "Never")
 
     def prepare_body(self, force=False):
+        """Called to prepare all the resources in the body for execution
+
+        Args:
+            force (bool, optional): The body preparation will only happen once, unless forced. Defaults to False.
+        """
         if not force and self._is_body_ready:
             return
 
@@ -190,7 +225,7 @@ class JobRunner:
         assert len(name_parts) > 0, JobRunnerException("Invalid name or auto generated name")
         descriptor.name = "-".join(name_parts)
 
-        self.update_metadata_labels(
+        self._update_metadata_labels(
             body,
             {
                 self.job_runner_instance_id_label_name: self.id,
@@ -202,7 +237,7 @@ class JobRunner:
 
         return body
 
-    def _create_body_operation_queries(self, operator: Type[ConfigureNamespaceObject]) -> List[KubeApiRestQuery]:
+    def _create_body_operation_queries(self, operator: Type[ConfigureNamespaceResource]) -> List[KubeApiRestQuery]:
         queries = []
         for obj in self.body:
             q = operator(obj)
@@ -212,6 +247,11 @@ class JobRunner:
         return queries
 
     def log(self, *args, level=logging.INFO):
+        """Log in the runner logger.
+
+        Args:
+            level ([type], optional): The log level. Defaults to logging.INFO.
+        """
         marker = f"job-runner-{self.id}" if self.show_runner_id_on_logs else "job-runner"
         if self.show_executor_logs:
             self.logger.log(level, f"{{{marker}}}: {args[0] if len(args)>0 else ''}", *args[1:])
@@ -221,6 +261,16 @@ class JobRunner:
         timeout: int = 60 * 5,
         watcher_start_timeout: int = 10,
     ):
+        """Execute the job
+
+        Args:
+            timeout (int, optional): Execution timeout. Defaults to 60*5.
+            watcher_start_timeout (int, optional): The timeout to start watching the namespaces. Defaults to 10.
+
+        Returns:
+            KubeResourceState: The main resource (resources[0]) final state.
+        """
+
         self.prepare_body()
 
         # prepare the run objects.
@@ -299,14 +349,14 @@ class JobRunner:
         self.log(f"Watching namespaces: {', '.join(namespaces)}")
 
         # Creating the objects to run
-        run_query_handler = self.client.query_async(self._create_body_operation_queries(CreateNamespaceObject))
+        run_query_handler = self.client.query_async(self._create_body_operation_queries(CreateNamespaceResource))
         # binding the errors.
         run_query_handler.on(run_query_handler.error_event_name, lambda sender, err: watcher.emit_error(err))
 
         self.log(f"Waiting for {state_object.namespace}/{state_object.name} to finish...")
 
         try:
-            final_state = watcher.wait_for_state(
+            final_state: KubeResourceState = watcher.wait_for_state(
                 [KubeResourceState.Failed, KubeResourceState.Succeeded, KubeResourceState.Deleted],  # type:ignore
                 kind=state_object.kind,
                 name=state_object.name,
@@ -328,10 +378,10 @@ class JobRunner:
         if final_state == KubeResourceState.Failed and self.show_error_logs:
             # print the object states.
             kinds = [o.kind.name for o in watcher.watched_objects]
-            queries: List[GetNamespaceObjects] = []
+            queries: List[GetNamespaceResources] = []
             for namespace in namespaces:
                 for kind in set(kinds):
-                    queries.append(GetNamespaceObjects(kind, namespace, label_selector=self.job_label_selector))
+                    queries.append(GetNamespaceResources(kind, namespace, label_selector=self.job_label_selector))
             self.log("Reading result error (status) objects..")
             resources = [KubeResourceDescriptor(o) for o in self.client.query(queries)]
             self.log(
@@ -374,10 +424,11 @@ class JobRunner:
         self.log(
             "Deleting objects: " + ", ".join([f"{d}" for d in descriptors]),
         )
-        self.client.query(self._create_body_operation_queries(DeleteNamespaceObject))
+        self.client.query(self._create_body_operation_queries(DeleteNamespaceResource))
         self.log("Job deleted")
 
     def abort(self):
+        """Abort the job (and delete all resources)"""
         self.log("Aborting job ...")
         self.delete_job()
         self.client.stop()
