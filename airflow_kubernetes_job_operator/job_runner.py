@@ -68,7 +68,7 @@ class JobRunner:
             name_postfix (str, optional): The postfix for all resource name. Defaults to None.
         """
 
-        body = body if not isinstance(body, str) else yaml.safe_load_all(body)
+        body = body if not isinstance(body, str) else list(yaml.safe_load_all(body))
         body = body if isinstance(body, list) else [body]
 
         assert all(isinstance(r, dict) for r in body), ValueError(

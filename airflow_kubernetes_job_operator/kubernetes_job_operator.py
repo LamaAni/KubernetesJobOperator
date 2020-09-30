@@ -88,7 +88,7 @@ class KubernetesJobOperator(BaseOperator):
         )
 
         body = body or self._read_body(
-            resolve_relative_path(body_filepath, 1) or DEFAULT_EXECUTION_OBJECT_PATHS[DEFAULT_EXECTION_OBJECT]
+            resolve_relative_path(body_filepath or DEFAULT_EXECUTION_OBJECT_PATHS[DEFAULT_EXECTION_OBJECT], 2)
         )
 
         assert body is not None and (isinstance(body, (dict, str))), ValueError(

@@ -38,10 +38,15 @@ def resolve_relative_path(src: str, caller_offset=0):
     Returns:
         [type]: [description]
     """
+
+    if os.path.isabs(src):
+        return os.path.abspath(src)
+
     caller_offset = caller_offset if caller_offset > -1 else 0
     caller_offset += 1
 
-    frame = inspect.stack()[caller_offset]
+    stack = inspect.stack()
+    frame = stack[caller_offset]
     return resolve_path(src=src, basepath=os.path.dirname(frame.filename))
 
 
