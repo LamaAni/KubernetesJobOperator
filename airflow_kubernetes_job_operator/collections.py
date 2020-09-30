@@ -15,6 +15,6 @@ class JobRunnerDeletePolicy(Enum):
         return self.value
 
 
-class KubernetesJobOperatorDefaultExecutionObject(Enum):
+class KubernetesJobOperatorDefaultExecutionResource(Enum):
     Pod = "Pod"
     Job = "Job"

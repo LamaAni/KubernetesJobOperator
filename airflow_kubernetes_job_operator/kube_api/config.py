@@ -5,7 +5,7 @@ from kubernetes.config.kube_config import Configuration
 
 from airflow_kubernetes_job_operator.kube_api.exceptions import KubeApiException
 from airflow_kubernetes_job_operator.kube_api.utils import join_locations_list, not_empty_string
-from airflow_kubernetes_job_operator.kube_api.collections import KubeObjectKind
+from airflow_kubernetes_job_operator.kube_api.collections import KubeResourceKind
 
 
 DEFAULT_KUBE_CONFIG_LOCATIONS: List[str] = join_locations_list(
@@ -245,10 +245,10 @@ class KubeApiConfiguration:
                 watching a namespace. Defaults to True.
 
         Note:
-            There are default parse methods available as static methods on KubeObjectKind class.
+            There are default parse methods available as static methods on KubeResourceKind class.
         """
-        return KubeObjectKind.register_global_kind(
-            KubeObjectKind(
+        return KubeResourceKind.register_global_kind(
+            KubeResourceKind(
                 name=name,
                 api_version=api_version,
                 parse_kind_state=parse_kind_state,

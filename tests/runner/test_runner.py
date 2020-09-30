@@ -1,7 +1,8 @@
 import os
 import yaml
 import re
-from tests.utils import logging, resolve_file, style, load_default_kube_config
+from tests.utils import logging, style, load_default_kube_config
+from airflow_kubernetes_job_operator.utils import resolve_relative_path
 from airflow_kubernetes_job_operator.job_runner import JobRunner, JobRunnerDeletePolicy
 from airflow_kubernetes_job_operator.kube_api import KubeResourceKind, KubeApiConfiguration
 
@@ -13,7 +14,7 @@ KubeApiConfiguration.register_kind(
 
 
 def _exec_test(fpath):
-    fpath = resolve_file(fpath)
+    fpath = resolve_relative_path(fpath)
     logging.info(style.CYAN(f"Testing {fpath}:"))
     body = None
     with open(fpath, "r") as raw:
