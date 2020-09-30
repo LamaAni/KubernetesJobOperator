@@ -1,25 +1,26 @@
 # Airflow KubernetesJobOperator
 
-An airflow job operator that executes a task as a Kubernetes job on a cluster, given a job yaml configuration or an image uri.
+An airflow operator that executes a task in a kubernetes cluster, given a yaml configuration or an image url.
 
-### Two operators are available:
+### BETA
 
-1. KubernetesJobOperator - The main kubernetes job operator.
-1. KubernetesLegacyJobOperator - A operator that accepts the same parameters as
-   the KubernetesPodOperator and allows seamless integration between old and new.
+This repository is in beta testing. Contributions are welcome.
 
-### Implementations still missing:
+### Supports
 
-1. XCom
-1. Examples (other than TL;DR)
+1. Running tasks as Kubernetes Jobs.
+1. Running tasks as Kubernetes Pods.
+1. Running tasks as multi resources schemas (multiple resources) as a task (similar to `kubectl apply`).
+1. Running tasks as [custom resources](docs/custom_kinds.md).
+1. Auto detection of kubernetes namespace and config.
+1. Pod and participating resources logs -> airflow.
+1. Full kubernetes error logs on failure.
+1. Never/Always/OnFailure/OnSuccess kubernetes resources delete policy.
 
-### Next steps
+### Two operator classes are available:
 
-1. Create a python installation for pip.
-
-# BETA
-
-This repository is in beta testing. Any contributions are welcome.
+1. KubernetesJobOperator - Supply a kubernetes configuration (yaml file, yaml string or a list of python dictionaries) as the body of the task.
+1. KubernetesLegacyJobOperator - Defaults to a kubernetes job definition, and supports the same arguments as the KubernetesPodOperator. i.e. replace with the KubernetesPodOperator for legacy support.
 
 # Install
 
@@ -43,6 +44,8 @@ pip install git+https://github.com/LamaAni/KubernetesJobOperator.git@[tag]
 
 # TL;DR
 
+Example airflow DAG,
+
 ```python
 from airflow import DAG
 from airflow_kubernetes_job_operator.kubernetes_job_operator import KubernetesJobOperator
@@ -52,16 +55,18 @@ from airflow.utils.dates import days_ago
 default_args = {"owner": "tester", "start_date": days_ago(2), "retries": 0}
 dag = DAG("job-tester", default_args=default_args, description="Test base job operator", schedule_interval=None)
 
-job_task=KubernetesJobOperator(
+job_task = KubernetesJobOperator(
     task_id="test-job",
     dag=dag,
     image="ubuntu",
     command=["bash", "-c", 'echo "all ok"'],
 )
 
-body=... # loaded from file.
-job_task_from_yaml = KubernetesJobOperator(task_id="test-job-from-yaml", body=body, dag=dag)
+body = {"kind": "Pod"}  # The body or a yaml string (must be valids)
+job_task_from_body = KubernetesJobOperator(dag=dag, task_id="test-job-from-body", body=body)
 
+body_filepath = "./my_yaml_file.yaml"
+job_task_from_yaml = KubernetesJobOperator(dag=dag, task_id="test-job-from-yaml", body_filepath=body_filepath)
 
 # Legacy compatibility to KubernetesPodOperator
 legacy_job_task = KubernetesLegacyJobOperator(
@@ -73,7 +78,7 @@ legacy_job_task = KubernetesLegacyJobOperator(
 )
 ```
 
-And the job yaml:
+Example (multi resource) task yaml:
 
 ```yaml
 apiVersion: batch/v1
@@ -84,6 +89,9 @@ metadata:
     - foregroundDeletion
 spec:
   template:
+    metadata:
+      labels:
+        app: test-task-pod
     spec:
       restartPolicy: Never
       containers:
@@ -96,6 +104,19 @@ spec:
               #/usr/bin/env bash
               echo "OK"
   backoffLimit: 0
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: test-service
+spec:
+  selector:
+    app: test-task-pod
+  ports:
+    - port: 8080
+      targetPort: 8080
+---
+
 ```
 
 # Why/When would this be better than the [KubernetesPodOperator](https://github.com/apache/airflow/blob/master/airflow/contrib/operators/kubernetes_pod_operator.p)?
@@ -110,6 +131,13 @@ You can find a description of the kubernetes Job resource [here](https://kuberne
 # Contribution
 
 Feel free to ping me in issues or directly on LinkedIn to contribute.
+
+# Implementations still missing:
+
+Add an issue (or better submit PR) if you need these.
+
+1. XCom
+1. Examples (other than TL;DR)
 
 # Licence
 
