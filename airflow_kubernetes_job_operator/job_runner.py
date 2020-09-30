@@ -5,7 +5,7 @@ import os
 
 from logging import Logger
 from uuid import uuid4
-from typing import Callable, List, Type, Union, Set
+from typing import Callable, List, Type, Union
 from airflow_kubernetes_job_operator.kube_api.utils import not_empty_string
 from airflow_kubernetes_job_operator.utils import random_string
 from airflow_kubernetes_job_operator.collections import JobRunnerDeletePolicy, JobRunnerException
@@ -315,7 +315,8 @@ class JobRunner:
         for kind in KubeResourceKind.watchable():
             if kind not in watchable_kinds:
                 self.log(
-                    f"Could not find kind '{kind}' in the api server. This kind is not watched and events will not be logged",
+                    f"Could not find kind '{kind}' in the api server. "
+                    + "This kind is not watched and events will not be logged",
                     level=logging.WARNING,
                 )
 

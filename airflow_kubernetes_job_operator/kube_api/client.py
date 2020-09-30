@@ -92,7 +92,8 @@ class KubeApiRestQuery(Task):
             headers (dict, optional): The request headers/override headers. Defaults to None.
             timeout (float, optional): The request timeout. Defaults to None.
             use_asyncio (bool, optional): Not implemented yet! Defaults to None.
-            auto_reconnect (bool, optional): If true attempts to auto reconnect if connection is lost. Defaults to False.
+            auto_reconnect (bool, optional): If true attempts to auto reconnect if connection is lost.
+                Defaults to False.
             auto_reconnect_max_attempts (int, optional): Max number of consecutive auto reconnect requests.
                 Defaults to DEFAULT_AUTO_RECONNECT_MAX_ATTEMPTS.
             auto_reconnect_wait_between_attempts (float, optional): Wait time in seconds.
@@ -462,7 +463,8 @@ class KubeApiRestQuery(Task):
 
         Args:
             logger (Logger, optional): The logger to pipe to. Defaults to kube_logger.
-            allowed_event_names (str|List[str]|Enum|list[Enum], optional): The allowed events to log on. Defaults to None.
+            allowed_event_names (str|List[str]|Enum|list[Enum], optional): The allowed events to log on.
+                Defaults to None.
 
         Returns:
             EventHandler: The handler which is the event pipe.
@@ -701,8 +703,8 @@ class KubeApiRestClient:
 
         Args:
             queries (Union[List[KubeApiRestQuery], KubeApiRestQuery]): The queries to execute.
-            event_name (Union[List[str], str], optional): The name of the data event, if none defaults to query.data_event_name
-                Defaults to None.
+            event_name (Union[List[str], str], optional): The name of the data event,
+                if none defaults to query.data_event_name. Defaults to None.
             timeout ([type], optional): The query timeout. Defaults to None.
             throw_errors (bool, optional): If true throw error if they occur. Defaults to True.
 
