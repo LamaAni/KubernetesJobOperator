@@ -17,7 +17,7 @@ from airflow_kubernetes_job_operator.kube_api.collections import (
 from airflow_kubernetes_job_operator.kube_api.client import KubeApiRestQuery, KubeApiRestClient
 
 
-def do_detect_log_level(line: "LogLine", msg: str):
+def default_detect_log_level(line: "LogLine", msg: str):
     if "CRITICAL" in msg:
         return logging.CRITICAL
     if "ERROR" in msg:
@@ -33,7 +33,7 @@ def do_detect_log_level(line: "LogLine", msg: str):
 class LogLine:
     show_kubernetes_log_timestamps: bool = False
     autodetect_kuberentes_log_level: bool = True
-    detect_kubernetes_log_level: Callable = do_detect_log_level
+    detect_kubernetes_log_level: Callable = None
 
     def __init__(self, pod_name: str, namespace: str, message: str, timestamp: datetime):
         """GetPodLogs log line generated info object.
@@ -52,11 +52,12 @@ class LogLine:
 
     def log(self, logger: Logger = kube_logger):
         msg = self.__repr__()
-        if not self.autodetect_kuberentes_log_level or not isinstance(self.detect_kubernetes_log_level, Callable):
+        auto_detect_method = self.detect_kubernetes_log_level or default_detect_log_level
+        if not self.autodetect_kuberentes_log_level or not isinstance(auto_detect_method, Callable):
             logger.info(msg)
         else:
             logger.log(
-                self.detect_kubernetes_log_level(self, msg) or logging.INFO,
+                auto_detect_method(self, msg) or logging.INFO,
                 msg,
             )
 
