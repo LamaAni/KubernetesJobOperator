@@ -78,6 +78,6 @@ def to_kubernetes_valid_name(name, max_length=50, start_trim_offset=10):
     if len(name) > max_length:
         first_part = name[0:start_trim_offset] if start_trim_offset > 0 else ""
         second_part = name[start_trim_offset:]
-        second_part = second_part[-max_length + start_trim_offset + 2 :]
+        second_part = second_part[-max_length + start_trim_offset + 2 :]  # noqa: E203
         name = first_part + "--" + second_part
     return name

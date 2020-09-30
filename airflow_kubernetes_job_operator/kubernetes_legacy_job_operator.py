@@ -56,7 +56,7 @@ class KubernetesLegacyJobOperator(KubernetesJobOperator):
         security_context: dict = None,
         pod_runtime_info_envs: dict = None,
         dnspolicy: str = None,
-        ## new args.
+        # new args.
         init_containers: Optional[List[k8s.V1Container]] = None,
         env_from: List[str] = None,
         schedulername: str = None,
