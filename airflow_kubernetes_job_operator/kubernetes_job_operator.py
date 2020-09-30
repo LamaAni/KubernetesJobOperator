@@ -128,7 +128,7 @@ class KubernetesJobOperator(BaseOperator):
             body=body,
             logger=self.logger,
             namespace=namespace,
-            auto_load_kube_config=False,
+            auto_load_kube_config=True,
             name_prefix=self._create_job_name(task_id),
             show_pod_logs=get_logs,
             delete_policy=delete_policy,

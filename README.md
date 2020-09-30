@@ -56,21 +56,21 @@ default_args = {"owner": "tester", "start_date": days_ago(2), "retries": 0}
 dag = DAG("job-tester", default_args=default_args, description="Test base job operator", schedule_interval=None)
 
 job_task = KubernetesJobOperator(
-    task_id="test-job",
+    task_id="from-image",
     dag=dag,
     image="ubuntu",
     command=["bash", "-c", 'echo "all ok"'],
 )
 
-body = {"kind": "Pod"}  # The body or a yaml string (must be valids)
-job_task_from_body = KubernetesJobOperator(dag=dag, task_id="test-job-from-body", body=body)
+body = {"kind": "Pod"}  # The body or a yaml string (must be valid)
+job_task_from_body = KubernetesJobOperator(dag=dag, task_id="from-body", body=body)
 
-body_filepath = "./my_yaml_file.yaml"
-job_task_from_yaml = KubernetesJobOperator(dag=dag, task_id="test-job-from-yaml", body_filepath=body_filepath)
+body_filepath = "./my_yaml_file.yaml" # Can be relative to this file, or abs path.
+job_task_from_yaml = KubernetesJobOperator(dag=dag, task_id="from-yaml", body_filepath=body_filepath)
 
 # Legacy compatibility to KubernetesPodOperator
 legacy_job_task = KubernetesLegacyJobOperator(
-    task_id="legacy-test-job",
+    task_id="legacy-image-job",
     image="ubuntu",
     cmds=["bash", "-c", 'echo "all ok"'],
     dag=dag,
@@ -84,7 +84,7 @@ Example (multi resource) task yaml:
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: test-job
+  name: test-job # not required. Will be a prefix to task name
   finalizers:
     - foregroundDeletion
 spec:
@@ -108,29 +108,61 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: test-service
+  name: test-service # not required, will be a prefex to task name.
 spec:
   selector:
     app: test-task-pod
   ports:
     - port: 8080
       targetPort: 8080
----
+```
+
+# Configuration
+
+Airflow config extra sections,
+
+```ini
+[kubernetes_job_operator]
+# The task kube resources delete policy. Can be: Never, Always, IfFailed, IfSucceeded
+delete_policy=IfSucceeded
+# The default object type to execute with (legacy, or image). Can be: Pod, Job
+default_execution_object=Job
+
+# Logs
+detect_kubernetes_log_level=True
+show_kubernetes_timestamps=False
+# Shows the runner id in the log (for all runner logs.)
+show_runner_id=False
+
+# Tasks (Defaults)
+# Wait to first connect to kubernetes.
+startup_timeout_seconds=120
+# if true, will parse the body when building the dag. Otherwise only while executing.
+validate_body_on_init=False
+
+# Comma seperated list of where to look for the kube config file. Will be added to the top
+# of the search list, in order.
+kube_config_extra_locations=
 
 ```
 
-# Why/When would this be better than the [KubernetesPodOperator](https://github.com/apache/airflow/blob/master/airflow/contrib/operators/kubernetes_pod_operator.p)?
+To set these values through the environment follow airflow standards,
 
-The kubernetes Job allows for more execution options such as retries/timeouts/deadlines/replicas/etc.. which cannot be defined directly on a pod.
+```
+export AIRFLOW__[section]__[item] = value
+```
 
-Also, the connection between the kubernetes pod and the airflow worker can be lost, due to communication issues,
-pod deletions or just pod scheduling problems in the cluster. The Kubernetes Job is a "definition" like resource, and therefore would lose its execution state only if deliberately deleted. A job will also recover automatically from pod manual deletions and pod scheduling errors.
+# Why would this be better than the [KubernetesPodOperator](https://github.com/apache/airflow/blob/master/airflow/contrib/operators/kubernetes_pod_operator.p)?
 
-You can find a description of the kubernetes Job resource [here](https://kubernetes.io/docs/concepts/workloads/controllers/jobs-run-to-completion/)
+The KubernetesJobOperator allows for more execution options thank the KubernetesPodOperator such as multiple resource execution, custom resource executions, creation event and pod log tracking, proper resource deletion after task is complete, on error and when task is cancelled and more.
+
+Further, in the KubernetesPodOperator the monitoring between the worker pod and airflow is done by an internal loop which executes and consumes worker resources. In this operator, an async threaded approach was taken which reduces resource consumption on the worker. Further, since the logging and parsing of data is done outside of the main worker thread the worker is "free" do handle other tasks without interruption.
+
+Finally, using the KubernetesJobOperator you are free to use other resources like the kubernetes [Job](https://kubernetes.io/docs/concepts/workloads/controllers/jobs-run-to-completion/) to execute your tasks. These are better designed for use in kubernetes and are "up with the times".
 
 # Contribution
 
-Feel free to ping me in issues or directly on LinkedIn to contribute.
+Are welcome, please post issues or PR's if needed.
 
 # Implementations still missing:
 

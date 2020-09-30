@@ -8,6 +8,7 @@ from uuid import uuid4
 from typing import Callable, List, Type, Union
 from airflow_kubernetes_job_operator.kube_api.utils import not_empty_string
 from airflow_kubernetes_job_operator.utils import random_string
+from airflow_kubernetes_job_operator.config import SHOW_RUNNER_ID_IN_LOGS
 from airflow_kubernetes_job_operator.collections import JobRunnerDeletePolicy, JobRunnerException
 from airflow_kubernetes_job_operator.kube_api import (
     KubeApiConfiguration,
@@ -29,7 +30,7 @@ from airflow_kubernetes_job_operator.kube_api import (
 class JobRunner:
     job_runner_instance_id_label_name = "kubernetes-job-runner-instance-id"
     custom_prepare_kinds: dict = {}
-    show_runner_id_on_logs: bool = None  # type:ignore
+    show_runner_id_on_logs: bool = SHOW_RUNNER_ID_IN_LOGS
 
     def __init__(
         self,
@@ -95,9 +96,7 @@ class JobRunner:
         self.delete_policy = delete_policy
 
         if self.show_runner_id_on_logs is None:
-            self.show_runner_id_on_logs = (
-                os.environ.get("KUBERNETES_JOB_OPERATOR_SHOW_RUNNER_ID_IN_LOGS", "false").lower() == "true"
-            )
+            self.show_runner_id_on_logs = SHOW_RUNNER_ID_IN_LOGS
 
         super().__init__()
 

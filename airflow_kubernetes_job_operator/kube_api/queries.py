@@ -3,7 +3,7 @@ import logging
 from datetime import datetime
 import os
 import json
-from typing import Union, List
+from typing import Union, List, Callable
 import dateutil.parser
 from zthreading.events import Event
 
@@ -15,12 +15,6 @@ from airflow_kubernetes_job_operator.kube_api.collections import (
     KubeResourceDescriptor,
 )
 from airflow_kubernetes_job_operator.kube_api.client import KubeApiRestQuery, KubeApiRestClient
-
-
-KUBE_API_SHOW_SERVER_LOG_TIMESTAMPS = os.environ.get("KUBE_API_SHOW_SERVER_LOG_TIMESTAMPS", "false").lower() == "true"
-KUBE_API_SHOW_SERVER_DETECT_LOG_LEVEL = (
-    os.environ.get("KUBE_API_SHOW_SERVER_DETECT_LOG_LEVEL", "true").lower() == "true"
-)
 
 
 def do_detect_log_level(line: "LogLine", msg: str):
@@ -36,10 +30,11 @@ def do_detect_log_level(line: "LogLine", msg: str):
         return logging.INFO
 
 
-KUBE_API_SHOW_SERVER_DETECT_LOG_LEVEL_METHOD = do_detect_log_level
-
-
 class LogLine:
+    show_kubernetes_log_timestamps: bool = False
+    autodetect_kuberentes_log_level: bool = True
+    detect_kubernetes_log_level: Callable = do_detect_log_level
+
     def __init__(self, pod_name: str, namespace: str, message: str, timestamp: datetime):
         """GetPodLogs log line generated info object.
 
@@ -57,21 +52,19 @@ class LogLine:
 
     def log(self, logger: Logger = kube_logger):
         msg = self.__repr__()
-        if not KUBE_API_SHOW_SERVER_DETECT_LOG_LEVEL:
+        if not self.autodetect_kuberentes_log_level or not isinstance(self.detect_kubernetes_log_level, Callable):
             logger.info(msg)
-        elif KUBE_API_SHOW_SERVER_DETECT_LOG_LEVEL_METHOD is not None:
+        else:
             logger.log(
-                KUBE_API_SHOW_SERVER_DETECT_LOG_LEVEL_METHOD(self, msg) or logging.INFO,
+                self.detect_kubernetes_log_level(self, msg) or logging.INFO,
                 msg,
             )
-        else:
-            logger.info(msg)
 
     def __str__(self):
         return self.message
 
     def __repr__(self):
-        timestamp = f"[{self.timestamp}]" if KUBE_API_SHOW_SERVER_LOG_TIMESTAMPS else ""
+        timestamp = f"[{self.timestamp}]" if self.show_kubernetes_log_timestamps else ""
         return timestamp + f"[{self.namespace}/pods/{self.pod_name}]: {self.message}"
 
 
