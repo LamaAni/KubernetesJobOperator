@@ -137,7 +137,7 @@ class NamespaceWatchQuery(KubeApiRestQuery):
         )
 
         # update kinds
-        kinds = KubeResourceKind.watchable()
+        kinds = kinds or KubeResourceKind.watchable()
 
         self.watch = watch
         self.namespaces = [] if namespace is None else namespace if isinstance(namespace, list) else [namespace]

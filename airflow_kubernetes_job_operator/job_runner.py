@@ -246,24 +246,21 @@ class JobRunner:
             + "https://github.com/LamaAni/KubernetesJobOperator/docs/add_custom_kinds.md",
         )
 
-        for resource in descriptors:
-            descriptor = KubeResourceDescriptor(resource)
-            assert descriptor.kind is not None, JobRunnerException("Cannot execute an object without a kind")
-
-            all_kinds.append(descriptor.kind)
-            if descriptor.namespace is not None:
-                namespaces.append(descriptor.namespace)
-
-        namespaces = list(set(namespaces))
-        all_kinds = list(set(all_kinds))
-
         # scan the api and get all current watchable kinds.
         watchable_kinds = GetAPIVersions.get_existing_api_kinds(self.client, all_kinds)
 
-        assert state_object.kind in watchable_kinds, JobRunnerException(
-            "The first object in the collection must be watchable and createable, to allow the runner to "
-            + f"properly execute. The kind {str(state_object.kind)} was not found in the api."
-        )
+        for resource in descriptors:
+            assert resource.kind is not None, JobRunnerException("Cannot execute an object without a kind")
+            assert resource.kind in watchable_kinds, JobRunnerException(
+                "All resources specified in the execution (the body) must exist in the api. "
+                + f"The kind {str(state_object.kind)} was not found."
+            )
+            all_kinds.append(resource.kind)
+            if resource.namespace is not None:
+                namespaces.append(resource.namespace)
+
+        namespaces = list(set(namespaces))
+        all_kinds = list(set(all_kinds))
 
         for kind in KubeResourceKind.watchable():
             if kind not in watchable_kinds:

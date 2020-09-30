@@ -252,6 +252,9 @@ class KubeResourceKind:
             return False
         return o.api_version == self.api_version and o.name == self.name
 
+    def __hash__(self) -> int:
+        return hash(f"{self.api_version}/{self.name}")
+
     def __str__(self) -> str:
         return f"{self.api_version}/{self.plural}"
 
