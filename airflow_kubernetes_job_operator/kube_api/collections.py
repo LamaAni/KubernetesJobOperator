@@ -218,6 +218,7 @@ class KubeResourceKind:
         """Add a kind to the global kinds collection"""
         global kinds_collection
         kinds_collection[kind.name] = kind
+        return kind
 
     @staticmethod
     def parse_state_job(yaml: dict) -> KubeResourceState:

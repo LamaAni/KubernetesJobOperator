@@ -229,7 +229,7 @@ class KubeApiConfiguration:
         api_version: str,
         parse_kind_state: Callable = None,
         auto_include_in_watch: bool = True,
-    ):
+    ) -> KubeResourceKind:
         """Register a new kubernetes kind that will be used by the kube_api. If the object
         kind has a pase_kind_state, this would be a traceable kind. i.e. you could
         create jobs with it.

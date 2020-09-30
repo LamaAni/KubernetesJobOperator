@@ -1,23 +1,25 @@
 # Airflow KubernetesJobOperator
 
+##### Remember: If you like it \* it, so other people would also use it.
+
 An airflow operator that executes a task in a kubernetes cluster, given a yaml configuration or an image url.
 
 ### BETA
 
-This repository is in beta testing. Contributions are welcome.
+This operator is in beta testing. Contributions are welcome.
 
 ### Supports
 
 1. Running tasks as Kubernetes Jobs.
 1. Running tasks as Kubernetes Pods.
-1. Running tasks as multi resources schemas (multiple resources) as a task (similar to `kubectl apply`).
-1. Running tasks as [custom resources](docs/custom_kinds.md).
+1. Running tasks as multi resource (see example below, similar to `kubectl apply`).
+1. Running tasks as custom resources ([help](docs/custom_kinds.md)).
 1. Auto detection of kubernetes namespace and config.
 1. Pod and participating resources logs -> airflow.
 1. Full kubernetes error logs on failure.
-1. Never/Always/OnFailure/OnSuccess kubernetes resources delete policy.
+1. Integrated operator airflow config, see below.
 
-### Two operator classes are available:
+### Two operator classes are available
 
 1. KubernetesJobOperator - Supply a kubernetes configuration (yaml file, yaml string or a list of python dictionaries) as the body of the task.
 1. KubernetesLegacyJobOperator - Defaults to a kubernetes job definition, and supports the same arguments as the KubernetesPodOperator. i.e. replace with the KubernetesPodOperator for legacy support.
@@ -44,7 +46,7 @@ pip install git+https://github.com/LamaAni/KubernetesJobOperator.git@[tag]
 
 # TL;DR
 
-Example airflow DAG,
+### Example airflow DAG
 
 ```python
 from airflow import DAG
@@ -78,7 +80,9 @@ legacy_job_task = KubernetesLegacyJobOperator(
 )
 ```
 
-Example (multi resource) task yaml:
+### Example (multi resource) task yaml
+
+NOTE: that the success/failure of the task is tracked only on the `first` resource, no matter of its kind. Currently native support exists for Pods and Jobs only, though you can always add a [custom resource](docs/custom_kinds.md).
 
 ```yaml
 apiVersion: batch/v1
