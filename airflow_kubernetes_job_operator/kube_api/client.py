@@ -22,7 +22,6 @@ from airflow_kubernetes_job_operator.kube_api.exceptions import KubeApiException
 from airflow_kubernetes_job_operator.kube_api.collections import KubeApiRestQueryConnectionState
 from airflow_kubernetes_job_operator.kube_api.config import (
     KubeApiConfiguration,
-    DEFAULT_USE_ASYNCIO_ENV_NAME,
     DEFAULT_AUTO_RECONNECT_MAX_ATTEMPTS,
     DEFAULT_AUTO_RECONNECT_WAIT_BETWEEN_ATTEMPTS,
 )
@@ -46,10 +45,6 @@ def set_asyncio_mode(is_active: bool):
 def get_asyncio_mode() -> bool:
     """Returns the asyncio mode. Defaults to true if not defined in env (reduces memory)"""
     return KubeApiRestQuery.default_use_asyncio
-
-
-if DEFAULT_USE_ASYNCIO_ENV_NAME in os.environ:
-    set_asyncio_mode(os.environ.get(DEFAULT_USE_ASYNCIO_ENV_NAME, "false") == "true")
 
 
 class KubeApiRestQuery(Task):

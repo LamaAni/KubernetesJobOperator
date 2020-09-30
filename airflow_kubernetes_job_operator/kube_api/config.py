@@ -10,11 +10,10 @@ from airflow_kubernetes_job_operator.kube_api.collections import KubeResourceKin
 
 DEFAULT_KUBE_CONFIG_LOCATIONS: List[str] = join_locations_list(
     [kube_config.KUBE_CONFIG_DEFAULT_LOCATION],
-    os.environ.get("KUBERNETES_JOB_OPERATOR_DEFAULT_CONFIG_LOCATIONS", None),
+    os.environ.get("KUBE_API_DEFAULT_CONFIG_LOCATIONS", None),
 )
 
 DEFAULT_SERVICE_ACCOUNT_PATH = os.path.dirname(incluster_config.SERVICE_CERT_FILENAME)
-DEFAULT_USE_ASYNCIO_ENV_NAME = "KUBERNETES_API_CLIENT_USE_ASYNCIO"
 
 KURBETNTES_API_ACCEPT = [
     "application/json",
@@ -230,7 +229,7 @@ class KubeApiConfiguration:
         api_version: str,
         parse_kind_state: Callable = None,
         auto_include_in_watch: bool = True,
-    ):
+    ) -> KubeResourceKind:
         """Register a new kubernetes kind that will be used by the kube_api. If the object
         kind has a pase_kind_state, this would be a traceable kind. i.e. you could
         create jobs with it.

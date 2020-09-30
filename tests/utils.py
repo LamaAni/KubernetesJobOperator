@@ -88,7 +88,7 @@ def resolve_file(fpath: str, offset=1):
 
     frame = inspect.stack()[offset]
     cur_path = os.path.dirname(frame.filename)
-    
+
     if fpath.startswith("."):
         if fpath.startswith("./"):
             fpath = os.path.join(cur_path, fpath[2:])
