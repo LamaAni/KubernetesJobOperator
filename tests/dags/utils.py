@@ -1,5 +1,5 @@
 import os
-from airflow_kubernetes_job_operator.kube_api import KubeApiConfiguration, KubeObjectKind
+from airflow_kubernetes_job_operator.kube_api import KubeApiConfiguration, KubeResourceKind
 
 # import airflow.configuration
 import warnings
@@ -13,7 +13,7 @@ KubeApiConfiguration.set_default_namespace("cdm-hcjobs")
 KubeApiConfiguration.register_kind(
     name="HCJob",
     api_version="hc.dto.cbsinteractive.com/v1alpha1",
-    parse_kind_state=KubeObjectKind.parse_state_job,
+    parse_kind_state=KubeResourceKind.parse_state_job,
 )
 
 

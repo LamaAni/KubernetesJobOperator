@@ -1,10 +1,10 @@
 from typing import Type, Dict
 from enum import Enum
-from airflow_kubernetes_job_operator.utils import repo_reslove
+from airflow_kubernetes_job_operator.utils import resolve_path
 from airflow.configuration import conf
 from airflow_kubernetes_job_operator.collections import (
     JobRunnerDeletePolicy,
-    KubernetesJobOperatorDefaultExecutionObject,
+    KubernetesJobOperatorDefaultExecutionResource,
 )
 
 airflow_section_name = "kube_job_operator"
@@ -33,12 +33,12 @@ def get_enum(key: str, default: Enum, collection=None):
 DEFAULT_DELETE_POLICY: JobRunnerDeletePolicy = get_enum("delete_policy", JobRunnerDeletePolicy.IfSucceeded)
 
 # Default bodies
-DEFAULT_EXECTION_OBJECT: KubernetesJobOperatorDefaultExecutionObject = get_enum(
-    "default_execution_object", KubernetesJobOperatorDefaultExecutionObject.Job
+DEFAULT_EXECTION_OBJECT: KubernetesJobOperatorDefaultExecutionResource = get_enum(
+    "default_execution_object", KubernetesJobOperatorDefaultExecutionResource.Job
 )
-DEFAULT_EXECUTION_OBJECT_PATHS: Dict[KubernetesJobOperatorDefaultExecutionObject, str] = {
-    KubernetesJobOperatorDefaultExecutionObject.Job: repo_reslove("./templates/job_default.yaml"),
-    KubernetesJobOperatorDefaultExecutionObject.Pod: repo_reslove("./templates/pod_default.yaml"),
+DEFAULT_EXECUTION_OBJECT_PATHS: Dict[KubernetesJobOperatorDefaultExecutionResource, str] = {
+    KubernetesJobOperatorDefaultExecutionResource.Job: resolve_path("./templates/job_default.yaml"),
+    KubernetesJobOperatorDefaultExecutionResource.Pod: resolve_path("./templates/pod_default.yaml"),
 }
 
 # task config

@@ -1,10 +1,10 @@
 from tests.utils import logging
-from airflow_kubernetes_job_operator.kube_api import KubeObjectKind
+from airflow_kubernetes_job_operator.kube_api import KubeResourceKind
 from airflow_kubernetes_job_operator.kube_api import KubeApiRestClient
 from airflow_kubernetes_job_operator.kube_api import NamespaceWatchQuery
 
-KubeObjectKind.register_global_kind(
-    KubeObjectKind("HCjob", "hc.dto.cbsinteractive.com/v1alpha1", parse_kind_state=KubeObjectKind.parse_state_job)
+KubeResourceKind.register_global_kind(
+    KubeResourceKind("HCjob", "hc.dto.cbsinteractive.com/v1alpha1", parse_kind_state=KubeResourceKind.parse_state_job)
 )
 
 

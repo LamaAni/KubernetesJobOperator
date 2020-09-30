@@ -4,7 +4,7 @@ import os
 import yaml
 import inspect
 from airflow_kubernetes_job_operator.kube_api import KubeApiConfiguration
-from airflow_kubernetes_job_operator.utils import repo_reslove
+from airflow_kubernetes_job_operator.utils import resolve_path
 
 
 CUR_DIRECTORY = os.path.abspath(os.path.dirname(__file__))
@@ -26,7 +26,7 @@ def colorize(val, color, add_reset=True):
 
 def load_yaml_objects(fpath):
     rslt = None
-    with open(repo_reslove(fpath, basepath=os.path.dirname(__file__)), "r") as raw:
+    with open(resolve_path(fpath, basepath=os.path.dirname(__file__)), "r") as raw:
         yaml_string = raw.read()
         rslt = yaml.safe_load_all(yaml_string)
     return list(rslt)

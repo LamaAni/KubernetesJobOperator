@@ -5,7 +5,7 @@ from kubernetes.config.kube_config import Configuration
 
 from airflow_kubernetes_job_operator.kube_api.exceptions import KubeApiException
 from airflow_kubernetes_job_operator.kube_api.utils import join_locations_list, not_empty_string
-from airflow_kubernetes_job_operator.kube_api.collections import KubeObjectKind
+from airflow_kubernetes_job_operator.kube_api.collections import KubeResourceKind
 
 
 DEFAULT_KUBE_CONFIG_LOCATIONS: List[str] = join_locations_list(
@@ -170,7 +170,9 @@ class KubeApiConfiguration:
         if configuration is not None:
             configuration.filepath = configuration.filepath if hasattr(configuration, "filepath") else None
             configuration.default_namespace = (
-                default_namespace or configuration.default_namespace if hasattr(configuration, "default_namespace") else None
+                default_namespace or configuration.default_namespace
+                if hasattr(configuration, "default_namespace")
+                else None
             )
 
             if set_as_default:
@@ -236,17 +238,17 @@ class KubeApiConfiguration:
         Args:
             name (str): The name of the kind (Pod,Job, ??)
             api_version (str): The api (api/v1, batch)
-            parse_kind_state (Callable, optional)->KubeObjectState: Method to transcribe the current
-                status to a KubeObjectState. Defaults to None. An object is watchable if it returns three
-                states at lease, KubeObjectState.Running, KubeObjectState.Succeeded, KubeObjectState.Failed
+            parse_kind_state (Callable, optional)->KubeResourceState: Method to transcribe the current
+                status to a KubeResourceState. Defaults to None. An object is watchable if it returns three
+                states at lease, KubeResourceState.Running, KubeResourceState.Succeeded, KubeResourceState.Failed
             auto_include_in_watch (bool, optional): If true, auto watch changes in this kind when
                 watching a namespace. Defaults to True.
 
         Note:
-            There are default parse methods available as static methods on KubeObjectKind class.
+            There are default parse methods available as static methods on KubeResourceKind class.
         """
-        return KubeObjectKind.register_global_kind(
-            KubeObjectKind(
+        return KubeResourceKind.register_global_kind(
+            KubeResourceKind(
                 name=name,
                 api_version=api_version,
                 parse_kind_state=parse_kind_state,

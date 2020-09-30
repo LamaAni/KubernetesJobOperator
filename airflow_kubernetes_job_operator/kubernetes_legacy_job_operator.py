@@ -3,6 +3,7 @@ import kubernetes.client as k8s
 from typing import List, Optional, Union
 from airflow import configuration
 from airflow_kubernetes_job_operator.job_runner import JobRunnerDeletePolicy
+from airflow_kubernetes_job_operator.utils import resolve_relative_path
 from airflow_kubernetes_job_operator.kubernetes_job_operator import KubernetesJobOperator
 
 try:
@@ -56,7 +57,7 @@ class KubernetesLegacyJobOperator(KubernetesJobOperator):
         security_context: dict = None,
         pod_runtime_info_envs: dict = None,
         dnspolicy: str = None,
-        ## new args.
+        # new args.
         init_containers: Optional[List[k8s.V1Container]] = None,
         env_from: List[str] = None,
         schedulername: str = None,
@@ -171,6 +172,9 @@ class KubernetesLegacyJobOperator(KubernetesJobOperator):
         validate_body_on_init = (
             configuration.conf.getboolean("kube_job_operator", "validate_body_on_init", fallback=False) or False
         )
+
+        if body_filepath is not None:
+            body_filepath = resolve_relative_path(body_filepath, 2)
 
         super().__init__(
             command=cmds,

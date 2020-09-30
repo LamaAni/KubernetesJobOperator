@@ -5,7 +5,7 @@ import kubernetes.config.kube_config
 from tests.utils import logging
 from zthreading.tasks import Task
 from airflow_kubernetes_job_operator.kube_api.client import KubeApiRestClient
-from airflow_kubernetes_job_operator.kube_api import CreateNamespaceObject, DeleteNamespaceObject
+from airflow_kubernetes_job_operator.kube_api import CreateNamespaceResource, DeleteNamespaceResource
 
 
 def load_yaml_obj_configs(fpath: str):
@@ -26,7 +26,7 @@ obj: dict = None
 queries = []
 
 for obj in obj_definitions:
-    q = DeleteNamespaceObject(obj, namespace=client.get_default_namespace())
+    q = DeleteNamespaceResource(obj, namespace=client.get_default_namespace())
     q.pipe_to_logger(logging)
     queries.append(q)
 

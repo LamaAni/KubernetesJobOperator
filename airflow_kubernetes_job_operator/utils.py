@@ -1,11 +1,21 @@
 import os
 import random
 import re
+import inspect
 
 REPO_PATH = os.path.dirname(__file__)
 
 
-def repo_reslove(src: str, basepath: str = REPO_PATH):
+def resolve_path(src: str, basepath: str = REPO_PATH) -> str:
+    """resolve path in the current repo.
+
+    Args:
+        src (str): The path to resolve.
+        basepath (str, optional): The base path to search in. Defaults to REPO_PATH.
+
+    Returns:
+        str: The absolute path.
+    """
     if src.startswith("."):
         if src.startswith("./"):
             src = os.path.join(basepath, src[2:])
@@ -14,43 +24,33 @@ def repo_reslove(src: str, basepath: str = REPO_PATH):
     return os.path.abspath(src)
 
 
-def get_dict_path_value(yaml: dict, path_names):
-    value = yaml
-    cur_path = []
-    for name in path_names:
-        cur_path.append(name)
-        path_string = ".".join(map(lambda v: str(v), path_names))
+def resolve_relative_path(src: str, caller_offset=0):
+    """Resolve a path relative to the caller.
 
-        if isinstance(value, dict):
-            assert name in value, "Missing path:" + path_string
-        elif isinstance(value, list):
-            assert len(value) > name, "Missing path:" + path_string
-        else:
-            raise Exception("Expected path " + path_string + " to be a list or a dictionary")
+    Args:
+        src (str): The path to resolve.
+        caller_offset (int, optional): The caller to resolve relative to (the caller file).
+            0 means the direct caller.
+            1 means the caller of the caller.
+            etc..
+            Defaults to 0.
 
-        value = value[name]
-    return value
+    Returns:
+        [type]: [description]
+    """
 
+    if os.path.isabs(src):
+        return os.path.abspath(src)
 
-def set_dict_path_value(yaml: dict, path_names: list, value, if_not_exists=False):
-    name_to_set = path_names[-1]
-    col = get_dict_path_value(yaml, path_names[:-1])
+    caller_offset = caller_offset if caller_offset > -1 else 0
+    caller_offset += 1
 
-    if isinstance(col, list):
-        assert isinstance(name_to_set, int), "To set a list value you must have an integer key."
-        if name_to_set > -1 and len(col) > name_to_set:
-            if if_not_exists:
-                return
-            col[name_to_set] = value
-        else:
-            col.append(value)
-    else:
-        if if_not_exists and name_to_set in col:
-            return
-        col[name_to_set] = value
+    stack = inspect.stack()
+    frame = stack[caller_offset]
+    return resolve_path(src=src, basepath=os.path.dirname(frame.filename))
 
 
-def randomString(stringLength=10):
+def random_string(stringLength=10):
     """Create a random string
 
     Keyword Arguments:
@@ -83,6 +83,6 @@ def to_kubernetes_valid_name(name, max_length=50, start_trim_offset=10):
     if len(name) > max_length:
         first_part = name[0:start_trim_offset] if start_trim_offset > 0 else ""
         second_part = name[start_trim_offset:]
-        second_part = second_part[-max_length + start_trim_offset + 2 :]
+        second_part = second_part[-max_length + start_trim_offset + 2 :]  # noqa: E203
         name = first_part + "--" + second_part
     return name

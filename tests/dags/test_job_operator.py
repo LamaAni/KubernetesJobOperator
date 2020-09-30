@@ -1,4 +1,4 @@
-from utils import resolve_file, default_args
+from utils import default_args
 from datetime import timedelta
 from airflow import DAG
 from airflow_kubernetes_job_operator.kubernetes_job_operator import KubernetesJobOperator
@@ -20,28 +20,28 @@ envs = {
 tj_success = KubernetesJobOperator(
     task_id="test-job-success",
     namespace=namespace,
-    body_filepath=resolve_file("./templates/test_job.success.yaml"),
+    body_filepath="./templates/test_job.success.yaml",
     envs=envs,
     dag=dag,
 )
 tj_fail = KubernetesJobOperator(
     task_id="test-job-fail",
     namespace=namespace,
-    body_filepath=resolve_file("./templates/test_job.fail.yaml"),
+    body_filepath="./templates/test_job.fail.yaml",
     envs=envs,
     dag=dag,
 )
 tj_pod_fail = KubernetesJobOperator(
     task_id="test-pod-fail",
     namespace=namespace,
-    body_filepath=resolve_file("./templates/test_pod.fail.yaml"),
+    body_filepath="./templates/test_pod.fail.yaml",
     envs=envs,
     dag=dag,
 )
 tj_pod_fail = KubernetesJobOperator(
     task_id="test-pod-fail",
     namespace=namespace,
-    body_filepath=resolve_file("./templates/test_pod.success.yaml"),
+    body_filepath="./templates/test_pod.success.yaml",
     envs=envs,
     dag=dag,
 )
@@ -58,7 +58,7 @@ tj_overrides = KubernetesJobOperator(
 ti_timeout = KubernetesJobOperator(
     task_id="test-job-timeout",
     namespace=namespace,
-    body_filepath=resolve_file("./templates/test_job.success.yaml"),
+    body_filepath="./templates/test_job.success.yaml",
     envs={
         "TIC_COUNT": "100",
         "PASS_ARG": "timeout",

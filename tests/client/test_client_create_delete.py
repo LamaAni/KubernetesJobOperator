@@ -3,9 +3,9 @@ from time import sleep
 from typing import Type
 from airflow_kubernetes_job_operator.kube_api import (
     KubeApiRestClient,
-    CreateNamespaceObject,
-    DeleteNamespaceObject,
-    ConfigureNamespaceObject,
+    CreateNamespaceResource,
+    DeleteNamespaceResource,
+    ConfigureNamespaceResource,
     NamespaceWatchQuery,
 )
 
@@ -17,7 +17,7 @@ client = KubeApiRestClient()
 watcher = NamespaceWatchQuery()
 
 
-def create_queries(action: Type[ConfigureNamespaceObject]):
+def create_queries(action: Type[ConfigureNamespaceResource]):
     queries = [action(o, namespace=client.get_default_namespace()) for o in objs]
     for q in queries:
         q.pipe_to_logger(logging)
@@ -27,8 +27,8 @@ def create_queries(action: Type[ConfigureNamespaceObject]):
 client.query_async(watcher)
 watcher.wait_until_running()
 logging.info("Watcher is running, creating")
-client.query(create_queries(CreateNamespaceObject))
+client.query(create_queries(CreateNamespaceResource))
 logging.info("All created.")
-client.query(create_queries(DeleteNamespaceObject))
+client.query(create_queries(DeleteNamespaceResource))
 logging.info("All deleted")
 watcher.stop()
