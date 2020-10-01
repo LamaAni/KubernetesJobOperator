@@ -1,7 +1,7 @@
 from utils import default_args
 from datetime import timedelta
 from airflow import DAG
-from airflow_kubernetes_job_operator.kubernetes_job_operator import KubernetesJobOperator
+from airflow_kubernetes_job_operator.kubernetes_job_operator import KubernetesJobOperator, JobRunnerDeletePolicy
 
 dag = DAG(
     "kub-job-op",
@@ -17,45 +17,56 @@ envs = {
     "PASS_ARG": "a test",
 }
 
-tj_success = KubernetesJobOperator(
+default_delete_policy = JobRunnerDeletePolicy.IfSucceeded
+
+# Job
+KubernetesJobOperator(
     task_id="test-job-success",
     namespace=namespace,
     body_filepath="./templates/test_job.success.yaml",
     envs=envs,
     dag=dag,
+    delete_policy=default_delete_policy,
 )
-tj_fail = KubernetesJobOperator(
+KubernetesJobOperator(
     task_id="test-job-fail",
     namespace=namespace,
     body_filepath="./templates/test_job.fail.yaml",
     envs=envs,
     dag=dag,
+    delete_policy=default_delete_policy,
 )
-tj_pod_fail = KubernetesJobOperator(
+
+# Pod
+KubernetesJobOperator(
     task_id="test-pod-fail",
     namespace=namespace,
     body_filepath="./templates/test_pod.fail.yaml",
     envs=envs,
     dag=dag,
+    delete_policy=default_delete_policy,
 )
-tj_pod_fail = KubernetesJobOperator(
+KubernetesJobOperator(
     task_id="test-pod-fail",
     namespace=namespace,
     body_filepath="./templates/test_pod.success.yaml",
     envs=envs,
     dag=dag,
+    delete_policy=default_delete_policy,
 )
 
 # -- others.
-tj_overrides = KubernetesJobOperator(
+KubernetesJobOperator(
     task_id="test-job-overrides",
     dag=dag,
     namespace=namespace,
     image="ubuntu",
     envs=envs,
     command=["bash", "-c", 'echo "Starting $PASS_ARG"; sleep 10; echo end'],
+    delete_policy=default_delete_policy,
 )
-ti_timeout = KubernetesJobOperator(
+
+KubernetesJobOperator(
     task_id="test-job-timeout",
     namespace=namespace,
     body_filepath="./templates/test_job.success.yaml",
@@ -65,6 +76,7 @@ ti_timeout = KubernetesJobOperator(
     },
     dag=dag,
     execution_timeout=timedelta(seconds=3),
+    delete_policy=default_delete_policy,
 )
 
 if __name__ == "__main__":

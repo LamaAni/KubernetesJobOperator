@@ -34,4 +34,4 @@ spec:
               exit 99
           env:
             - name: TIC_COUNT
-              value: "0"
+              value: '0'

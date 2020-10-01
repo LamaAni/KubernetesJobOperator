@@ -20,14 +20,7 @@ if [ "$1" != "delete" ] && [ "$1" != "-d" ]; then
     BRANCH="$(git rev-parse --abbrev-ref HEAD)"
     : "${BRANCH:="master"}"
     echo "Applying changes on branch: $BRANCH"
-    APPLY_COMMAND="helmfile apply --set envs.ZAIRFLOW_GIT_AUTOSYNC_BRANCH=$BRANCH"
-
-    ${APPLY_COMMAND}
-    if [ $? -ne 0 ]; then
-        echo "------------------------------"
-        echo "Apply failed, replacing deployment"
-        ${APPLY_COMMAND} --args "--atomic"
-    fi
+    helmfile apply --set "envs.ZAIRFLOW_GIT_AUTOSYNC_BRANCH=$BRANCH" --set "envs.TS=$(date)"
 else
     helmfile delete || exit $?
 fi

@@ -223,17 +223,19 @@ class KubeResourceKind:
     @staticmethod
     def parse_state_job(yaml: dict) -> KubeResourceState:
         status = yaml.get("status", {})
-        spec = yaml.get("spec", {})
-        back_off_limit = int(spec.get("backoffLimit", 0))
+        conditions = status.get("conditions", [])
 
         job_status = KubeResourceState.Pending
-        if "failed" in status and int(status.get("failed", 0)) > back_off_limit:
-            job_status = KubeResourceState.Failed
-        elif "startTime" in status:
-            if "completionTime" in status:
+
+        if "startTime" in status:
+            job_status = KubeResourceState.Running
+
+        condition: dict = None
+        for condition in conditions:
+            if condition.get("type") == "Failed":
+                job_status = KubeResourceState.Failed
+            if condition.get("type") == "Complete":
                 job_status = KubeResourceState.Succeeded
-            else:
-                job_status = KubeResourceState.Running
 
         return job_status
 
