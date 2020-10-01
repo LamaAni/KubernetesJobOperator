@@ -4,6 +4,8 @@ metadata:
   finalizers:
     - foregroundDeletion
 spec:
+  backoffLimit: 2
+  completions: 3
   template:
     spec:
       restartPolicy: Never
@@ -30,4 +32,3 @@ spec:
           env:
             - name: TIC_COUNT
               value: '2'
-  backoffLimit: 0
