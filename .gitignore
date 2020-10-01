@@ -5,6 +5,7 @@ logs/
 Pipefile.lock
 .devcontainer/
 .devcontainer
+.DS_Store
 
 # ignore the test airflow db.
 tests/airflow.db
