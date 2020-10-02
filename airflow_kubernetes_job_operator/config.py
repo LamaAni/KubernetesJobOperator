@@ -24,7 +24,7 @@ def get(
     default=None,
     otype: Type = None,
     collection=None,
-    allow_empty: bool = True,
+    allow_empty: bool = False,
 ):
     otype = otype or str if default is None else default.__class__
     collection = collection or AIRFLOW_CONFIG_SECTION_NAME
@@ -70,7 +70,7 @@ DEFAULT_VALIDATE_BODY_ON_INIT: bool = get("validate_body_on_init", False)
 SHOW_RUNNER_ID_IN_LOGS: bool = get("show_runner_id", False)
 
 # Client config
-KUBE_CONFIG_EXTRA_LOCATIONS: str = get("kube_config_extra_locations", None, otype=str)
+KUBE_CONFIG_EXTRA_LOCATIONS: str = get("kube_config_extra_locations", "", otype=str, allow_empty=True)
 if not_empty_string(KUBE_CONFIG_EXTRA_LOCATIONS):
     for loc in KUBE_CONFIG_EXTRA_LOCATIONS.split(",").reverse():
         log = loc.strip()
