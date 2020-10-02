@@ -1,5 +1,9 @@
 import os
 from airflow_kubernetes_job_operator.kube_api import KubeApiConfiguration, KubeResourceKind
+# from airflow_kubernetes_job_operator.config import DEFAULT_EXECUTION_OBJECT_PATHS
+# from airflow_kubernetes_job_operator.utils import resolve_relative_path
+
+# resolve_relative_path(DEFAULT_EXECUTION_OBJECT_PATHS.values()[0])
 
 # import airflow.configuration
 import warnings

@@ -24,33 +24,27 @@ def get(
     default=None,
     otype: Type = None,
     collection=None,
+    allow_empty: bool = True,
 ):
     otype = otype or str if default is None else default.__class__
     collection = collection or AIRFLOW_CONFIG_SECTION_NAME
-    val = conf.get(AIRFLOW_CONFIG_SECTION_NAME, key, fallback=default)
-    if val is None:
+    val = conf.get(AIRFLOW_CONFIG_SECTION_NAME, key, fallback=None)
+
+    if issubclass(otype, Enum):
+        allow_empty = False
+
+    if val is None or (not allow_empty and len(val.strip()) == 0):
         assert default is not None, f"Airflow configuration {collection}.{key} not found, and no default value"
         return default
+
     if otype == bool:
         return val.lower() == "true"
+
     elif issubclass(otype, Enum):
         val = val.strip()
-        return default if val == "" else otype(val)
+        return otype(val.strip())
     else:
         return otype(val)
-
-
-# def get_enum(key: str, default: Enum, collection=None):
-#     collection = collection or AIRFLOW_CONFIG_SECTION_NAME
-#     type_class: Type[Enum] = default.__class__
-#     val: str = get(key, "", collection=collection)
-#     try:
-#         return default if val == "" else type_class(val)  # type:ignore
-#     except Exception:
-#         raise Exception(
-#             f"Invalid ariflow configuration {collection or AIRFLOW_CONFIG_SECTION_NAME}.{key}: {val}. "
-#             + f" Accepted values: {[str(v) for v in type_class]}"
-#         )
 
 
 # ------------------------------
