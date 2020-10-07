@@ -5,6 +5,7 @@ from airflow import configuration
 from airflow_kubernetes_job_operator.job_runner import JobRunnerDeletePolicy
 from airflow_kubernetes_job_operator.utils import resolve_relative_path
 from airflow_kubernetes_job_operator.kubernetes_job_operator import KubernetesJobOperator
+from airflow_kubernetes_job_operator.config import DEFAULT_VALIDATE_BODY_ON_INIT
 
 try:
     from airflow.contrib.kubernetes.kubernetes_request_factory import pod_request_factory
@@ -66,7 +67,7 @@ class KubernetesLegacyJobOperator(KubernetesJobOperator):
         body: str = None,
         body_filepath: str = None,
         delete_policy: Union[str, JobRunnerDeletePolicy] = None,
-        validate_body_on_init: bool = None,
+        validate_body_on_init: bool = DEFAULT_VALIDATE_BODY_ON_INIT,
         wait_for_task_timeout: float = None,
         *args,
         **kwargs,
@@ -167,10 +168,6 @@ class KubernetesLegacyJobOperator(KubernetesJobOperator):
             delete_policy or JobRunnerDeletePolicy.IfSucceeded
             if is_delete_operator_pod
             else JobRunnerDeletePolicy.Never
-        )
-
-        validate_body_on_init = (
-            configuration.conf.getboolean("kube_job_operator", "validate_body_on_init", fallback=False) or False
         )
 
         if body_filepath is not None:

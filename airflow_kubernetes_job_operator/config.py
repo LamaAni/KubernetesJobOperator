@@ -1,3 +1,4 @@
+import logging
 from typing import Type, Dict
 from enum import Enum
 from airflow_kubernetes_job_operator.kube_api.utils import not_empty_string
@@ -5,6 +6,7 @@ from airflow_kubernetes_job_operator.kube_api.config import DEFAULT_KUBE_CONFIG_
 from airflow_kubernetes_job_operator.kube_api.queries import LogLine
 from airflow_kubernetes_job_operator.utils import resolve_path
 from airflow.configuration import conf
+from airflow.exceptions import AirflowConfigException
 from airflow_kubernetes_job_operator.collections import (
     JobRunnerDeletePolicy,
     KubernetesJobOperatorDefaultExecutionResource,
@@ -28,7 +30,11 @@ def get(
 ):
     otype = otype or str if default is None else default.__class__
     collection = collection or AIRFLOW_CONFIG_SECTION_NAME
-    val = conf.get(AIRFLOW_CONFIG_SECTION_NAME, key, fallback=None)
+    val = None
+    try:
+        val = conf.get(AIRFLOW_CONFIG_SECTION_NAME, key)
+    except AirflowConfigException as ex:
+        logging.debug(ex)
 
     if issubclass(otype, Enum):
         allow_empty = False
@@ -57,6 +63,7 @@ DEFAULT_DELETE_POLICY: JobRunnerDeletePolicy = get("delete_policy", JobRunnerDel
 DEFAULT_EXECTION_OBJECT: KubernetesJobOperatorDefaultExecutionResource = get(
     "default_execution_object", KubernetesJobOperatorDefaultExecutionResource.Job
 )
+DEFAULT_KUBERNETES_MAX_RESOURCE_NAME_LENGTH = get("max_job_name_length", 50)
 
 # api config
 LogLine.detect_kubernetes_log_level = get("detect_kubernetes_log_level", True)
