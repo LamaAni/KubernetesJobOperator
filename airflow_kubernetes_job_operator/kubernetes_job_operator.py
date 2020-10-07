@@ -16,6 +16,7 @@ from airflow_kubernetes_job_operator.config import (
     DEFAULT_EXECTION_OBJECT,
     DEFAULT_DELETE_POLICY,
     DEFAULT_TASK_STARTUP_TIMEOUT,
+    DEFAULT_KUBERNETES_MAX_RESOURCE_NAME_LENGTH,
 )
 
 
@@ -160,7 +161,7 @@ class KubernetesJobOperator(BaseOperator):
     def _create_job_name(cls, name):
         return to_kubernetes_valid_name(
             name,
-            max_length=configuration.conf.getint("kube_job_operator", "max_job_name_length", fallback=50),
+            max_length=DEFAULT_KUBERNETES_MAX_RESOURCE_NAME_LENGTH,
         )
 
     def update_override_params(self, o: dict):
