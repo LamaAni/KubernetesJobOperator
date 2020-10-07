@@ -34,7 +34,7 @@ def get(
     try:
         val = conf.get(AIRFLOW_CONFIG_SECTION_NAME, key)
     except AirflowConfigException as ex:
-        logging.warning(ex)
+        logging.debug(ex)
 
     if issubclass(otype, Enum):
         allow_empty = False
