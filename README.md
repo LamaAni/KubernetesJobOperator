@@ -174,6 +174,7 @@ Add an issue (or better submit PR) if you need these.
 
 1. XCom
 1. Examples (other than TL;DR)
+1. Jinja support for file/string yaml body.
 
 # Licence
 
