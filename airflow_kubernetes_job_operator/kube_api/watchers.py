@@ -20,6 +20,8 @@ from airflow_kubernetes_job_operator.kube_api.queries import (
     LogLine,
 )
 
+from zthreading.decorators import thread_synchronized
+
 
 class NamespaceWatchQueryResourceState(EventHandler):
     def __init__(
@@ -132,6 +134,7 @@ class NamespaceWatchQuery(KubeApiRestQuery):
     state_changed_event_name = "state_changed"
     deleted_event_name = "deleted"
     watch_started_event_name = "watch_started"
+    pod_logs_reader_started_event_name = "pod_logs_reader_started"
 
     def __init__(
         self,
@@ -193,6 +196,17 @@ class NamespaceWatchQuery(KubeApiRestQuery):
     def emit_log(self, data):
         self.emit(self.pod_log_event_name, data)
 
+    @thread_synchronized
+    def _create_pod_log_reader(self, uid: str, name: str, namespace: str, follow=True):
+        read_logs = GetPodLogs(
+            name=name,
+            namespace=namespace,
+            since=self.pod_log_since,
+            follow=follow,
+        )
+        self._executing_pod_loggers[uid] = read_logs
+        return read_logs
+
     def process_data_state(self, data: dict, client: KubeApiRestClient):
         if not self.is_running:
             return
@@ -213,16 +227,18 @@ class NamespaceWatchQuery(KubeApiRestQuery):
                 del self._object_states[uid]
 
         if self.watch_pod_logs and kind == "pod" and uid not in self._executing_pod_loggers:
-            namespace = data["metadata"]["namespace"]
             name = data["metadata"]["name"]
+            namesoace = data["metadata"]["namespace"]
             pod_status = data["status"]["phase"]
             if pod_status != "Pending":
-                read_logs = GetPodLogs(
+                osw = self._object_states.get(uid)
+                read_logs = self._create_pod_log_reader(
+                    uid=uid,
                     name=name,
-                    namespace=namespace,
-                    since=self.pod_log_since,
-                    follow=True,
+                    namespace=namesoace,
                 )
+
+                osw.emit(self.pod_logs_reader_started_event_name)
 
                 def handle_error(sender, *args):
                     # Don't throw error if not running.
@@ -237,7 +253,6 @@ class NamespaceWatchQuery(KubeApiRestQuery):
                 # binding only relevant events.
                 read_logs.on(read_logs.data_event_name, lambda line: self.emit_log(line))
                 read_logs.on(read_logs.error_event_name, handle_error)
-                self._executing_pod_loggers[uid] = read_logs
                 client.query_async(read_logs)
 
     def _stop_all_loggers(
@@ -271,17 +286,21 @@ class NamespaceWatchQuery(KubeApiRestQuery):
                     f"[{get_ns_objs.namespace}/{get_ns_objs.kind.plural}] "
                     + f"Watch collection for {get_ns_objs.kind.plural} lost, attempting to reconnect..."
                 )
-        if ev.name == self.state_changed_event_name:
+        elif ev.name == self.state_changed_event_name:
             osw: NamespaceWatchQueryResourceState = ev.sender
             logger.info(f"[{osw.namespace}/{osw.kind_name.lower()}s/{osw.name}]" + f" {osw.state}")
         elif ev.name == self.pod_log_event_name:
             line: LogLine = ev.args[0]
             line.log(logger)
+        elif ev.name == self.pod_logs_reader_started_event_name:
+            osw: NamespaceWatchQueryResourceState = ev.sender
+            logger.info(f"[{osw.namespace}/{osw.kind_name.lower()}s/{osw.name}] Reading logs")
 
     def pipe_to_logger(self, logger: Logger = kube_logger, allowed_event_names=None) -> int:
         allowed_event_names = set(
             allowed_event_names
             or [
+                self.pod_logs_reader_started_event_name,
                 self.state_changed_event_name,
                 self.pod_log_event_name,
             ]

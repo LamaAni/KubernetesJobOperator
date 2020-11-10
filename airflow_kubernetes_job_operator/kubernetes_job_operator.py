@@ -1,6 +1,5 @@
 from typing import List, Union
 
-from airflow import configuration
 from airflow.utils.decorators import apply_defaults
 from airflow.operators import BaseOperator
 from airflow_kubernetes_job_operator.kube_api import KubeResourceState
