@@ -1,6 +1,5 @@
 # Implements a rest api
 from logging import Logger
-import os
 import json
 import traceback
 import time
