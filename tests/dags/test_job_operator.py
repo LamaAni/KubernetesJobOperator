@@ -15,6 +15,7 @@ namespace = None
 
 envs = {
     "PASS_ARG": "a test",
+    "JINJA_ENV": "{{ ds }}",
 }
 
 default_delete_policy = JobRunnerDeletePolicy.IfSucceeded

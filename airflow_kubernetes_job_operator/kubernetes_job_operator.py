@@ -19,10 +19,15 @@ from airflow_kubernetes_job_operator.config import (
 )
 
 
-class KubernetesJobOperator(BaseOperator):
+class KubernetesJobOperatorDefaultsBase(BaseOperator):
+    @apply_defaults
+    def __init__(self, **kwargs) -> None:
+        super().__init__(**kwargs)
+
+
+class KubernetesJobOperator(KubernetesJobOperatorDefaultsBase):
     autogenerate_job_id_from_task_id: bool = True
 
-    @apply_defaults
     def __init__(
         self,
         task_id: str,
@@ -41,6 +46,8 @@ class KubernetesJobOperator(BaseOperator):
         cluster_context: str = None,
         startup_timeout_seconds: float = DEFAULT_TASK_STARTUP_TIMEOUT,
         validate_body_on_init: bool = DEFAULT_VALIDATE_BODY_ON_INIT,
+        enable_jinja: bool = True,
+        resolve_relative_path_callstack_offset: int = 0,
         **kwargs,
     ):
         """A operator that executes an airflow task as a kubernetes Job.
@@ -69,6 +76,12 @@ class KubernetesJobOperator(BaseOperator):
             validate_body_on_init {bool} -- If true, validates the yaml in the constructor,
                 setting this to True, will slow dag creation.
                 (default: {from env/airflow config: AIRFLOW__KUBE_JOB_OPERATOR__validate_body_on_init or False})
+            enable_jinja {bool} -- If true, the following fields will be parsed as jinja2,
+                        command, arguments, image, envs, body, namespace, config_file, cluster_context
+            resolve_relative_path_callstack_offset {int} - The call stack offset to render relative files
+                from.
+                    0 = relative to the caller of the constructor.
+                    1 = relative to the caller of the caller to the constructor.
 
         Auto completed yaml values (if missing):
 
@@ -87,8 +100,11 @@ class KubernetesJobOperator(BaseOperator):
             "body is None, body_filepath is None and an image was not defined. Unknown image to execute."
         )
 
-        body = body or self._read_body(
-            resolve_relative_path(body_filepath or DEFAULT_EXECUTION_OBJECT_PATHS[DEFAULT_EXECTION_OBJECT], 2)
+        body = body or self._read_body_from_file(
+            resolve_relative_path(
+                body_filepath or DEFAULT_EXECUTION_OBJECT_PATHS[DEFAULT_EXECTION_OBJECT],
+                resolve_relative_path_callstack_offset + 1,
+            )
         )
 
         assert body is not None and (isinstance(body, (dict, str))), ValueError(
@@ -102,7 +118,9 @@ class KubernetesJobOperator(BaseOperator):
         assert envs is None or isinstance(envs, dict), ValueError("The env collection must be a dict or None")
         assert image is None or isinstance(image, str), ValueError("image must be a string or None")
 
+        # Job properties.
         self._job_is_executing = False
+        self._job_runner: JobRunner = None
 
         # override/replace properties
         self.command = command
@@ -110,6 +128,10 @@ class KubernetesJobOperator(BaseOperator):
         self.image = image
         self.envs = envs
         self.image_pull_policy = image_pull_policy
+        self.body = body
+        self.namespace = namespace
+        self.get_logs = get_logs
+        self.delete_policy = delete_policy
 
         # kubernetes config properties.
         self.config_file = config_file
@@ -118,43 +140,39 @@ class KubernetesJobOperator(BaseOperator):
 
         # operation properties
         self.startup_timeout_seconds = startup_timeout_seconds
-        self.get_logs = get_logs
+
+        if enable_jinja:
+            self.template_fields = [
+                "command",
+                "arguments",
+                "image",
+                "envs",
+                "body",
+                "namespace",
+                "config_file",
+                "cluster_context",
+            ]
 
         # Used for debugging
         self._internal_wait_kuberentes_object_timeout = None
 
-        # create the job runner.
-        self.job_runner: JobRunner = JobRunner(
-            body=body,
-            logger=self.logger,
-            namespace=namespace,
-            auto_load_kube_config=True,
-            name_prefix=self._create_job_name(task_id),
-            show_pod_logs=get_logs,
-            delete_policy=delete_policy,
-        )
-
         if validate_body_on_init:
+            assert not enable_jinja or isinstance(body, dict), ValueError(
+                "Cannot set validate_body_on_init=True, if input body is string. "
+                + "Jinja context only exists when the task is executed."
+            )
             self.prepare_and_update_body()
 
-    @staticmethod
-    def _read_body(filepath):
+    @classmethod
+    def _read_body_from_file(cls, filepath):
         body = ""
         with open(filepath, "r", encoding="utf-8") as reader:
             body = reader.read()
         return body
 
     @property
-    def body(self) -> dict:
-        return self.job_runner.body
-
-    @property
-    def delete_policy(self) -> JobRunnerDeletePolicy:
-        return self.job_runner.delete_policy
-
-    @delete_policy.setter
-    def delete_policy(self, val: JobRunnerDeletePolicy):
-        self.job_runner.delete_policy = val
+    def job_runner(self) -> JobRunner:
+        return self._job_runner
 
     @classmethod
     def _create_job_name(cls, name):
@@ -162,6 +180,9 @@ class KubernetesJobOperator(BaseOperator):
             name,
             max_length=DEFAULT_KUBERNETES_MAX_RESOURCE_NAME_LENGTH,
         )
+
+    def _get_kubernetes_env_list(self):
+        return [{"name": k, "value": f"{self.envs[k]}"} for k in self.envs.keys()]
 
     def update_override_params(self, o: dict):
         if "spec" in o and "containers" in o.get("spec", {}):
@@ -173,9 +194,7 @@ class KubernetesJobOperator(BaseOperator):
                 if self.arguments:
                     main_container["args"] = self.arguments
                 if self.envs:
-                    env_list = main_container.get("env", [])
-                    for k in self.envs.keys():
-                        env_list.append({"name": k, "value": self.envs[k]})
+                    env_list = [*main_container.get("env", []), *self._get_kubernetes_env_list()]
                     main_container["env"] = env_list
                 if self.image:
                     main_container["image"] = self.image
@@ -185,8 +204,27 @@ class KubernetesJobOperator(BaseOperator):
             if isinstance(c, dict):
                 self.update_override_params(c)
 
+    def _validate_job_runner(self):
+        if self.job_runner is not None:
+            return
+        self.prepare_job_runner()
+
+    def prepare_job_runner(self):
+        """Override this method to create your own or augment the job runner"""
+        # create the job runner.
+        self._job_runner: JobRunner = JobRunner(
+            body=self.body,
+            namespace=self.namespace,
+            show_pod_logs=self.get_logs,
+            delete_policy=self.delete_policy,
+            logger=self.logger,
+            auto_load_kube_config=True,
+            name_prefix=self._create_job_name(self.task_id),
+        )
+
     def prepare_and_update_body(self):
         """Call to prepare the body for execution, this is a heavy command."""
+        self._validate_job_runner()
         self.job_runner.prepare_body()
 
     def pre_execute(self, context):
@@ -197,6 +235,7 @@ class KubernetesJobOperator(BaseOperator):
         Arguments:
             context -- The airflow context
         """
+        self._validate_job_runner()
         self._job_is_executing = False
 
         # Load the configuration.
@@ -210,7 +249,7 @@ class KubernetesJobOperator(BaseOperator):
         self.prepare_and_update_body()
 
         # write override params
-        self.update_override_params(self.body[0])
+        self.update_override_params(self.job_runner.body[0])
 
         # call parent.
         return super().pre_execute(context)
@@ -224,7 +263,9 @@ class KubernetesJobOperator(BaseOperator):
         Raises:
             AirflowException: Error in execution.
         """
-
+        assert self._job_runner is not None, KubernetesJobOperatorException(
+            "Execute called without pre_execute. Job runner is object was not created."
+        )
         self._job_is_executing = True
         try:
             rslt = self.job_runner.execute_job(

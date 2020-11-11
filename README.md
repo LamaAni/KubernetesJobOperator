@@ -18,6 +18,7 @@ This operator is in beta testing. Contributions are welcome.
 1. Pod and participating resources logs -> airflow.
 1. Full kubernetes error logs on failure.
 1. Integrated operator airflow config, see below.
+1. Integrated Jinja2 support for file templates with flag.
 
 ### Two operator classes are available
 
@@ -174,7 +175,6 @@ Add an issue (or better submit PR) if you need these.
 
 1. XCom
 1. Examples (other than TL;DR)
-1. Jinja support for file/string yaml body.
 
 # Licence
 
