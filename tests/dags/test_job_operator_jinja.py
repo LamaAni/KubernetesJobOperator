@@ -29,15 +29,15 @@ envs = {
 
 default_delete_policy = JobRunnerDeletePolicy.Never
 
-# KubernetesJobOperator(
-#     task_id="test-job-success",
-#     namespace=namespace,
-#     image="{{default_image}}",
-#     body_filepath="./templates/test_job.success.jinja.yaml",
-#     envs=envs,
-#     dag=dag,
-#     delete_policy=default_delete_policy,
-# )
+KubernetesJobOperator(
+    task_id="test-job-success",
+    namespace=namespace,
+    image="{{default_image}}",
+    body_filepath="./templates/test_job.success.jinja.yaml",
+    envs=envs,
+    dag=dag,
+    delete_policy=default_delete_policy,
+)
 
 bash_script = """
 #/usr/bin/env bash
