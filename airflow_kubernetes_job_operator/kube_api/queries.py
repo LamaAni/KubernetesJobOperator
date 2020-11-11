@@ -1,7 +1,6 @@
 from logging import Logger
 import logging
 from datetime import datetime
-import os
 import json
 from typing import Union, List, Callable
 import dateutil.parser
@@ -35,7 +34,7 @@ class LogLine:
     autodetect_kuberentes_log_level: bool = True
     detect_kubernetes_log_level: Callable = None
 
-    def __init__(self, pod_name: str, namespace: str, message: str, timestamp: datetime):
+    def __init__(self, pod_name: str, namespace: str, message: str, timestamp: datetime = None):
         """GetPodLogs log line generated info object.
 
         Args:
@@ -48,7 +47,7 @@ class LogLine:
         self.pod_name = pod_name
         self.namespace = namespace
         self.message = message
-        self.timestamp = timestamp
+        self.timestamp = timestamp or datetime.now()
 
     def log(self, logger: Logger = kube_logger):
         msg = self.__repr__()

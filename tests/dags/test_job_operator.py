@@ -79,6 +79,7 @@ KubernetesJobOperator(
     delete_policy=default_delete_policy,
 )
 
+
 if __name__ == "__main__":
     dag.clear(reset_dag_runs=True)
     dag.run()

@@ -300,7 +300,7 @@ class KubeApiRestQuery(Task):
                     self._set_connection_state(KubeApiRestQueryConnectionState.Disconnected)
 
                     # Case auto_reconnect has changed.
-                    if not self.auto_reconnect and do_reconnect:
+                    if not self.auto_reconnect or not do_reconnect:
                         break
 
                     kube_logger.debug(f"[{self.resource_path}] Connection lost, reconnecting..")
