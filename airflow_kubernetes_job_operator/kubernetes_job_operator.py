@@ -264,7 +264,7 @@ class KubernetesJobOperator(KubernetesJobOperatorDefaultsBase):
             AirflowException: Error in execution.
         """
         assert self._job_runner is not None, KubernetesJobOperatorException(
-            "Execute called without pre_execute. Job runner is object was not created."
+            "Execute called without pre_execute. Job runner object was not created."
         )
         self._job_is_executing = True
         try:
