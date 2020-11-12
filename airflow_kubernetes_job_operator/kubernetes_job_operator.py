@@ -80,14 +80,14 @@ class KubernetesJobOperator(KubernetesJobOperatorDefaultsBase):
                         command, arguments, image, envs, body, namespace, config_file, cluster_context
 
         Auto completed yaml values (if missing):
-
-            metadata.namespace - current namespace
-            spec.backOffLimit - 0
-            spec.template.spec.restartPolicy - Never
-
-        Added yaml values:
-
-            metadata.finalizers += foregroundDeletion
+            All:
+                metadata.namespace = current namespace
+            Pod:
+                spec.restartPolicy = Never
+            Job:
+                spec.backOffLimit = 0
+                spec.template.spec.restartPolicy = Never
+                metadata.finalizers - [foregroundDeletion]
 
         """
         super().__init__(task_id=task_id, **kwargs)
