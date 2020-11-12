@@ -204,6 +204,9 @@ class KubernetesJobOperator(KubernetesJobOperatorDefaultsBase):
         if self._job_runner is not None:
             return
         self._job_runner = self.create_job_runner()
+        assert isinstance(self._job_runner, JobRunner), KubernetesJobOperatorException(
+            "create_job_runner method must return a value of type JobRunner"
+        )
 
     def create_job_runner(self) -> JobRunner:
         """Override this method to create your own or augment the job runner"""
