@@ -205,14 +205,14 @@ class KubernetesJobOperator(KubernetesJobOperatorDefaultsBase):
                 self.update_override_params(c)
 
     def _validate_job_runner(self):
-        if self.job_runner is not None:
+        if self._job_runner is not None:
             return
-        self.prepare_job_runner()
+        self._job_runner = self.prepare_job_runner()
 
-    def prepare_job_runner(self):
+    def prepare_job_runner(self) -> JobRunner:
         """Override this method to create your own or augment the job runner"""
         # create the job runner.
-        self._job_runner: JobRunner = JobRunner(
+        return JobRunner(
             body=self.body,
             namespace=self.namespace,
             show_pod_logs=self.get_logs,
