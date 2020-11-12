@@ -3,9 +3,7 @@
 # some of these values will be replaced.
 apiVersion: batch/v1
 kind: Job
-metadata:
-  finalizers:
-    - foregroundDeletion
+metadata: {}
 spec:
   backoffLimit: 2
   template:

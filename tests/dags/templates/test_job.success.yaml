@@ -1,8 +1,6 @@
 apiVersion: batch/v1
 kind: Job
-metadata:
-  finalizers:
-    - foregroundDeletion
+metadata: {}
 spec:
   backoffLimit: 2
   completions: 3
