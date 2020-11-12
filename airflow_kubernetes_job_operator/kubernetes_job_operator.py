@@ -207,9 +207,9 @@ class KubernetesJobOperator(KubernetesJobOperatorDefaultsBase):
     def _validate_job_runner(self):
         if self._job_runner is not None:
             return
-        self._job_runner = self.prepare_job_runner()
+        self._job_runner = self.create_job_runner()
 
-    def prepare_job_runner(self) -> JobRunner:
+    def create_job_runner(self) -> JobRunner:
         """Override this method to create your own or augment the job runner"""
         # create the job runner.
         return JobRunner(
