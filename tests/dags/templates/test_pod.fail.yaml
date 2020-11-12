@@ -3,9 +3,7 @@
 # some of these values will be replaced.
 apiVersion: v1
 kind: Pod
-metadata:
-  finalizers:
-    - foregroundDeletion
+metadata: {}
 spec:
   restartPolicy: Never
   containers:
