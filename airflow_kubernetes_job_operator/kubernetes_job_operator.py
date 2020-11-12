@@ -27,6 +27,7 @@ class KubernetesJobOperatorDefaultsBase(BaseOperator):
 
 class KubernetesJobOperator(KubernetesJobOperatorDefaultsBase):
     autogenerate_job_id_from_task_id: bool = True
+    resolve_relative_path_callstack_offset: int = 0
 
     def __init__(
         self,
@@ -47,7 +48,6 @@ class KubernetesJobOperator(KubernetesJobOperatorDefaultsBase):
         startup_timeout_seconds: float = DEFAULT_TASK_STARTUP_TIMEOUT,
         validate_body_on_init: bool = DEFAULT_VALIDATE_BODY_ON_INIT,
         enable_jinja: bool = True,
-        resolve_relative_path_callstack_offset: int = 0,
         **kwargs,
     ):
         """A operator that executes an airflow task as a kubernetes Job.
@@ -78,10 +78,6 @@ class KubernetesJobOperator(KubernetesJobOperatorDefaultsBase):
                 (default: {from env/airflow config: AIRFLOW__KUBE_JOB_OPERATOR__validate_body_on_init or False})
             enable_jinja {bool} -- If true, the following fields will be parsed as jinja2,
                         command, arguments, image, envs, body, namespace, config_file, cluster_context
-            resolve_relative_path_callstack_offset {int} - The call stack offset to render relative files
-                from.
-                    0 = relative to the caller of the constructor.
-                    1 = relative to the caller of the caller to the constructor.
 
         Auto completed yaml values (if missing):
 
@@ -103,7 +99,7 @@ class KubernetesJobOperator(KubernetesJobOperatorDefaultsBase):
         body = body or self._read_body_from_file(
             resolve_relative_path(
                 body_filepath or DEFAULT_EXECUTION_OBJECT_PATHS[DEFAULT_EXECTION_OBJECT],
-                resolve_relative_path_callstack_offset + 1,
+                self.resolve_relative_path_callstack_offset + 1,
             )
         )
 
