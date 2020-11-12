@@ -156,7 +156,7 @@ class JobRunner:
             "Cannot create a job without a template, 'spec.template' is missing or not a dictionary"
         )
 
-        assert isinstance(descriptor.metadata["template"].get("spec", None), dict), JobRunnerException(
+        assert isinstance(descriptor.spec.get("template", {}).get("spec", None), dict), JobRunnerException(
             "Cannot create a job without a template spec, 'spec.template.spec' is missing or not a dictionary"
         )
 
@@ -214,6 +214,7 @@ class JobRunner:
                 + "more information cab be found @ "
                 + "https://github.com/LamaAni/KubernetesJobOperator/docs/add_custom_kinds.md",
             )
+        kind = KubeResourceKind.get_kind(kind_name)
 
         descriptor = KubeResourceDescriptor(body)
         assert descriptor.spec is not None, ValueError("body['spec'] is not defined")
@@ -230,8 +231,8 @@ class JobRunner:
             },
         )
 
-        if kind_name in self.custom_prepare_kinds:
-            self.custom_prepare_kinds[kind_name](body)
+        if kind.name in self.custom_prepare_kinds:
+            self.custom_prepare_kinds[kind.name](body)
 
         return body
 
@@ -434,5 +435,5 @@ class JobRunner:
         self.log("Client stopped, execution aborted.")
 
 
-JobRunner.register_custom_prepare_kind("pod", JobRunner.custom_prepare_pod_kind)
-JobRunner.register_custom_prepare_kind("job", JobRunner.custom_prepare_job_kind)
+JobRunner.register_custom_prepare_kind("Pod", JobRunner.custom_prepare_pod_kind)
+JobRunner.register_custom_prepare_kind("Job", JobRunner.custom_prepare_job_kind)
