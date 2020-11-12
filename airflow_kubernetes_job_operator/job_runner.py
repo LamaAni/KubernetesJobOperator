@@ -1,7 +1,6 @@
 import yaml
 import copy
 import logging
-import os
 
 from logging import Logger
 from uuid import uuid4
@@ -9,6 +8,7 @@ from typing import Callable, List, Type, Union
 from airflow_kubernetes_job_operator.kube_api.utils import not_empty_string
 from airflow_kubernetes_job_operator.utils import random_string
 from airflow_kubernetes_job_operator.collections import JobRunnerDeletePolicy, JobRunnerException
+from airflow_kubernetes_job_operator.config import SHOW_RUNNER_ID_IN_LOGS
 from airflow_kubernetes_job_operator.kube_api import (
     KubeApiConfiguration,
     GetAPIVersions,

@@ -1,7 +1,6 @@
 import kubernetes.client as k8s
 
 from typing import List, Optional, Union
-from airflow import configuration
 from airflow_kubernetes_job_operator.job_runner import JobRunnerDeletePolicy
 from airflow_kubernetes_job_operator.utils import resolve_relative_path
 from airflow_kubernetes_job_operator.kubernetes_job_operator import KubernetesJobOperator
@@ -68,7 +67,7 @@ class KubernetesLegacyJobOperator(KubernetesJobOperator):
         body_filepath: str = None,
         delete_policy: Union[str, JobRunnerDeletePolicy] = None,
         validate_body_on_init: bool = DEFAULT_VALIDATE_BODY_ON_INIT,
-        wait_for_task_timeout: float = None,
+        enable_jinja: bool = True,
         *args,
         **kwargs,
     ):
@@ -174,8 +173,9 @@ class KubernetesLegacyJobOperator(KubernetesJobOperator):
             body_filepath = resolve_relative_path(body_filepath, 2)
 
         super().__init__(
-            command=cmds,
-            arguments=arguments,
+            command=cmds or [],
+            arguments=arguments or [],
+            envs=env_vars or {},
             image=image,
             namespace=namespace,
             body=body,
@@ -186,25 +186,19 @@ class KubernetesLegacyJobOperator(KubernetesJobOperator):
             cluster_context=cluster_context,
             validate_body_on_init=validate_body_on_init,
             startup_timeout_seconds=startup_timeout_seconds,
-            wait_for_task_timeout=wait_for_task_timeout,
             get_logs=get_logs,
+            enable_jinja=enable_jinja,
+            image_pull_policy=image_pull_policy,
             *args,
             **kwargs,
         )
 
         # adding self properties.
-        self.image = image
-        self.namespace = namespace
-        self.cmds = cmds or []
-        self.arguments = arguments or []
         self.labels = labels or {}
-        self.startup_timeout_seconds = startup_timeout_seconds
-        self.env_vars = env_vars or {}
         self.ports = ports or []
         self.volume_mounts = volume_mounts or []
         self.volumes = volumes or []
         self.secrets = secrets or []
-        self.image_pull_policy = image_pull_policy
         self.node_selectors = node_selectors or {}
         self.annotations = annotations or {}
         self.affinity = affinity or {}
@@ -232,7 +226,8 @@ class KubernetesLegacyJobOperator(KubernetesJobOperator):
         return inputResource
 
     def prepare_and_update_body(self):
-        self.job_runner.prepare_body()
+        # call to prepare the raw body.
+        super().prepare_and_update_body()
 
         pod_body = None
         if pod_generator is not None:
@@ -246,14 +241,14 @@ class KubernetesLegacyJobOperator(KubernetesJobOperator):
             for volume in self.volumes:
                 gen.add_volume(volume)
 
-            job_obj = self.body[0]
+            job_obj = self.job_runner.body[0]
 
             # selecting appropriate pod values.
             all_labels = {}
             all_labels.update(self.labels)
             all_labels.update(job_obj["spec"]["template"]["metadata"].get("labels", {}))
             image = self.image or job_obj["spec"]["template"]["spec"]["containers"][0].get("image", None)
-            cmds = self.cmds or job_obj["spec"]["template"]["spec"]["containers"][0].get("command", [])
+            cmds = self.command or job_obj["spec"]["template"]["spec"]["containers"][0].get("command", [])
             arguments = self.arguments or job_obj["spec"]["template"]["spec"]["containers"][0].get("args", [])
 
             pod = gen.make_pod(
@@ -267,7 +262,7 @@ class KubernetesLegacyJobOperator(KubernetesJobOperator):
 
             pod.service_account_name = self.service_account_name
             pod.secrets = self.secrets
-            pod.envs = self.env_vars
+            pod.envs = self.envs
             pod.image_pull_policy = self.image_pull_policy
             pod.image_pull_secrets = self.image_pull_secrets
             pod.annotations = self.annotations
@@ -302,14 +297,12 @@ class KubernetesLegacyJobOperator(KubernetesJobOperator):
                         k8s.V1Container(
                             image=self.image,
                             name="main",
-                            command=self.cmds,
+                            command=self.command,
                             ports=self.ports,
                             resources=self.resources,
                             volume_mounts=self.volume_mounts,
                             args=self.arguments,
-                            env=None
-                            if self.env_vars is None
-                            else [{"name": k, "value": self.env_vars[k]} for k in self.env_vars.keys()],
+                            env=None if self.envs is None else self._get_kubernetes_env_list(),
                             env_from=self.env_from,
                         )
                     ],
@@ -330,6 +323,6 @@ class KubernetesLegacyJobOperator(KubernetesJobOperator):
             }
 
         # reset the name
-        del self.body[0]["metadata"]["name"]
-        self.body[0]["spec"]["template"] = pod_body
-        self.job_runner.prepare_body(True)
+        del pod_body["metadata"]["name"]
+        pod_body["metadata"].update(self.job_runner.body[0]["spec"]["template"]["metadata"])
+        self.job_runner.body[0]["spec"]["template"] = pod_body
