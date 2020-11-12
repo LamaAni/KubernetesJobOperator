@@ -161,11 +161,8 @@ class JobRunner:
         )
 
         descriptor.spec.setdefault("backoffLimit", 0)
-        descriptor.metadata.setdefault("finalizers", [])
+        descriptor.metadata.setdefault("finalizers", ["foregroundDeletion"])
         descriptor.spec["template"]["spec"].setdefault("restartPolicy", "Never")
-
-        if "foregroundDeletion" not in descriptor.metadata["finalizers"]:
-            descriptor.metadata["finalizers"].append("foregroundDeletion")
 
     @classmethod
     def custom_prepare_pod_kind(cls, body: dict):
