@@ -165,6 +165,27 @@ Further, in the KubernetesPodOperator the monitoring between the worker pod and 
 
 Finally, using the KubernetesJobOperator you are free to use other resources like the kubernetes [Job](https://kubernetes.io/docs/concepts/workloads/controllers/jobs-run-to-completion/) to execute your tasks. These are better designed for use in kubernetes and are "up with the times".
 
+# Kubernetes job operator input variables
+
+argument| default value | description
+|---|---|---|
+command | None | A list of commands to be sent. i.e. ["echo","ok"]
+arguments | None | A list of arguments to be sent to the docker image.
+image | None | An image to use. (Overrides the main pod image)
+namespace | None | A namespace to use (Overrides/adds a namespace to main resource)
+envs | None | A dictionary of envs to add to the main job pod.
+body | None | The body of the job to use. Can be string, dictionary.
+body_filepath | None | A filepath to the yaml config file. Can use a relative filepath.
+image_pull_policy | Always | The kubernetes image pull policy (str)
+delete_policy | IfSucceeded | The resources delete policy. Can be one of: Always, Never, IfSucceeded, IfFailed (Str)
+in_cluster | None | Use in cluster creds.
+config_file | None | Use this kubernetes config file.
+get_logs | True | Retrive the executing pod logs (for all resources)
+cluster_context | The cluster context name to use.
+startup_timeout_seconds | 10 | The max number of seconds to create the job before timeout is called
+validate_body_on_init | False | Can be set to true only if jinja is disabled. Process the yaml when the object is created.
+enable_jinja| True | Enable jinja on the body (str, or file), and the following args: command, arguments, image, envs, body, namespace, config_file, cluster_context
+
 # Contribution
 
 Are welcome, please post issues or PR's if needed.
