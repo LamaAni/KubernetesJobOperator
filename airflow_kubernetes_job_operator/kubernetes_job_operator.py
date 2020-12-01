@@ -107,8 +107,15 @@ class KubernetesJobOperator(KubernetesJobOperatorDefaultsBase):
             "body must either be a yaml string or a dict"
         )
 
-        assert delete_policy in JobRunnerDeletePolicy, ValueError(
-            f"Invalid delete policy. Valid values are: {[str(v) for v in JobRunnerDeletePolicy]}"
+        if isinstance(delete_policy, str):
+            try:
+                delete_policy = JobRunnerDeletePolicy(delete_policy)
+            except Exception:
+                delete_policy = None
+
+        assert delete_policy is not None and isinstance(delete_policy, JobRunnerDeletePolicy), ValueError(
+            f"Invalid delete policy. Valid values are ({JobRunnerDeletePolicy.__module__}.JobRunnerDeletePolicy):"
+            + f" {[str(v) for v in JobRunnerDeletePolicy]}"
         )
 
         assert envs is None or isinstance(envs, dict), ValueError("The env collection must be a dict or None")

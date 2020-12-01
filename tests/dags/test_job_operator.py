@@ -1,7 +1,7 @@
 from utils import default_args
 from datetime import timedelta
 from airflow import DAG
-from airflow_kubernetes_job_operator.kubernetes_job_operator import KubernetesJobOperator, JobRunnerDeletePolicy
+from airflow_kubernetes_job_operator.kubernetes_job_operator import KubernetesJobOperator
 
 dag = DAG(
     "kub-job-op",
@@ -18,7 +18,7 @@ envs = {
     "JINJA_ENV": "{{ ds }}",
 }
 
-default_delete_policy = JobRunnerDeletePolicy.IfSucceeded
+default_delete_policy = "IfSucceeded"
 
 # Job
 KubernetesJobOperator(
