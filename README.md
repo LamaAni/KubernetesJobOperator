@@ -4,9 +4,7 @@
 
 An airflow operator that executes a task in a kubernetes cluster, given a yaml configuration or an image url.
 
-### BETA
-
-This operator is in beta testing. Contributions are welcome.
+Contributions are welcome. See [here](https://docs.github.com/en/free-pro-team@latest/github/collaborating-with-issues-and-pull-requests/creating-a-pull-request-from-a-fork).
 
 ### Supports
 
