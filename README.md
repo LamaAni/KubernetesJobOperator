@@ -17,6 +17,7 @@ Contributions are welcome. See [here](https://docs.github.com/en/free-pro-team@l
 1. Full kubernetes error logs on failure.
 1. Integrated operator airflow config, see below.
 1. Integrated Jinja2 support for file templates with flag.
+1. Tested and working on [google cloud composer](https://cloud.google.com/composer).
 
 ### Two operator classes are available
 
