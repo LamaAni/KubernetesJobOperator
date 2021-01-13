@@ -199,5 +199,5 @@ Add an issue (or better submit PR) if you need these.
 # Licence
 
 Copyright ©
-`Zav Shotan` and other [contributors](https://github.com/LamaAni/postgres-xl-helm/graphs/contributors).
+`Zav Shotan` and other [contributors](graphs/contributors).
 It is free software, released under the MIT licence, and may be redistributed under the terms specified in [LICENSE](docs/LICENSE).
