@@ -1,8 +1,8 @@
 # Airflow KubernetesJobOperator
 
-##### Remember: If you like it \* it, so other people would also use it.
-
 An airflow operator that executes a task in a kubernetes cluster, given a yaml configuration or an image url.
+
+### If you like it \* it, so other people would also use it.
 
 Contributions are welcome. See [here](https://docs.github.com/en/free-pro-team@latest/github/collaborating-with-issues-and-pull-requests/creating-a-pull-request-from-a-fork).
 
