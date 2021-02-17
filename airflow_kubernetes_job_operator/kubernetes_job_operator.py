@@ -189,28 +189,52 @@ class KubernetesJobOperator(KubernetesJobOperatorDefaultsBase):
             max_length=DEFAULT_KUBERNETES_MAX_RESOURCE_NAME_LENGTH,
         )
 
-    def _get_kubernetes_env_list(self):
-        return [{"name": k, "value": f"{self.envs[k]}"} for k in self.envs.keys()]
+    @classmethod
+    def _to_kubernetes_env_list(cls, envs: dict):
+        return [{"name": k, "value": f"{envs[k]}"} for k in envs.keys()]
 
-    def update_override_params(self, o: dict):
+    def _get_kubernetes_env_list(self):
+        return self._to_kubernetes_env_list(self.envs or {})
+
+    def _get_kubernetes_job_operator_envs(self):
+        body = self.job_runner.body
+        names = [r.get("metadata", {}).get("name", None) for r in body]
+        names = [n for n in names if n is not None]
+        return self._to_kubernetes_env_list(
+            {
+                "KUBERNETES_JOB_OPERATOR_RESOURCES": " ".join(names),
+            }
+        )
+
+    def _update_container_yaml(self, container):
+        container["env"] = [
+            *self._get_kubernetes_job_operator_envs(),
+            *container.get("env", []),
+            *self._get_kubernetes_env_list(),
+        ]
+
+    def _update_main_container_yaml(self, container: dict):
+        if self.command:
+            container["command"] = self.command
+        if self.arguments:
+            container["args"] = self.arguments
+        if self.image:
+            container["image"] = self.image
+        if self.image_pull_policy:
+            container["imagePullPolicy"] = self.image_pull_policy
+
+    def _update_override_params(self, o: dict):
         if "spec" in o and "containers" in o.get("spec", {}):
             containers: List[dict] = o["spec"]["containers"]
             if isinstance(containers, list) and len(containers) > 0:
-                main_container = containers[0]
-                if self.command:
-                    main_container["command"] = self.command
-                if self.arguments:
-                    main_container["args"] = self.arguments
-                if self.envs:
-                    env_list = [*main_container.get("env", []), *self._get_kubernetes_env_list()]
-                    main_container["env"] = env_list
-                if self.image:
-                    main_container["image"] = self.image
-                if self.image_pull_policy:
-                    main_container["imagePullPolicy"] = self.image_pull_policy
+                for container in containers:
+                    self._update_container_yaml(container=container)
+                self._update_main_container_yaml(containers[0])
+
+                ## adding env resources
         for c in o.values():
             if isinstance(c, dict):
-                self.update_override_params(c)
+                self._update_override_params(c)
 
     def _validate_job_runner(self):
         if self._job_runner is not None:
@@ -270,7 +294,7 @@ class KubernetesJobOperator(KubernetesJobOperatorDefaultsBase):
         self.prepare_and_update_body()
 
         # write override params
-        self.update_override_params(self.job_runner.body[0])
+        self._update_override_params(self.job_runner.body[0])
 
         # call parent.
         return super().pre_execute(context)
