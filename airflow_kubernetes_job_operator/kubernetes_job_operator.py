@@ -1,5 +1,5 @@
+import jinja2
 from typing import List, Union
-
 from airflow.utils.decorators import apply_defaults
 from airflow.operators import BaseOperator
 from airflow_kubernetes_job_operator.kube_api import KubeResourceState
@@ -48,6 +48,7 @@ class KubernetesJobOperator(KubernetesJobOperatorDefaultsBase):
         startup_timeout_seconds: float = DEFAULT_TASK_STARTUP_TIMEOUT,
         validate_body_on_init: bool = DEFAULT_VALIDATE_BODY_ON_INIT,
         enable_jinja: bool = True,
+        jinja_environment_kwargs: dict = None,
         **kwargs,
     ):
         """A operator that executes an airflow task as a kubernetes Job.
@@ -78,6 +79,7 @@ class KubernetesJobOperator(KubernetesJobOperatorDefaultsBase):
                 (default: {from env/airflow config: AIRFLOW__KUBE_JOB_OPERATOR__validate_body_on_init or False})
             enable_jinja {bool} -- If true, the following fields will be parsed as jinja2,
                         command, arguments, image, envs, body, namespace, config_file, cluster_context
+            jinja_environment_kwargs {dict} -- A dictionary with extra jinja envs.
 
         Auto completed yaml values (if missing):
             All:
@@ -144,6 +146,8 @@ class KubernetesJobOperator(KubernetesJobOperatorDefaultsBase):
         # operation properties
         self.startup_timeout_seconds = startup_timeout_seconds
 
+        # Jinja
+        self.jinja_environment_kwargs = jinja_environment_kwargs
         if enable_jinja:
             self.template_fields = [
                 "command",
@@ -227,6 +231,11 @@ class KubernetesJobOperator(KubernetesJobOperatorDefaultsBase):
             auto_load_kube_config=True,
             name_prefix=self._create_job_name(self.task_id),
         )
+
+    def get_template_env(self) -> jinja2.Environment:
+        base_env = super().get_template_env()
+        base_env.globals.update(self.jinja_environment_kwargs or {})
+        return base_env
 
     def prepare_and_update_body(self):
         """Call to prepare the body for execution, this is a heavy command."""
