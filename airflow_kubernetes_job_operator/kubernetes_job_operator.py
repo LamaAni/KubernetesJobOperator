@@ -239,9 +239,9 @@ class KubernetesJobOperator(KubernetesJobOperatorDefaultsBase):
         Returns:
             jinja2.Environment: The generated jinja environment.
         """
-        base_env = super().get_template_env()
-        base_env.globals["job"] = self.jinja_job_args or {}
-        return base_env
+        jinja_env = super().get_template_env()
+        jinja_env.globals["job"] = self.jinja_job_args or {}
+        return jinja_env
 
     def prepare_and_update_body(self):
         """Call to prepare the body for execution, this is a heavy command."""
