@@ -2,8 +2,8 @@ apiVersion: batch/v1
 kind: Job
 metadata: {}
 spec:
-  backoffLimit: 2
-  completions: 3
+  backoffLimit: 1
+  completions: 1
   template:
     spec:
       restartPolicy: Never
@@ -32,3 +32,5 @@ spec:
               value: '2'
             - name: JINJA_VAR_2
               value: '{{ti.task_id}}'
+            - name: JINJA_VAR_FROM_JOB
+              value: '{{job.test}}'

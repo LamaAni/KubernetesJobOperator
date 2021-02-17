@@ -68,6 +68,7 @@ class KubernetesLegacyJobOperator(KubernetesJobOperator):
         delete_policy: Union[str, JobRunnerDeletePolicy] = None,
         validate_body_on_init: bool = DEFAULT_VALIDATE_BODY_ON_INIT,
         enable_jinja: bool = True,
+        jinja_job_args: dict = None,
         *args,
         **kwargs,
     ):
@@ -162,6 +163,8 @@ class KubernetesLegacyJobOperator(KubernetesJobOperator):
             validate_body_on_init {bool} -- If true, validates the yaml in the constructor,
                 setting this to True, will slow dag creation.
                 (default: {from env/airflow config: AIRFLOW__KUBE_JOB_OPERATOR__validate_body_on_init or False})
+            jinja_job_args {dict} -- A dictionary or object to be used in the jinja template to render
+                arguments. The jinja args are loaded under the keyword "job".
         """
         delete_policy = (
             delete_policy or JobRunnerDeletePolicy.IfSucceeded
@@ -189,6 +192,7 @@ class KubernetesLegacyJobOperator(KubernetesJobOperator):
             get_logs=get_logs,
             enable_jinja=enable_jinja,
             image_pull_policy=image_pull_policy,
+            jinja_job_args=jinja_job_args,
             *args,
             **kwargs,
         )

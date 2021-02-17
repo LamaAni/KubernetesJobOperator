@@ -184,6 +184,7 @@ cluster_context | The cluster context name to use.
 startup_timeout_seconds | 10 | The max number of seconds to create the job before timeout is called
 validate_body_on_init | False | Can be set to true only if jinja is disabled. Process the yaml when the object is created.
 enable_jinja| True | Enable jinja on the body (str, or file), and the following args: command, arguments, image, envs, body, namespace, config_file, cluster_context
+jinja_job_args | None | A dictionary or object to be used in the jinja template to render arguments. The jinja args are loaded under the keyword "job".
 
 # Contribution
 
