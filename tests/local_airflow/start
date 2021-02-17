@@ -20,7 +20,6 @@ if [ "$#" -eq 0 ]; then
   echo "Running airflow version:"
   airflow version
   echo "----------------------"
-  sleep 1
   airflow scheduler &
   SCHEDULER_PID="$!"
   airflow webserver

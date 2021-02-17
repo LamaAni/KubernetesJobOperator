@@ -37,11 +37,12 @@ KubernetesJobOperator(
     envs=envs,
     dag=dag,
     delete_policy=default_delete_policy,
+    jinja_job_args={"test": "lama"},
 )
 
 bash_script = """
 #/usr/bin/env bash
-echo "Legacy start for taskid {{ti.task_id}}"
+echo "Legacy start for taskid {{ti.task_id}} {{job.test}}"
 cur_count=0
 while true; do
     cur_count=$((cur_count + 1))
