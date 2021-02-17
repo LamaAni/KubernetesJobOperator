@@ -4,7 +4,6 @@ from airflow import DAG
 from airflow_kubernetes_job_operator import (
     KubernetesJobOperator,
     JobRunnerDeletePolicy,
-    KubernetesLegacyJobOperator,
 )
 
 dag = DAG(
