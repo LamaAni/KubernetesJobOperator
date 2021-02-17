@@ -85,6 +85,7 @@ legacy_job_task = KubernetesLegacyJobOperator(
 NOTE: that the success/failure of the task is tracked only on the `first` resource, no matter of its kind. Currently native support exists for Pods and Jobs only, though you can always add a [custom resource](docs/custom_kinds.md).
 
 ```yaml
+# First resource: this resource will be tracked by the operator. Other resources will not be tracked.
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -120,6 +121,15 @@ spec:
     - port: 8080
       targetPort: 8080
 ```
+
+### YAML field augmentation
+
+The operator auto augments the following fields on the first resource containers,
+1. envs are added to all pods
+1. special envs are added:
+    1. KUBERNETES_JOB_OPERATOR_RESOURCES - A list of all resource names.
+
+All other changes are made on the main container (the first container) of the first resource only.
 
 # Configuration
 
