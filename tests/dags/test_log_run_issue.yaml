@@ -1,0 +1,16 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  finalizers:
+    - foregroundDeletion
+spec:
+  backoffLimit: 1
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: test-connection-reset-by-peer
+          image: python:3.8.6-slim
+          imagePullPolicy: Always
+          command: ['bash']
+          args: ['-c', "echo 'start' && sleep 600 && echo 'done'"]
