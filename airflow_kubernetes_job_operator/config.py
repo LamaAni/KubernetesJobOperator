@@ -5,7 +5,7 @@ from airflow_kubernetes_job_operator.kube_api.utils import not_empty_string
 from airflow_kubernetes_job_operator.kube_api.config import DEFAULT_KUBE_CONFIG_LOCATIONS
 from airflow_kubernetes_job_operator.kube_api.queries import LogLine
 from airflow_kubernetes_job_operator.utils import resolve_path
-from airflow.configuration import conf
+from airflow.configuration import conf, log
 from airflow.exceptions import AirflowConfigException
 from airflow_kubernetes_job_operator.collections import (
     JobRunnerDeletePolicy,
@@ -21,6 +21,20 @@ DEFAULT_EXECUTION_OBJECT_PATHS: Dict[KubernetesJobOperatorDefaultExecutionResour
 AIRFLOW_CONFIG_SECTION_NAME = "kubernetes_job_operator"
 
 
+def conf_get_no_warnings_no_errors(*args, **kwargs):
+    old_level = log.level
+    try:
+        # must be suppressed manually since the config
+        # always prints (rather then raise a warning)
+        log.level = logging.ERROR
+        val = conf.get(*args, **kwargs)
+    except AirflowConfigException:
+        val = None
+    finally:
+        log.level = old_level
+    return val
+
+
 def get(
     key: str,
     default=None,
@@ -32,7 +46,7 @@ def get(
     collection = collection or AIRFLOW_CONFIG_SECTION_NAME
     val = None
     try:
-        val = conf.get(AIRFLOW_CONFIG_SECTION_NAME, key)
+        val = conf_get_no_warnings_no_errors(AIRFLOW_CONFIG_SECTION_NAME, key)
     except AirflowConfigException as ex:
         logging.debug(ex)
 
