@@ -6,6 +6,9 @@ verify_ssl = true
 [dev-packages]
 
 [packages]
+apache-airflow = "==1.10.14"
+zthreading = "*"
+kubernetes = "*"
 
 [requires]
 python_version = "3.6"
