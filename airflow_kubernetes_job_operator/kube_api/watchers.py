@@ -197,14 +197,25 @@ class NamespaceWatchQuery(KubeApiRestQuery):
         self.emit(self.pod_log_event_name, data)
 
     @thread_synchronized
-    def _create_pod_log_reader(self, uid: str, name: str, namespace: str, follow=True):
+    def _create_pod_log_reader(
+        self,
+        logger_id: str,
+        name: str,
+        namespace: str,
+        container: str = None,
+        follow=True,
+        is_single=False,
+    ):
         read_logs = GetPodLogs(
             name=name,
             namespace=namespace,
             since=self.pod_log_since,
             follow=follow,
+            container=container,
+            add_container_name_to_log=True if is_single else False,
         )
-        self._executing_pod_loggers[uid] = read_logs
+
+        self._executing_pod_loggers[logger_id] = read_logs
         return read_logs
 
     def process_data_state(self, data: dict, client: KubeApiRestClient):
@@ -226,42 +237,62 @@ class NamespaceWatchQuery(KubeApiRestQuery):
             if state.deleted:
                 del self._object_states[uid]
 
-        if self.watch_pod_logs and kind == "pod" and uid not in self._executing_pod_loggers:
+        if self.watch_pod_logs and kind == "pod":
             name = data["metadata"]["name"]
             namesoace = data["metadata"]["namespace"]
             pod_status = data["status"]["phase"]
+
             if pod_status != "Pending":
-                osw = self._object_states.get(uid)
-                read_logs = self._create_pod_log_reader(
-                    uid=uid,
-                    name=name,
-                    namespace=namesoace,
-                )
+                containers = data["spec"]["containers"]
+                is_single = len(containers) < 2
+                for container in containers:
+                    if not isinstance(container, dict):
+                        continue
 
-                osw.emit(self.pod_logs_reader_started_event_name)
+                    container_name = container.get("name", None)
 
-                def handle_error(sender, *args):
-                    # Don't throw error if not running.
-                    if not self.is_running:
-                        return
+                    assert isinstance(container_name, str) and len(container_name.strip()) > 0, KubeApiException(
+                        "Invalid container name when reading logs"
+                    )
 
-                    if len(args) == 0:
-                        self.emit_error(KubeApiException("Unknown error from sender", sender))
-                    else:
-                        self.emit_error(args[0])
+                    logger_id = f"{uid}/{container_name}"
 
-                # binding only relevant events.
-                read_logs.on(read_logs.data_event_name, lambda line: self.emit_log(line))
-                read_logs.on(read_logs.error_event_name, handle_error)
-                client.query_async(read_logs)
+                    if logger_id in self._executing_pod_loggers:
+                        continue
+
+                    osw = self._object_states.get(uid)
+                    read_logs = self._create_pod_log_reader(
+                        logger_id=logger_id,
+                        name=name,
+                        namespace=namesoace,
+                        container=container.get("name", None),
+                        is_single=is_single,
+                    )
+
+                    osw.emit(self.pod_logs_reader_started_event_name)
+
+                    def handle_error(sender, *args):
+                        # Don't throw error if not running.
+                        if not self.is_running:
+                            return
+
+                        if len(args) == 0:
+                            self.emit_error(KubeApiException("Unknown error from sender", sender))
+                        else:
+                            self.emit_error(args[0])
+
+                    # binding only relevant events.
+                    read_logs.on(read_logs.data_event_name, lambda line: self.emit_log(line))
+                    read_logs.on(read_logs.error_event_name, handle_error)
+                    client.query_async(read_logs)
 
     def _stop_all_loggers(
         self,
         timeout: float = None,
         throw_error_if_not_running: bool = None,
     ):
-        for q in list(self._executing_pod_loggers.values()):
-            q.stop(timeout=timeout, throw_error_if_not_running=throw_error_if_not_running)
+        for pod_logger in list(self._executing_pod_loggers.values()):
+            pod_logger.stop(timeout=timeout, throw_error_if_not_running=throw_error_if_not_running)
 
     def stop(
         self,
