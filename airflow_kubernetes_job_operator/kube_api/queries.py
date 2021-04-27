@@ -34,7 +34,14 @@ class LogLine:
     autodetect_kuberentes_log_level: bool = True
     detect_kubernetes_log_level: Callable = None
 
-    def __init__(self, pod_name: str, namespace: str, message: str, timestamp: datetime = None):
+    def __init__(
+        self,
+        pod_name: str,
+        container_name: str,
+        namespace: str,
+        message: str,
+        timestamp: datetime = None,
+    ):
         """GetPodLogs log line generated info object.
 
         Args:
@@ -47,6 +54,7 @@ class LogLine:
         self.pod_name = pod_name
         self.namespace = namespace
         self.message = message
+        self.container_name = container_name
         self.timestamp = timestamp or datetime.now()
 
     def log(self, logger: Logger = kube_logger):
@@ -64,8 +72,14 @@ class LogLine:
         return self.message
 
     def __repr__(self):
-        timestamp = f"[{self.timestamp}]" if self.show_kubernetes_log_timestamps else ""
-        return timestamp + f"[{self.namespace}/pods/{self.pod_name}]: {self.message}"
+        header_parts = [
+            f"{self.timestamp}" if self.show_kubernetes_log_timestamps else None,
+            f"{self.namespace}/pods/{self.pod_name}",
+            self.container_name,
+        ]
+
+        header = "".join([f"[{p}]" for p in header_parts if p is not None])
+        return f"{header}: {self.message}"
 
 
 class GetPodLogs(KubeApiRestQuery):
@@ -76,6 +90,8 @@ class GetPodLogs(KubeApiRestQuery):
         since: datetime = None,
         follow: bool = False,
         timeout: int = None,
+        container: str = None,
+        add_container_name_to_log: bool = None,
     ):
         """Returns the pod logs for a pod. Can follow the pod logs
         in real time.
@@ -91,6 +107,7 @@ class GetPodLogs(KubeApiRestQuery):
         """
         assert not_empty_string(name), ValueError("name must be a non empty string")
         assert not_empty_string(namespace), ValueError("namespace must be a non empty string")
+        assert container is None or not_empty_string(container), ValueError("container must be a non empty string")
 
         kind: KubeResourceKind = KubeResourceKind.get_kind("Pod")
         super().__init__(
@@ -104,15 +121,22 @@ class GetPodLogs(KubeApiRestQuery):
         self.name: str = name
         self.namespace: str = namespace
         self.since: datetime = since
+        self.container = container
         self.query_params = {
             "follow": follow,
             "pretty": False,
             "timestamps": True,
         }
 
+        if container is not None:
+            self.query_params["container"] = container
+
         self.since = since
         self._last_timestamp = None
         self._active_namespace = None
+        self.add_container_name_to_log = (
+            add_container_name_to_log if add_container_name_to_log is not None else container is not None
+        )
 
     def pre_request(self, client: "KubeApiRestClient"):
         super().pre_request(client)
@@ -158,7 +182,15 @@ class GetPodLogs(KubeApiRestQuery):
         message = message.replace("\r", "")
         lines = []
         for message_line in message.split("\n"):
-            lines.append(LogLine(self.name, self.namespace, message_line, timestamp))
+            lines.append(
+                LogLine(
+                    pod_name=self.name,
+                    namespace=self.namespace,
+                    message=message_line,
+                    timestamp=timestamp,
+                    container_name=self.container if self.add_container_name_to_log else None,
+                )
+            )
         return lines
 
     def emit_data(self, data):
@@ -271,7 +303,7 @@ class GetAPIVersions(KubeApiRestQuery):
         )
 
     def parse_data(self, data):
-        """ Override data parse """
+        """Override data parse"""
         rslt = json.loads(data)
         prased = {}
         for grp in rslt.get("groups", []):

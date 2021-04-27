@@ -4,11 +4,18 @@ url = "https://pypi.org/simple"
 verify_ssl = true
 
 [dev-packages]
+black = "*"
 
 [packages]
-apache-airflow = "==1.10.14"
-zthreading = "*"
+SQLAlchemy = "==1.3.23"
+Flask-SQLAlchemy= "==2.4.4"
+apache-airflow = "==1.10.15"
+airflow-db-logger = "==1.0.5"
 kubernetes = "*"
+zthreading = "*"
 
 [requires]
 python_version = "3.6"
+
+[pipenv]
+allow_prereleases = true
