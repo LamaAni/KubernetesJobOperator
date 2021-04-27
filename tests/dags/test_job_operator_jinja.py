@@ -1,14 +1,13 @@
-from utils import default_args
+from utils import default_args, name_from_file
 from datetime import timedelta
 from airflow import DAG
 from airflow_kubernetes_job_operator import (
     KubernetesJobOperator,
     JobRunnerDeletePolicy,
-    KubernetesLegacyJobOperator,
 )
 
 dag = DAG(
-    "kub-job-op-test-jinja",
+    name_from_file(__file__),
     default_args=default_args,
     description="Test base job operator",
     schedule_interval=None,
@@ -39,31 +38,6 @@ KubernetesJobOperator(
     delete_policy=default_delete_policy,
     jinja_job_args={"test": "lama"},
 )
-
-# bash_script = """
-# #/usr/bin/env bash
-# echo "Legacy start for taskid {{ti.task_id}} {{job.test}}"
-# cur_count=0
-# while true; do
-#     cur_count=$((cur_count + 1))
-#     if [ "$cur_count" -ge "$TIC_COUNT" ]; then
-#         break
-#     fi
-#     date
-#     sleep 1
-# done
-
-# echo "Complete"
-# """
-# KubernetesLegacyJobOperator(
-#     task_id="legacy-test-job-success",
-#     image="{{default_image}}",
-#     cmds=["bash", "-c", bash_script],
-#     dag=dag,
-#     is_delete_operator_pod=True,
-#     env_vars=envs,
-#     delete_policy=default_delete_policy,
-# )
 
 if __name__ == "__main__":
     dag.clear(reset_dag_runs=True)

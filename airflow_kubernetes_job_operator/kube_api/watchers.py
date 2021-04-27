@@ -212,7 +212,7 @@ class NamespaceWatchQuery(KubeApiRestQuery):
             since=self.pod_log_since,
             follow=follow,
             container=container,
-            add_container_name_to_log=True if is_single else False,
+            add_container_name_to_log=False if is_single else True,
         )
 
         self._executing_pod_loggers[logger_id] = read_logs
@@ -269,7 +269,7 @@ class NamespaceWatchQuery(KubeApiRestQuery):
                         is_single=is_single,
                     )
 
-                    osw.emit(self.pod_logs_reader_started_event_name)
+                    osw.emit(self.pod_logs_reader_started_event_name, container=container_name)
 
                     def handle_error(sender, *args):
                         # Don't throw error if not running.
@@ -325,7 +325,8 @@ class NamespaceWatchQuery(KubeApiRestQuery):
             line.log(logger)
         elif ev.name == self.pod_logs_reader_started_event_name:
             osw: NamespaceWatchQueryResourceState = ev.sender
-            logger.info(f"[{osw.namespace}/{osw.kind_name.lower()}s/{osw.name}] Reading logs")
+            container_name = ev.kwargs.get("container", "[unknown container name]")
+            logger.info(f"[{osw.namespace}/{osw.kind_name.lower()}s/{osw.name}] Reading logs from {container_name}")
 
     def pipe_to_logger(self, logger: Logger = kube_logger, allowed_event_names=None) -> int:
         allowed_event_names = set(

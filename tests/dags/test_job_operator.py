@@ -1,10 +1,10 @@
-from utils import default_args
+from utils import default_args, name_from_file
 from datetime import timedelta
 from airflow import DAG
 from airflow_kubernetes_job_operator.kubernetes_job_operator import KubernetesJobOperator
 
 dag = DAG(
-    "kub-job-op",
+    name_from_file(__file__),
     default_args=default_args,
     description="Test base job operator",
     schedule_interval=None,
