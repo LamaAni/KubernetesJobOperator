@@ -91,7 +91,7 @@ class GetPodLogs(KubeApiRestQuery):
         follow: bool = False,
         timeout: int = None,
         container: str = None,
-        add_container_name_to_log: bool = False,
+        add_container_name_to_log: bool = None,
     ):
         """Returns the pod logs for a pod. Can follow the pod logs
         in real time.
@@ -134,7 +134,9 @@ class GetPodLogs(KubeApiRestQuery):
         self.since = since
         self._last_timestamp = None
         self._active_namespace = None
-        self.add_container_name_to_log = add_container_name_to_log
+        self.add_container_name_to_log = (
+            add_container_name_to_log if add_container_name_to_log is not None else container is not None
+        )
 
     def pre_request(self, client: "KubeApiRestClient"):
         super().pre_request(client)
