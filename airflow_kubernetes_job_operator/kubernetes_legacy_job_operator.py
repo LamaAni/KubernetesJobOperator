@@ -3,7 +3,7 @@ import kubernetes.client as k8s
 from typing import List, Optional, Union
 from airflow_kubernetes_job_operator.job_runner import JobRunnerDeletePolicy
 from airflow_kubernetes_job_operator.utils import resolve_relative_path
-from airflow_kubernetes_job_operator.kubernetes_job_operator import KubernetesJobOperator
+from airflow_kubernetes_job_operator.kubernetes_job_operator import KubernetesJobOperator, xcom_value_parser
 from airflow_kubernetes_job_operator.config import DEFAULT_VALIDATE_BODY_ON_INIT
 
 try:
@@ -69,6 +69,8 @@ class KubernetesLegacyJobOperator(KubernetesJobOperator):
         validate_body_on_init: bool = DEFAULT_VALIDATE_BODY_ON_INIT,
         enable_jinja: bool = True,
         jinja_job_args: dict = None,
+        on_kube_api_event: callable = None,
+        parse_xcom_event: xcom_value_parser = xcom_value_parser,
         *args,
         **kwargs,
     ):
@@ -165,6 +167,9 @@ class KubernetesLegacyJobOperator(KubernetesJobOperator):
                 (default: {from env/airflow config: AIRFLOW__KUBE_JOB_OPERATOR__validate_body_on_init or False})
             jinja_job_args {dict} -- A dictionary or object to be used in the jinja template to render
                 arguments. The jinja args are loaded under the keyword "job".
+            on_kube_api_event {callable, optional} -- a method to catch api events when called. lambda api_event, context: ...
+            parse_xcom_event {xcom_value_parser, optional} -- parse an incoming xcom event value.
+                Must return a dictionary with key/value pairs.
         """
         delete_policy = (
             delete_policy or JobRunnerDeletePolicy.IfSucceeded
@@ -193,6 +198,8 @@ class KubernetesLegacyJobOperator(KubernetesJobOperator):
             enable_jinja=enable_jinja,
             image_pull_policy=image_pull_policy,
             jinja_job_args=jinja_job_args,
+            on_kube_api_event=on_kube_api_event,
+            parse_xcom_event=parse_xcom_event,
             *args,
             **kwargs,
         )

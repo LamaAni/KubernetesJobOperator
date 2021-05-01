@@ -17,6 +17,7 @@ from airflow_kubernetes_job_operator.kube_api.client import KubeApiRestQuery, Ku
 from airflow_kubernetes_job_operator.kube_api.queries import (
     GetNamespaceResources,
     GetPodLogs,
+    KubeLogApiEvent,
     LogLine,
 )
 
@@ -135,6 +136,7 @@ class NamespaceWatchQuery(KubeApiRestQuery):
     deleted_event_name = "deleted"
     watch_started_event_name = "watch_started"
     pod_logs_reader_started_event_name = "pod_logs_reader_started"
+    pod_log_api_event_name = GetPodLogs.kube_api_event_name
 
     def __init__(
         self,
@@ -196,6 +198,9 @@ class NamespaceWatchQuery(KubeApiRestQuery):
     def emit_log(self, data):
         self.emit(self.pod_log_event_name, data)
 
+    def emit_api_event(self, api_event: KubeLogApiEvent):
+        self.emit(self.pod_log_api_event_name, api_event)
+
     @thread_synchronized
     def _create_pod_log_reader(
         self,
@@ -205,7 +210,7 @@ class NamespaceWatchQuery(KubeApiRestQuery):
         container: str = None,
         follow=True,
         is_single=False,
-    ):
+    ) -> GetPodLogs:
         read_logs = GetPodLogs(
             name=name,
             namespace=namespace,
@@ -261,7 +266,7 @@ class NamespaceWatchQuery(KubeApiRestQuery):
                         continue
 
                     osw = self._object_states.get(uid)
-                    read_logs = self._create_pod_log_reader(
+                    read_logs: GetPodLogs = self._create_pod_log_reader(
                         logger_id=logger_id,
                         name=name,
                         namespace=namesoace,
@@ -283,6 +288,9 @@ class NamespaceWatchQuery(KubeApiRestQuery):
 
                     # binding only relevant events.
                     read_logs.on(read_logs.data_event_name, lambda line: self.emit_log(line))
+                    read_logs.on(
+                        read_logs.kube_api_event_name, lambda api_event: self.emit_api_event(api_event=api_event)
+                    )
                     read_logs.on(read_logs.error_event_name, handle_error)
                     client.query_async(read_logs)
 

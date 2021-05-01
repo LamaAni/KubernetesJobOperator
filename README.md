@@ -17,6 +17,8 @@ Contributions are welcome. See [here](https://docs.github.com/en/free-pro-team@l
 1. Full kubernetes error logs on failure.
 1. Integrated operator airflow config, see below.
 1. Integrated Jinja2 support for file templates with flag.
+1. XCom
+1. Log based events
 1. Tested and working on [google cloud composer](https://cloud.google.com/composer).
 
 ### Two operator classes are available
@@ -195,17 +197,25 @@ startup_timeout_seconds | 10 | The max number of seconds to create the job befor
 validate_body_on_init | False | Can be set to true only if jinja is disabled. Process the yaml when the object is created.
 enable_jinja| True | Enable jinja on the body (str, or file), and the following args: command, arguments, image, envs, body, namespace, config_file, cluster_context
 jinja_job_args | None | A dictionary or object to be used in the jinja template to render arguments. The jinja args are loaded under the keyword "job".
+on_kube_api_event | None | A method to capture kube api log events. By default is none. log output pattern: `::kube_api:[name]=value`
+parse_xcom_event| json parser | Parse the result of xcom events, `::kube_api:xcom={json values...}`
+
+# XCom
+
+The implementation of XCom via the KubernetesJobOperator differes from the one by KuberenetesPodsOperator, 
+and therefore no backward compatible implementation for XCom currently exists.
+
+To use xcom with KubernetesJobOperator simply add a log line to your pod log output,
+
+```shell
+::kube_api:xcom={"a":2,"[key]":"[value]"}
+```
+
+Note the value of the xcom must be in json format (for the default parser).
 
 # Contribution
 
 Are welcome, please post issues or PR's if needed.
-
-# Implementations still missing:
-
-Add an issue (or better submit PR) if you need these.
-
-1. XCom
-1. Examples (other than TL;DR)
 
 # Licence
 

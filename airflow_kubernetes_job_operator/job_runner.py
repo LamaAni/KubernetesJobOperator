@@ -10,8 +10,10 @@ from airflow_kubernetes_job_operator.utils import random_string
 from airflow_kubernetes_job_operator.collections import JobRunnerDeletePolicy, JobRunnerException
 from airflow_kubernetes_job_operator.config import SHOW_RUNNER_ID_IN_LOGS
 from airflow_kubernetes_job_operator.kube_api import (
+    EventHandler,
     KubeApiConfiguration,
     GetAPIVersions,
+    KubeLogApiEvent,
     KubeApiRestQuery,
     KubeApiRestClient,
     KubeResourceKind,
@@ -256,12 +258,14 @@ class JobRunner:
         self,
         timeout: int = 60 * 5,
         watcher_start_timeout: int = 10,
+        on_kube_api_event: callable = None,
     ):
         """Execute the job
 
         Args:
             timeout (int, optional): Execution timeout. Defaults to 60*5.
             watcher_start_timeout (int, optional): The timeout to start watching the namespaces. Defaults to 10.
+            on_kube_api_event(callable, optional): Handle kube api events.
 
         Returns:
             KubeResourceState: The main resource (resources[0]) final state.
@@ -327,6 +331,16 @@ class JobRunner:
             timeout=timeout,
             watch_pod_logs=self.show_pod_logs,
             label_selector=self.job_label_selector,
+        )
+
+        def handle_kube_api_event(event: KubeLogApiEvent):
+            self.log(f"{event.line.get_context_header()} KubeApiEvent {event.name} of {len(event.value)} [chars]")
+            if on_kube_api_event:
+                on_kube_api_event(event)
+
+        watcher.on(
+            watcher.pod_log_api_event_name,
+            handle_kube_api_event,
         )
 
         # start the watcher
