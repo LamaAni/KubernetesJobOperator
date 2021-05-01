@@ -1,9 +1,9 @@
 import logging
 from typing import Type, Dict
 from enum import Enum
+from airflow_kubernetes_job_operator.kube_api import config as kube_api_config
 from airflow_kubernetes_job_operator.kube_api.utils import not_empty_string
-from airflow_kubernetes_job_operator.kube_api.config import DEFAULT_KUBE_CONFIG_LOCATIONS
-from airflow_kubernetes_job_operator.kube_api.queries import LogLine
+from airflow_kubernetes_job_operator.kube_api.queries import LogLine, GetPodLogs
 from airflow_kubernetes_job_operator.utils import resolve_path
 from airflow.configuration import conf, log
 from airflow.exceptions import AirflowConfigException
@@ -97,4 +97,22 @@ if not_empty_string(KUBE_CONFIG_EXTRA_LOCATIONS):
         log = loc.strip()
         if len(loc) == 0:
             continue
-        DEFAULT_KUBE_CONFIG_LOCATIONS.insert(0, loc)
+        kube_api_config.DEFAULT_KUBE_CONFIG_LOCATIONS.insert(0, loc)
+
+GetPodLogs.enable_kube_api_events = get(
+    "log_query_enable_api_events",
+    default=GetPodLogs.enable_kube_api_events,
+    otype=bool,
+)
+
+GetPodLogs.api_event_match_regexp = get(
+    "log_query_api_event_match_regexp",
+    default=GetPodLogs.api_event_match_regexp,
+    otype=str,
+)
+
+GetPodLogs.emit_api_events_as_log = get(
+    "log_query_emit_api_events_as_log",
+    default=GetPodLogs.emit_api_events_as_log,
+    otype=bool,
+)

@@ -1,8 +1,9 @@
 import jinja2
+import json
 from typing import List, Union
 from airflow.utils.decorators import apply_defaults
 from airflow.operators import BaseOperator
-from airflow_kubernetes_job_operator.kube_api import KubeResourceState
+from airflow_kubernetes_job_operator.kube_api import KubeResourceState, KubeLogApiEvent
 from airflow_kubernetes_job_operator.utils import (
     to_kubernetes_valid_name,
 )
@@ -17,6 +18,18 @@ from airflow_kubernetes_job_operator.config import (
     DEFAULT_TASK_STARTUP_TIMEOUT,
     DEFAULT_KUBERNETES_MAX_RESOURCE_NAME_LENGTH,
 )
+
+
+def xcom_value_parser(value: str) -> dict:
+    value = value.strip()
+    try:
+        value: dict = json.loads(value)
+        assert isinstance(value, dict), "Value must be a json object (dict)"
+    except Exception as ex:
+        raise KubernetesJobOperatorException(
+            "XCom messages (with default parser) must be in json object format:", *ex.args
+        )
+    return value
 
 
 class KubernetesJobOperatorDefaultsBase(BaseOperator):
@@ -49,6 +62,8 @@ class KubernetesJobOperator(KubernetesJobOperatorDefaultsBase):
         validate_body_on_init: bool = DEFAULT_VALIDATE_BODY_ON_INIT,
         enable_jinja: bool = True,
         jinja_job_args: dict = None,
+        on_kube_api_event: callable = None,
+        parse_xcom_event: xcom_value_parser = xcom_value_parser,
         **kwargs,
     ):
         """A operator that executes an airflow task as a kubernetes Job.
@@ -81,6 +96,9 @@ class KubernetesJobOperator(KubernetesJobOperatorDefaultsBase):
                         command, arguments, image, envs, body, namespace, config_file, cluster_context
             jinja_job_args {dict} -- A dictionary or object to be used in the jinja template to render
                 arguments. The jinja args are loaded under the keyword "job".
+            on_kube_api_event {callable, optional} -- a method to catch api events when called. lambda api_event, context: ...
+            parse_xcom_event {xcom_value_parser, optional} -- parse an incoming xcom event value.
+                Must return a dictionary with key/value pairs.
 
         Auto completed yaml values (if missing):
             All:
@@ -137,6 +155,8 @@ class KubernetesJobOperator(KubernetesJobOperatorDefaultsBase):
         self.body = body
         self.namespace = namespace
         self.get_logs = get_logs
+        self.on_kube_api_event = on_kube_api_event
+        self.parse_xcom_event = parse_xcom_event
         self.delete_policy = delete_policy
 
         # kubernetes config properties.
@@ -299,6 +319,23 @@ class KubernetesJobOperator(KubernetesJobOperatorDefaultsBase):
         # call parent.
         return super().pre_execute(context)
 
+    def handle_kube_api_event(self, event: KubeLogApiEvent, context):
+        if self.on_kube_api_event:
+            self.on_kube_api_event(event, context)
+
+        if event.name == "xcom":
+            values_dict = self.parse_xcom_event(event.value or "{}")
+            has_been_updated = False
+            for key in values_dict.keys():
+                self.xcom_push(
+                    context=context,
+                    key=key,
+                    value=values_dict.get(key),
+                )
+                has_been_updated = True
+            if has_been_updated:
+                self.log.info(f"XCom updated, keys: " + ", ".join(values_dict.keys()))
+
     def execute(self, context):
         """Call to execute the kubernetes job.
 
@@ -313,9 +350,14 @@ class KubernetesJobOperator(KubernetesJobOperatorDefaultsBase):
         )
         self._job_is_executing = True
         try:
+
             rslt = self.job_runner.execute_job(
                 watcher_start_timeout=self.startup_timeout_seconds,
                 timeout=self._internal_wait_kuberentes_object_timeout,
+                on_kube_api_event=lambda event: self.handle_kube_api_event(
+                    event=event,
+                    context=context,
+                ),
             )
 
             if rslt == KubeResourceState.Failed:

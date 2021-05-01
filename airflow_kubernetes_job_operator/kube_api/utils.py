@@ -1,3 +1,4 @@
+import os
 from logging import Logger
 from typing import List
 import logging
@@ -29,7 +30,7 @@ def unqiue_with_order(lst) -> list:
 
 
 def not_empty_string(val: str):
-    """Returns true if the string is not empty (len>0) and not None """
+    """Returns true if the string is not empty (len>0) and not None"""
     return isinstance(val, str) and len(val) > 0
 
 

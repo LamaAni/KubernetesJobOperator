@@ -1,3 +1,4 @@
+import re
 from logging import Logger
 import logging
 from datetime import datetime
@@ -29,6 +30,19 @@ def default_detect_log_level(line: "LogLine", msg: str):
         return logging.INFO
 
 
+class KubeLogApiEvent(Event):
+    def __init__(
+        self,
+        name: str,
+        value: str,
+        line: "LogLine",
+        sender=None,
+    ):
+        super().__init__(name, [], {}, sender=sender)
+        self.value = value
+        self.line = line
+
+
 class LogLine:
     show_kubernetes_log_timestamps: bool = False
     autodetect_kuberentes_log_level: bool = True
@@ -53,8 +67,9 @@ class LogLine:
         super().__init__()
         self.pod_name = pod_name
         self.namespace = namespace
-        self.message = message
         self.container_name = container_name
+
+        self.message = message
         self.timestamp = timestamp or datetime.now()
 
     def log(self, logger: Logger = kube_logger):
@@ -68,21 +83,28 @@ class LogLine:
                 msg,
             )
 
-    def __str__(self):
-        return self.message
-
-    def __repr__(self):
+    def get_context_header(self):
         header_parts = [
             f"{self.timestamp}" if self.show_kubernetes_log_timestamps else None,
             f"{self.namespace}/pods/{self.pod_name}",
             self.container_name,
         ]
 
-        header = "".join([f"[{p}]" for p in header_parts if p is not None])
-        return f"{header}: {self.message}"
+        return "".join([f"[{p}]" for p in header_parts if p is not None])
+
+    def __str__(self):
+        return self.message
+
+    def __repr__(self):
+        return f"{self.get_context_header()}: {self.message}"
 
 
 class GetPodLogs(KubeApiRestQuery):
+    enable_kube_api_events: bool = True
+    api_event_match_regexp: str = r"^\s*[:]{2}kube_api[:]([a-zA-Z0-9_-]+)[=](.*)$"
+    kube_api_event_name: str = "kube_api_event"
+    emit_api_events_as_log: bool = False
+
     def __init__(
         self,
         name: str,
@@ -92,6 +114,8 @@ class GetPodLogs(KubeApiRestQuery):
         timeout: int = None,
         container: str = None,
         add_container_name_to_log: bool = None,
+        enable_kube_api_events: bool = None,
+        api_event_match_regexp: str = None,
     ):
         """Returns the pod logs for a pod. Can follow the pod logs
         in real time.
@@ -104,9 +128,24 @@ class GetPodLogs(KubeApiRestQuery):
             follow (bool, optional): If true, keep streaming pod logs. Defaults to False.
             timeout (int, optional): The read timeout, if specified will error if logs were not
                 returned in time. Defaults to None.
+            container (str, optional): Read from this specific containter.
+            add_container_name_to_log (bool, optional): Add containter names to the log line. None = true
+                if containter is defined.
+            enable_kube_api_events (bool, optional): Enabled kube api events messaging.
+                Defaults to GetPodLogs.enable_kube_api_events
+            api_event_match_regexp (str, optional): Kube api event match regexp.
+                Must have exactly two match groups (event name, value)
+                Defaults to GetPodLogs.api_event_match_regexp
+
+        Event binding:
+            To send a kube api event, place the following string in the pod output log,
+
         """
         assert not_empty_string(name), ValueError("name must be a non empty string")
         assert not_empty_string(namespace), ValueError("namespace must be a non empty string")
+        assert api_event_match_regexp is None or not_empty_string(api_event_match_regexp), ValueError(
+            "Event match regexp must me none or a non empty string"
+        )
         assert container is None or not_empty_string(container), ValueError("container must be a non empty string")
 
         kind: KubeResourceKind = KubeResourceKind.get_kind("Pod")
@@ -137,6 +176,10 @@ class GetPodLogs(KubeApiRestQuery):
         self.add_container_name_to_log = (
             add_container_name_to_log if add_container_name_to_log is not None else container is not None
         )
+        self.enable_kube_api_events = (
+            enable_kube_api_events if enable_kube_api_events is not None else GetPodLogs.enable_kube_api_events
+        )
+        self.api_event_match_regexp = api_event_match_regexp or GetPodLogs.api_event_match_regexp
 
     def pre_request(self, client: "KubeApiRestClient"):
         super().pre_request(client)
@@ -174,23 +217,52 @@ class GetPodLogs(KubeApiRestQuery):
             self.auto_reconnect = False
             raise ex
 
+    def parse_and_emit_events(self, line: LogLine):
+        events = re.findall(self.api_event_match_regexp, line.message or "", re.M)
+        has_events = False
+        for ev in events:
+            if not isinstance(ev, tuple) or len(ev) != 2:
+                continue
+            has_events = True
+            event_name = ev[0]
+            event_value = ev[1]
+            self.emit(
+                self.kube_api_event_name,
+                KubeLogApiEvent(
+                    name=event_name,
+                    value=event_value,
+                    line=line,
+                    sender=self,
+                ),
+            )
+
+        return has_events
+
     def parse_data(self, message_line: str):
         self._last_timestamp = datetime.now()
         timestamp = dateutil.parser.isoparse(message_line[: message_line.index(" ")])
 
         message = message_line[message_line.index(" ") + 1 :]  # noqa: E203
         message = message.replace("\r", "")
+
         lines = []
+
         for message_line in message.split("\n"):
-            lines.append(
-                LogLine(
-                    pod_name=self.name,
-                    namespace=self.namespace,
-                    message=message_line,
-                    timestamp=timestamp,
-                    container_name=self.container if self.add_container_name_to_log else None,
-                )
+            line = LogLine(
+                pod_name=self.name,
+                namespace=self.namespace,
+                message=message_line,
+                timestamp=timestamp,
+                container_name=self.container if self.add_container_name_to_log else None,
             )
+
+            if self.enable_kube_api_events:
+                # checking for events and continue if needed.
+                if self.parse_and_emit_events(line) and not self.emit_api_events_as_log:
+                    continue
+
+            lines.append(line)
+
         return lines
 
     def emit_data(self, data):

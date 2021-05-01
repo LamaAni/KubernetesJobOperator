@@ -7,7 +7,6 @@ from airflow_kubernetes_job_operator.kube_api.exceptions import KubeApiException
 from airflow_kubernetes_job_operator.kube_api.utils import join_locations_list, not_empty_string
 from airflow_kubernetes_job_operator.kube_api.collections import KubeResourceKind
 
-
 DEFAULT_KUBE_CONFIG_LOCATIONS: List[str] = join_locations_list(
     [kube_config.KUBE_CONFIG_DEFAULT_LOCATION],
     os.environ.get("KUBE_API_DEFAULT_CONFIG_LOCATIONS", None),
