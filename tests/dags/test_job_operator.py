@@ -48,7 +48,7 @@ KubernetesJobOperator(
     delete_policy=default_delete_policy,
 )
 KubernetesJobOperator(
-    task_id="test-pod-fail",
+    task_id="test-pod-success",
     namespace=namespace,
     body_filepath="./templates/test_pod.success.yaml",
     envs=envs,
@@ -82,5 +82,6 @@ KubernetesJobOperator(
 
 
 if __name__ == "__main__":
-    dag.clear(reset_dag_runs=True)
+    dag.schedule_interval = None
+    dag.clear()
     dag.run()

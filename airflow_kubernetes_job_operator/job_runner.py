@@ -70,6 +70,8 @@ class JobRunner:
             name_postfix (str, optional): The postfix for all resource name. Defaults to None.
         """
 
+        logger = logger if logger is not None else kube_logger
+
         body = body if not isinstance(body, str) else list(yaml.safe_load_all(body))
         body = body if isinstance(body, list) else [body]
 

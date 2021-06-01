@@ -13,13 +13,14 @@ Contributions are welcome. See [here](https://docs.github.com/en/free-pro-team@l
 1. Running tasks as multi resource (see example below, similar to `kubectl apply`).
 1. Running tasks as custom resources ([help](docs/custom_kinds.md)).
 1. Auto detection of kubernetes namespace and config.
-1. Pod and participating resources logs -> airflow.
-1. Full kubernetes error logs on failure.
-1. Integrated operator airflow config, see below.
-1. Integrated Jinja2 support for file templates with flag.
-1. XCom
-1. Log based events
-1. Tested and working on [google cloud composer](https://cloud.google.com/composer).
+3. Pod and participating resources logs -> airflow.
+4. Full kubernetes error logs on failure.
+5. Integrated operator airflow config, see below.
+6. Integrated Jinja2 support for file templates with flag.
+7. XCom
+8. Log based events
+9. Tested and working on [google cloud composer](https://cloud.google.com/composer).
+10. Airflow > 2.0.0 (BETA)
 
 ### Two operator classes are available
 
