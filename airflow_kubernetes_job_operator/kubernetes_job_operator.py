@@ -2,7 +2,15 @@ import jinja2
 import json
 from typing import List, Union
 from airflow.utils.decorators import apply_defaults
-from airflow.operators import BaseOperator
+from airflow import version
+
+AIRFLOW_MAJOR_VERSION = int(version.version.split(".")[0])
+
+if AIRFLOW_MAJOR_VERSION > 1:
+    from airflow.models import BaseOperator
+else:
+    from airflow.operators import BaseOperator
+
 from airflow_kubernetes_job_operator.kube_api import KubeResourceState, KubeLogApiEvent
 from airflow_kubernetes_job_operator.utils import (
     to_kubernetes_valid_name,
@@ -120,7 +128,7 @@ class KubernetesJobOperator(KubernetesJobOperatorDefaultsBase):
         body = body or self._read_body_from_file(
             resolve_relative_path(
                 body_filepath or DEFAULT_EXECUTION_OBJECT_PATHS[DEFAULT_EXECTION_OBJECT],
-                self.resolve_relative_path_callstack_offset + 1,
+                self.resolve_relative_path_callstack_offset + (2 if AIRFLOW_MAJOR_VERSION > 1 else 1),
             )
         )
 
@@ -272,7 +280,7 @@ class KubernetesJobOperator(KubernetesJobOperatorDefaultsBase):
             namespace=self.namespace,
             show_pod_logs=self.get_logs,
             delete_policy=self.delete_policy,
-            logger=self.logger,
+            logger=self.logger if hasattr(self, "logger") else None,
             auto_load_kube_config=True,
             name_prefix=self._create_job_name(self.task_id),
         )
