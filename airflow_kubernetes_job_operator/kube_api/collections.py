@@ -1,10 +1,10 @@
 import re
 from enum import Enum
-from typing import Callable, List
+from typing import Callable, List, Dict
 
 
 def not_empty_string(val: str):
-    """Returns true if the string is not empty (len>0) and not None """
+    """Returns true if the string is not empty (len>0) and not None"""
     return isinstance(val, str) and len(val) > 0
 
 
@@ -240,31 +240,68 @@ class KubeResourceKind:
         return job_status
 
     @staticmethod
+    def _get_container_resource_states_by_name(yaml: dict) -> Dict[str, KubeResourceState]:
+        container_statuses = yaml.get("status", {}).get("containerStatuses", [])
+        state_by_name: dict = {}
+        for container_status in container_statuses:
+            name = container_status.get("name", None)
+            state = KubeResourceState.Active
+
+            container_state: dict = container_status.get("state", {})
+
+            terminated_info: dict = container_state.get("terminated", None)
+            running_info: dict = container_state.get("running", None)
+            waiting_info: dict = container_state.get("waiting", None)
+
+            if waiting_info is not None:
+                state = KubeResourceState.Pending
+            elif running_info is not None:
+                state = KubeResourceState.Running
+            elif terminated_info is not None:
+                if terminated_info.get("errorCode", 0) != 0:
+                    state = KubeResourceState.Failed
+                else:
+                    state = KubeResourceState.Succeeded
+
+            state_by_name[name] = state
+        return state_by_name
+
+    @staticmethod
     def parse_state_pod(yaml: dict) -> KubeResourceState:
+        """A general method for running pod state. Includes metadata symbols for running
+        containers and sidecars.
 
-        status = yaml.get("status", {})
-        pod_phase = status["phase"]
-        container_status = status.get("containerStatuses", [])
+        Args:
+            yaml (dict): The body of the current pod deployment.
 
-        for container_status in container_status:
-            if "state" in container_status:
-                if (
-                    "waiting" in container_status["state"]
-                    and "reason" in container_status["state"]["waiting"]
-                    and "BackOff" in container_status["state"]["waiting"]["reason"]
-                ):
-                    return KubeResourceState.Failed
-                if "error" in container_status["state"]:
-                    return KubeResourceState.Failed
+        Metadata annotations:
+            kubernetes_job_operator/main_container: The name of the main container to watch.
 
+        Returns:
+            KubeResourceState: The resource state for the deployment.
+        """
+        status: dict = yaml.get("status", {})
+        annotations: dict = yaml.get("metadata", {}).get("annotations", {})
+        main_container_name = annotations.get("kubernetes_job_operator/main_container", None)
+
+        container_resource_states = KubeResourceKind._get_container_resource_states_by_name(yaml=yaml)
+
+        for container_state in container_resource_states.values():
+            if container_state == KubeResourceState.Failed:
+                return KubeResourceState.Failed
+
+        pod_phase = status.get("phase")
         if pod_phase == "Pending":
             return KubeResourceState.Pending
-        elif pod_phase == "Running":
-            return KubeResourceState.Running
         elif pod_phase == "Succeeded":
             return KubeResourceState.Succeeded
         elif pod_phase == "Failed":
             return KubeResourceState.Failed
+        elif pod_phase == "Running":
+            if main_container_name is not None and main_container_name in container_resource_states:
+                return container_resource_states[main_container_name]
+            return KubeResourceState.Running
+
         return pod_phase
 
     def __eq__(self, o: "KubeResourceKind") -> bool:
