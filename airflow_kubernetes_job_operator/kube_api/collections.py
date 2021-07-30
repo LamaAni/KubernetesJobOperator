@@ -275,14 +275,14 @@ class KubeResourceKind:
             yaml (dict): The body of the current pod deployment.
 
         Metadata annotations:
-            kubernetes_job_operator/main_container: The name of the main container to watch.
+            kubernetes_job_operator.main_container: The name of the main container to watch.
 
         Returns:
             KubeResourceState: The resource state for the deployment.
         """
         status: dict = yaml.get("status", {})
         annotations: dict = yaml.get("metadata", {}).get("annotations", {})
-        main_container_name = annotations.get("kubernetes_job_operator/main_container", None)
+        main_container_name = annotations.get("kubernetes_job_operator.main_container", None)
 
         container_resource_states = KubeResourceKind._get_container_resource_states_by_name(yaml=yaml)
 

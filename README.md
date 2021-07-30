@@ -212,7 +212,7 @@ kind: Pod
 metadata:
   ...
   annotations:
-    kubernetes_job_operator/main_container: main
+    kubernetes_job_operator.main_container: main
 spec:
   restartPolicy: Never
   containers:
