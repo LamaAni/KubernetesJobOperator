@@ -201,6 +201,35 @@ jinja_job_args | None | A dictionary or object to be used in the jinja template 
 on_kube_api_event | None | A method to capture kube api log events. By default is none. log output pattern: `::kube_api:[name]=value`
 parse_xcom_event| json parser | Parse the result of xcom events, `::kube_api:xcom={json values...}`
 
+# Metadata annotations
+
+When executing `Pod` resources, via yaml, we can define the main container that the status is taken from. Thus we allow
+other sidecars to be loaded before the pod completes (this for now is not available for `Job`),
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  ...
+  annotations:
+    kubernetes_job_operator.main_container: main
+spec:
+  restartPolicy: Never
+  containers:
+    - name: main
+      image: 'ubuntu:20.10'
+      command:
+        - sleep
+        - '10'
+    - name: side-car
+      image: 'ubuntu:20.10'
+      command:
+        - sleep
+        - infinity
+```
+
+When that is executed, only the execution status of the main pod will be taken into account when determining the state of the task. 
+**Note** that, if the delete policy is not one of `Always`,`IfFailed`, the sidecar will continue executing on failure.
 # XCom
 
 The implementation of XCom via the KubernetesJobOperator differes from the one by KuberenetesPodsOperator, 
