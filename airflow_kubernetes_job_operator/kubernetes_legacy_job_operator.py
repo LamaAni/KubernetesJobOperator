@@ -37,6 +37,7 @@ if LOAD_CLASSES_FROM_KUBERNETES_CLIENT:
 class KubernetesLegacyJobOperator(KubernetesJobOperator):
     def __init__(
         self,
+        name: str = None,
         namespace: str = None,
         image: str = None,
         cmds: List[str] = None,
@@ -98,6 +99,8 @@ class KubernetesLegacyJobOperator(KubernetesJobOperator):
         :type image: str
         :param namespace: the namespace to run within kubernetes
         :type namespace: str
+        :param name: The name prefix for the executing pod. (default: task_id)
+        :type name: str
         :param cmds: entrypoint of the container. (templated)
             The docker images's entrypoint is used if this is not provide.
         :type cmds: list[str]
@@ -194,6 +197,7 @@ class KubernetesLegacyJobOperator(KubernetesJobOperator):
             arguments=arguments or [],
             envs=env_vars or {},
             image=image,
+            name=name,
             namespace=namespace,
             body=body,
             body_filepath=body_filepath,

@@ -61,6 +61,7 @@ class KubernetesJobOperator(KubernetesJobOperatorDefaultsBase):
         command: List[str] = None,
         arguments: List[str] = None,
         image: str = None,
+        name: str = None,
         namespace: str = None,
         envs: dict = None,
         body: Union[str, dict, List[dict]] = None,
@@ -88,6 +89,7 @@ class KubernetesJobOperator(KubernetesJobOperatorDefaultsBase):
             command {List[str]} -- The pod main container command (default: None)
             arguments {List[str]} -- the pod main container arguments. (default: None)
             image {str} -- The image to use in the pod. (default: None)
+            name {str} -- The name prefix for the executing pod. (default: task_id)
             namespace {str} -- The namespace to execute in. (default: None)
             envs {dict} -= A collection of environment variables that will be added to all
                 containers.
@@ -166,6 +168,7 @@ class KubernetesJobOperator(KubernetesJobOperatorDefaultsBase):
         self.envs = envs
         self.image_pull_policy = image_pull_policy
         self.body = body
+        self.name = name
         self.namespace = namespace
         self.get_logs = get_logs
         self.on_kube_api_event = on_kube_api_event
