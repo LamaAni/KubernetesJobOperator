@@ -8,7 +8,7 @@ black = "*"
 
 [packages]
 apache-airflow = "==2.1.2"
-airflow-db-logger = "==2.0.1"
+airflow-db-logger = "==2.0.2"
 kubernetes = "*"
 zthreading = "*"
 
