@@ -2,15 +2,6 @@ import jinja2
 import json
 from typing import List, Union
 from airflow.utils.decorators import apply_defaults
-from airflow import version
-
-AIRFLOW_MAJOR_VERSION = int(version.version.split(".")[0])
-
-if AIRFLOW_MAJOR_VERSION > 1:
-    from airflow.models import BaseOperator
-else:
-    from airflow.operators import BaseOperator
-
 from airflow_kubernetes_job_operator.kube_api import KubeResourceState, KubeLogApiEvent
 from airflow_kubernetes_job_operator.utils import (
     to_kubernetes_valid_name,
@@ -25,7 +16,27 @@ from airflow_kubernetes_job_operator.config import (
     DEFAULT_DELETE_POLICY,
     DEFAULT_TASK_STARTUP_TIMEOUT,
     DEFAULT_KUBERNETES_MAX_RESOURCE_NAME_LENGTH,
+    IS_AIRFLOW_ONE,
+    AIRFLOW_MAJOR_VERSION,
 )
+
+
+# Base class is determined by the airflow version.
+if IS_AIRFLOW_ONE:
+    from airflow.operators import BaseOperator
+
+    class KubernetesJobOperatorDefaultsBase(BaseOperator):
+        @apply_defaults
+        def __init__(self, **kwargs) -> None:
+            super().__init__(**kwargs)
+
+
+else:
+    from airflow.models import BaseOperator
+
+    class KubernetesJobOperatorDefaultsBase(BaseOperator):
+        def __init__(self, **kwargs) -> None:
+            super().__init__(**kwargs)
 
 
 def xcom_value_parser(value: str) -> dict:
@@ -38,12 +49,6 @@ def xcom_value_parser(value: str) -> dict:
             "XCom messages (with default parser) must be in json object format:", *ex.args
         )
     return value
-
-
-class KubernetesJobOperatorDefaultsBase(BaseOperator):
-    @apply_defaults
-    def __init__(self, **kwargs) -> None:
-        super().__init__(**kwargs)
 
 
 class KubernetesJobOperator(KubernetesJobOperatorDefaultsBase):

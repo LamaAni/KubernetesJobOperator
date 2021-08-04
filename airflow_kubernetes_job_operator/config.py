@@ -5,6 +5,7 @@ from airflow_kubernetes_job_operator.kube_api import config as kube_api_config
 from airflow_kubernetes_job_operator.kube_api.utils import not_empty_string
 from airflow_kubernetes_job_operator.kube_api.queries import LogLine, GetPodLogs
 from airflow_kubernetes_job_operator.utils import resolve_path
+from airflow.version import version
 from airflow.configuration import conf, log
 from airflow.exceptions import AirflowConfigException
 from airflow_kubernetes_job_operator.collections import (
@@ -19,6 +20,11 @@ DEFAULT_EXECUTION_OBJECT_PATHS: Dict[KubernetesJobOperatorDefaultExecutionResour
 }
 
 AIRFLOW_CONFIG_SECTION_NAME = "kubernetes_job_operator"
+
+AIRFLOW_VERSION = [int(v) for v in version.split(".")]
+AIRFLOW_MAJOR_VERSION = AIRFLOW_VERSION[0]
+AIRFLOW_MINOR_VERSION = AIRFLOW_VERSION[1]
+IS_AIRFLOW_ONE = AIRFLOW_MAJOR_VERSION < 2
 
 
 def conf_get_no_warnings_no_errors(*args, **kwargs):

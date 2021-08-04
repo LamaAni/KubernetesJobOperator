@@ -4,16 +4,24 @@ from typing import List, Optional, Union
 from airflow_kubernetes_job_operator.job_runner import JobRunnerDeletePolicy
 from airflow_kubernetes_job_operator.utils import resolve_relative_path
 from airflow_kubernetes_job_operator.kubernetes_job_operator import KubernetesJobOperator, xcom_value_parser
-from airflow_kubernetes_job_operator.config import DEFAULT_VALIDATE_BODY_ON_INIT
+from airflow_kubernetes_job_operator.config import DEFAULT_VALIDATE_BODY_ON_INIT, IS_AIRFLOW_ONE
 
+
+LOAD_CLASSES_FROM_KUBERNETES_CLIENT = True
 try:
-    from airflow.contrib.kubernetes.kubernetes_request_factory import pod_request_factory
-    from airflow.contrib.kubernetes import pod_generator
-    from airflow.contrib.kubernetes.pod import Resources
-    from airflow.contrib.kubernetes.volume_mount import VolumeMount
-    from airflow.contrib.kubernetes.volume import Volume
-    from airflow.contrib.kubernetes.secret import Secret
+    if IS_AIRFLOW_ONE:
+        from airflow.contrib.kubernetes.kubernetes_request_factory import pod_request_factory
+        from airflow.contrib.kubernetes import pod_generator
+        from airflow.contrib.kubernetes.pod import Resources
+        from airflow.contrib.kubernetes.volume_mount import VolumeMount
+        from airflow.contrib.kubernetes.volume import Volume
+        from airflow.contrib.kubernetes.secret import Secret
+
+        LOAD_CLASSES_FROM_KUBERNETES_CLIENT = False
 except Exception:
+    pass
+
+if LOAD_CLASSES_FROM_KUBERNETES_CLIENT:
     from kubernetes.client import (
         V1ResourceRequirements as Resources,
         V1Volume as Volume,
@@ -21,6 +29,7 @@ except Exception:
         V1Secret as Secret,
     )
 
+    # Back support for old kubernetes client.
     pod_generator = None
     pod_request_factory = None
 
