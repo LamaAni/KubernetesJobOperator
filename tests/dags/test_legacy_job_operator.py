@@ -1,6 +1,7 @@
 from utils import default_args, name_from_file
+import kubernetes.client as k8s
 from airflow import DAG
-from airflow_kubernetes_job_operator.kubernetes_legacy_job_operator import KubernetesLegacyJobOperator
+from airflow_kubernetes_job_operator.kubernetes_legacy_job_operator import KubernetesLegacyJobOperator, Secret
 
 dag = DAG(
     name_from_file(__file__),
@@ -27,25 +28,67 @@ done
 
 echo "Complete"
 """
-# BashOperator(bash_command="date", task_id="test-bash", dag=dag)
+with dag:
+    KubernetesLegacyJobOperator(
+        task_id="legacy-test-job-success",
+        image="ubuntu",
+        cmds=["bash", "-c", bash_script],
+        is_delete_operator_pod=False,
+        secrets=[
+            Secret(
+                deploy_type="volume",
+                deploy_target="/tmp",
+                secret="test-secret",
+            )
+        ],
+    )
 
-op = KubernetesLegacyJobOperator(
-    task_id="legacy-test-job-success",
-    image="ubuntu",
-    cmds=["bash", "-c", bash_script],
-    dag=dag,
-    is_delete_operator_pod=True,
-)
+    KubernetesLegacyJobOperator(
+        task_id="legacy-test-job-success-from-file",
+        pod_template_file=__file__ + ".yaml",
+        image="ubuntu",
+        cmds=["sleep", "10"],
+        is_delete_operator_pod=True,
+    )
 
+    KubernetesLegacyJobOperator(
+        task_id="legacy-test-job-success-full-spec",
+        image="ubuntu",
+        full_pod_spec=k8s.V1Pod(
+            metadata=k8s.V1ObjectMeta(
+                name="lama",
+                namespace="zav-dev",
+            ),
+            spec=k8s.V1PodSpec(
+                containers=[
+                    k8s.V1Container(
+                        name="lama",
+                        image="ubuntu",
+                        command=[
+                            "bash",
+                            "-c",
+                            """
+    echo "sleeping"
+    sleep 3
+    echo "ok"
+    """,
+                        ],
+                    )
+                ]
+            ),
+        ),
+        is_delete_operator_pod=True,
+    )
 
-KubernetesLegacyJobOperator(
-    task_id="legacy-test-job-fail",
-    image="ubuntu",
-    cmds=["bash", "-c", bash_script + "\nexit 99"],
-    dag=dag,
-    is_delete_operator_pod=True,
-)
+    KubernetesLegacyJobOperator(
+        task_id="legacy-test-job-fail",
+        image="ubuntu",
+        cmds=["bash", "-c", bash_script + "\nexit 99"],
+        dag=dag,
+        is_delete_operator_pod=True,
+    )
 
 if __name__ == "__main__":
     dag.clear()
+    # dag.clear()
     dag.run()

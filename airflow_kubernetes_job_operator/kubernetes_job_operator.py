@@ -61,6 +61,7 @@ class KubernetesJobOperator(KubernetesJobOperatorDefaultsBase):
         command: List[str] = None,
         arguments: List[str] = None,
         image: str = None,
+        name_prefix: str = None,
         namespace: str = None,
         envs: dict = None,
         body: Union[str, dict, List[dict]] = None,
@@ -79,51 +80,46 @@ class KubernetesJobOperator(KubernetesJobOperatorDefaultsBase):
         parse_xcom_event: xcom_value_parser = xcom_value_parser,
         **kwargs,
     ):
-        """A operator that executes an airflow task as a kubernetes Job.
+        """A operator that executes an airflow task given a configuration yaml or as a kubernetes job.
         See: https://kubernetes.io/docs/concepts/workloads/controllers/jobs-run-to-completion/
         for notes about a kubernetes job.
 
-        Keyword Arguments:
+        Args:
+            task_id (str): The airflow task id.
+            command (List[str], optional): The kubernetes pod command. Defaults to None.
+            arguments (List[str], optional): The kubernetes pod arguments. Defaults to None.
+            image (str, optional): The kubernetes container image to use. Defaults to None.
+            name_prefix (str, optional): The kubernetes resource(s) name prefix. Defaults to (corrected) task_id.
+            namespace (str, optional): The kubernetes namespace to run in. Defaults to current namespace.
+            envs (dict, optional): A dictionary of key value pairs that is loaded into the environment variables.
+                Defaults to None.
+            body (Union[str, dict, List[dict]], optional):
+                The dictionary/list[dictionary] or yaml that defines the job yaml.
+                None = use KubernetesJobOperator default job yaml (https://github.com/LamaAni/KubernetesJobOperator/blob/master/airflow_kubernetes_job_operator/templates/job_default.yaml)
+            body_filepath (str, optional): A filepath to the job yaml or json configuration. Can be a relative path.
+                Defaults to None -> use body.
+            image_pull_policy (str, optional): The kubernetes image pull policy. Defaults to None.
+            delete_policy (Union[str, JobRunnerDeletePolicy], optional): The delete policy to use.
+                e.g. What to do when the task finishes. Defaults to DEFAULT_DELETE_POLICY.
+            in_cluster (bool, optional): If true, currently running in cluster. Defaults to autodetect.
+            config_file (str, optional): The kube connection configuration file. Defaults to autodetect.
+            get_logs (bool, optional): Read the logs from all the resources in the body. Defaults to True.
+            cluster_context (str, optional): The name of the cluster to use. Defaults to autodetect.
+            startup_timeout_seconds (float, optional): A timeout for the any of the pods to start.
+                Defaults to DEFAULT_TASK_STARTUP_TIMEOUT.
+            enable_jinja (bool, optional): If true enable jinja in args. Defaults to True.
+            jinja_job_args (dict, optional): An key value pair argument list to be added on top
+                of airflow argument list. Defaults to None.
 
-            command {List[str]} -- The pod main container command (default: None)
-            arguments {List[str]} -- the pod main container arguments. (default: None)
-            image {str} -- The image to use in the pod. (default: None)
-            namespace {str} -- The namespace to execute in. (default: None)
-            envs {dict} -= A collection of environment variables that will be added to all
-                containers.
-            body {dict|string} -- The job to execute as a yaml description. (default: None)
-                If None, will use a default job yaml command. In this case you must provide an
-                image.
-            body_filepath {str} -- The path to the file to read the yaml from, overridden by
-                body. (default: None)
-            delete_policy {str} -- Any of: Never, Always, IfSucceeded (default: {"IfSucceeded"})
-            in_cluster {bool} -- True if running inside a cluster (on a pod) (default: {False})
-            config_file {str} -- The kubernetes configuration file to load, if
-                None use default config. (default: {None})
-            cluster_context {str} -- The context to run in, if None, use current context
-                (default: {None})
-            validate_body_on_init {bool} -- If true, validates the yaml in the constructor,
-                setting this to True, will slow dag creation.
-                (default: {from env/airflow config: AIRFLOW__KUBE_JOB_OPERATOR__validate_body_on_init or False})
-            enable_jinja {bool} -- If true, the following fields will be parsed as jinja2,
-                        command, arguments, image, envs, body, namespace, config_file, cluster_context
-            jinja_job_args {dict} -- A dictionary or object to be used in the jinja template to render
-                arguments. The jinja args are loaded under the keyword "job".
-            on_kube_api_event {callable, optional} -- a method to catch api events when called. lambda api_event, context: ...
-            parse_xcom_event {xcom_value_parser, optional} -- parse an incoming xcom event value.
-                Must return a dictionary with key/value pairs.
-
-        Auto completed yaml values (if missing):
-            All:
-                metadata.namespace = current namespace
-            Pod:
-                spec.restartPolicy = Never
-            Job:
-                spec.backOffLimit = 0
-                spec.template.spec.restartPolicy = Never
-                metadata.finalizers - [foregroundDeletion]
-
+        Advanced:
+            validate_body_on_init (bool, optional): If true, validates the body before the
+                operator is executed in the worker. Defaults to DEFAULT_VALIDATE_BODY_ON_INIT.
+            on_kube_api_event (callable, optional): Called when the kube api emits an event (Pending, Running).
+                Defaults to None.
+            parse_xcom_event (xcom_value_parser, optional): Called when an xcom event is detected to parse it.
+                Defaults to xcom_value_parser.
         """
+
         super().__init__(task_id=task_id, **kwargs)
 
         assert body_filepath is not None or body is not None or image is not None, ValueError(
@@ -166,6 +162,7 @@ class KubernetesJobOperator(KubernetesJobOperatorDefaultsBase):
         self.envs = envs
         self.image_pull_policy = image_pull_policy
         self.body = body
+        self.name_prefix = name_prefix
         self.namespace = namespace
         self.get_logs = get_logs
         self.on_kube_api_event = on_kube_api_event
@@ -189,6 +186,7 @@ class KubernetesJobOperator(KubernetesJobOperatorDefaultsBase):
                 "image",
                 "envs",
                 "body",
+                "name_prefix",
                 "namespace",
                 "config_file",
                 "cluster_context",
@@ -216,7 +214,7 @@ class KubernetesJobOperator(KubernetesJobOperatorDefaultsBase):
         return self._job_runner
 
     @classmethod
-    def _create_job_name(cls, name):
+    def _create_kubernetes_job_name_prefix(cls, name):
         return to_kubernetes_valid_name(
             name,
             max_length=DEFAULT_KUBERNETES_MAX_RESOURCE_NAME_LENGTH,
@@ -287,7 +285,7 @@ class KubernetesJobOperator(KubernetesJobOperatorDefaultsBase):
             delete_policy=self.delete_policy,
             logger=self.logger if hasattr(self, "logger") else None,
             auto_load_kube_config=True,
-            name_prefix=self._create_job_name(self.task_id),
+            name_prefix=self._create_kubernetes_job_name_prefix(self.name_prefix or self.task_id),
         )
 
     def get_template_env(self) -> jinja2.Environment:

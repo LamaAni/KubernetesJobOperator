@@ -377,7 +377,8 @@ class JobRunner:
                 timeout=timeout,
             )
         except Exception as ex:
-            self.log("Execution timeout... deleting resources", level=logging.ERROR)
+            self.log("Error while creating resources, aborting execution", level=logging.ERROR)
+            self.log(f"Resources,\n---\n{yaml.dump_all(self.body)}", level=logging.ERROR)
             self.abort()
             raise ex
 

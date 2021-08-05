@@ -12,6 +12,12 @@ REPO_PATH="$(realpath "$CUR_DIR/../../")"
 
 source "$CUR_DIR/configure" || exit $?
 
+if [ "$1" == "reset" ]; then
+  rm -rf "$REPO_PATH/.local/airflow.db" && echo "deleted airflow db"
+  rm -rf "$REPO_PATH/tests/local_airflow/airflow.cfg" && echo "deleted airflow config"
+  shift
+fi
+
 if [ "$#" -eq 0 ]; then
   echo "----------------------"
   echo "Running python version:"
