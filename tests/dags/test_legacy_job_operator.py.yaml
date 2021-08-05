@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: 'testpod'
+  labels:
+    app: 'testpod'
+spec:
+  containers:
+    - name: testpod
+      image: 'ubuntu:latest'
+      command:
+        - bash
+        - -c
+        - |
+          sleep 3
+          echo ok
+      resources: {}

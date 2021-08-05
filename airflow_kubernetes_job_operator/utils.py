@@ -2,6 +2,7 @@ import os
 import random
 import re
 import inspect
+from typing import List, Union, Dict, Any
 
 REPO_PATH = os.path.dirname(__file__)
 
@@ -86,3 +87,58 @@ def to_kubernetes_valid_name(name, max_length=50, start_trim_offset=10):
         second_part = second_part[-max_length + start_trim_offset + 2 :]  # noqa: E203
         name = first_part + "--" + second_part
     return name
+
+
+def __dict_remove_empty_cols(col: Union[Dict, List, Any]) -> Union[Dict, List, Any]:
+    if isinstance(col, dict):
+        for k in list(col.keys()):
+            val, do_delete = __dict_remove_empty_cols(col[k])
+            if do_delete:
+                del col[k]
+        return col, len(col.keys()) == 0
+    elif isinstance(col, list):
+        if len(col) == 0:
+            return col, True
+        for val in list(col):
+            __dict_remove_empty_cols(val)
+    return col, False
+
+
+def dict_remove_empty_cols(col: Union[Dict, List]):
+    __dict_remove_empty_cols(col)
+    return col
+
+
+def dict_merge(into: dict, *args: List[dict], merge_lists=False):
+    for source in args:
+        assert isinstance(source, dict)
+        for key in list(source.keys()):
+            val = source.get(key)
+            into_val = into.get(key, None)
+            if type(into_val) == type(val):
+                if isinstance(val, dict):
+                    dict_merge(into_val, val)
+                elif merge_lists and isinstance(val, list):
+                    into[key] = val + into_val
+            else:
+                into[key] = val
+
+    return into
+
+
+if __name__ == "__main__":
+    import yaml
+
+    print(
+        yaml.dump(
+            dict_merge(
+                {"a": 0},
+                {"a": 1},
+                {"b": 2},
+                {"b": {"d": 3}},
+                {"c": [1, 2, 3]},
+                {"c": [3, 4, 5]},
+                {"b": {"e": 1}},
+            )
+        )
+    )
