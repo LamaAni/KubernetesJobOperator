@@ -28,7 +28,6 @@ with dag:
             "echo",
             '::kube_api:xcom={"a":2,"b":"someval"}',
         ],
-        on_kube_api_event=
     )
 
     kube_task >> PythonOperator(

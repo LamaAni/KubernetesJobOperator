@@ -1,9 +1,5 @@
 from typing import TYPE_CHECKING, List
-
 from airflow.contrib.operators.kubernetes_pod_operator import KubernetesPodOperator
-
-if TYPE_CHECKING:
-    from airflow_kubernetes_job_operator.kubernetes_legacy_job_operator import KubernetesLegacyJobOperator
 from airflow_kubernetes_job_operator.config import AIRFLOW_MAJOR_VERSION, AIRFLOW_PATCH_VERSION
 
 # Loading libraries with backwards compatability
@@ -32,8 +28,14 @@ else:
     from kubernetes.client.models import V1Secret
     from airflow.providers.cncf.kubernetes.backcompat.pod_runtime_info_env import PodRuntimeInfoEnv
 
+if TYPE_CHECKING:
+    from airflow_kubernetes_job_operator.kubernetes_legacy_job_operator import KubernetesLegacyJobOperator
+
 
 def create_legacy_kubernetes_pod_airflow_1_using_request_factory(operator: "KubernetesLegacyJobOperator"):
+    if operator.full_pod_spec:
+        return create_legacy_kubernetes_pod_airflow_from_provider(operator)
+        
     pod_body = None
     # old pod generator
     gen = pod_generator.PodGenerator()
@@ -45,28 +47,21 @@ def create_legacy_kubernetes_pod_airflow_1_using_request_factory(operator: "Kube
     for volume in operator.volumes:
         gen.add_volume(volume)
 
-    job_obj = operator.job_runner.body[0]
-
-    # selecting appropriate pod values.
     all_labels = {}
     all_labels.update(operator.labels)
-    all_labels.update(job_obj["spec"]["template"]["metadata"].get("labels", {}))
-    image = operator.image or job_obj["spec"]["template"]["spec"]["containers"][0].get("image", None)
-    cmds = operator.command or job_obj["spec"]["template"]["spec"]["containers"][0].get("command", [])
-    arguments = operator.arguments or job_obj["spec"]["template"]["spec"]["containers"][0].get("args", [])
-
+    
     pod = gen.make_pod(
-        namespace=job_obj.get("metadata", {}).get("name"),
-        image=image,
-        pod_id=job_obj.get("metadata", {}).get("name"),
-        cmds=cmds,
-        arguments=arguments,
+        namespace=operator.namespace,
+        image=operator.image,
+        pod_id=operator.name_prefix or "kjo",
+        cmds=operator.command,
+        arguments=operator.arguments,
         labels=all_labels,
     )
 
     pod.service_account_name = operator.service_account_name
     pod.secrets = operator.secrets
-    pod.envs = operator.envs
+    pod.envs = operator.envs or {}
     pod.image_pull_policy = operator.image_pull_policy
     pod.image_pull_secrets = operator.image_pull_secrets
     pod.annotations = operator.annotations
