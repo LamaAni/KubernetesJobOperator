@@ -2,10 +2,10 @@ from typing import TYPE_CHECKING, List
 from airflow.contrib.operators.kubernetes_pod_operator import KubernetesPodOperator
 from airflow_kubernetes_job_operator.config import AIRFLOW_MAJOR_VERSION, AIRFLOW_PATCH_VERSION
 
+
 # Loading libraries with backwards compatability
-if AIRFLOW_MAJOR_VERSION == 1:
-    if AIRFLOW_PATCH_VERSION <= 10:
-        from airflow.contrib.kubernetes.kubernetes_request_factory import pod_request_factory
+if AIRFLOW_MAJOR_VERSION == 1 and AIRFLOW_PATCH_VERSION <= 10:
+    from airflow.contrib.kubernetes.kubernetes_request_factory import pod_request_factory
     from airflow.contrib.kubernetes import pod_generator
     from airflow.contrib.kubernetes.pod import Resources
     from airflow.contrib.kubernetes.volume_mount import VolumeMount
@@ -13,8 +13,12 @@ if AIRFLOW_MAJOR_VERSION == 1:
     from airflow.contrib.kubernetes.secret import Secret
     from airflow.contrib.kubernetes.pod import Port
     from typing import Dict as Affinity
-    from airflow.contrib.kubernetes.pod_runtime_info_env import PodRuntimeInfoEnv as PodRuntimeInfoEnv
+    from airflow.contrib.kubernetes.pod_runtime_info_env import PodRuntimeInfoEnv
 else:
+    if AIRFLOW_MAJOR_VERSION == 1:
+        from airflow.contrib.kubernetes.pod_runtime_info_env import PodRuntimeInfoEnv
+    else:
+        from airflow.providers.cncf.kubernetes.backcompat.pod_runtime_info_env import PodRuntimeInfoEnv
     from kubernetes.client import CoreV1Api, models as k8s
     from kubernetes.client import (
         V1ResourceRequirements as Resources,
@@ -26,7 +30,7 @@ else:
     )
     from airflow.kubernetes.secret import Secret
     from kubernetes.client.models import V1Secret
-    from airflow.providers.cncf.kubernetes.backcompat.pod_runtime_info_env import PodRuntimeInfoEnv
+
 
 if TYPE_CHECKING:
     from airflow_kubernetes_job_operator.kubernetes_legacy_job_operator import KubernetesLegacyJobOperator
@@ -34,8 +38,8 @@ if TYPE_CHECKING:
 
 def create_legacy_kubernetes_pod_airflow_1_using_request_factory(operator: "KubernetesLegacyJobOperator"):
     if operator.full_pod_spec:
-        return create_legacy_kubernetes_pod_airflow_from_provider(operator)
-        
+        raise Exception("full_pod_spec is not allowed in this version of airflow")
+
     pod_body = None
     # old pod generator
     gen = pod_generator.PodGenerator()
@@ -49,7 +53,7 @@ def create_legacy_kubernetes_pod_airflow_1_using_request_factory(operator: "Kube
 
     all_labels = {}
     all_labels.update(operator.labels)
-    
+
     pod = gen.make_pod(
         namespace=operator.namespace,
         image=operator.image,
@@ -81,7 +85,7 @@ def create_legacy_kubernetes_pod_airflow_1_using_request_factory(operator: "Kube
     return pod_body
 
 
-def create_legacy_kubernetes_pod_airflow_1(operator: "KubernetesLegacyJobOperator"):
+def create_legacy_kubernetes_pod_airflow_from_provider(operator: "KubernetesLegacyJobOperator"):
     env_vars = []
     if isinstance(env_vars, dict):
         for k in env_vars.keys():
@@ -158,13 +162,7 @@ def create_legacy_kubernetes_pod_airflow_1(operator: "KubernetesLegacyJobOperato
     }
 
 
-def create_legacy_kubernetes_pod_airflow_from_provider(operator: "KubernetesLegacyJobOperator"):
-    return create_legacy_kubernetes_pod_airflow_1(operator)
-
-
 def create_legacy_kubernetes_pod(operator: "KubernetesLegacyJobOperator"):
-    if AIRFLOW_MAJOR_VERSION == 1:
-        if AIRFLOW_PATCH_VERSION <= 10:
-            return create_legacy_kubernetes_pod_airflow_1_using_request_factory(operator)
-        return create_legacy_kubernetes_pod_airflow_1(operator)
+    if AIRFLOW_MAJOR_VERSION == 1 and AIRFLOW_PATCH_VERSION <= 10:
+        return create_legacy_kubernetes_pod_airflow_1_using_request_factory(operator)
     return create_legacy_kubernetes_pod_airflow_from_provider(operator)
