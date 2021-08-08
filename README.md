@@ -9,7 +9,7 @@ Contributions are welcome. See [here](https://docs.github.com/en/free-pro-team@l
 ### Supports
 
 1. Running tasks as Kubernetes Jobs.
-1. Running tasks as Kubernetes Pods.
+1. Running tasks as Kubernetes Pods, with sidecar support (see metadata annotations).
 1. Running tasks as multi resource (see example below, similar to `kubectl apply`).
 1. Running tasks as custom resources ([help](docs/custom_kinds.md)).
 1. Auto detection of kubernetes namespace and config.
