@@ -228,8 +228,9 @@ spec:
         - infinity
 ```
 
-When that is executed, only the execution status of the main pod will be taken into account when determining the state of the task. 
-**Note** that, if the delete policy is not one of `Always`,`IfFailed`, the sidecar will continue executing on failure.
+When executed, only the status of the main container will be taken into account when determining the state of the task. 
+**Note**, if the delete policy is not one of `Always`,`IfFailed`, the sidecar will continue executing on failure.
+
 # XCom
 
 The implementation of XCom via the KubernetesJobOperator differes from the one by KuberenetesPodsOperator, 
