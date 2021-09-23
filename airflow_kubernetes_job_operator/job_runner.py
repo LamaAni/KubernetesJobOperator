@@ -48,6 +48,7 @@ class JobRunner:
         random_name_postfix_length: int = 8,
         name_prefix: str = None,
         name_postfix: str = None,
+        config_file: str = None
     ):
         """A kubernetes job runner. Creates a collection of resources and waits for the
         first resource to reach one of KubeResourceState.Succeeded/KubeResourceState.Failed/KubeResourceState.Deleted
@@ -97,6 +98,7 @@ class JobRunner:
         self.show_executor_logs = show_executor_logs
         self.show_error_logs = show_error_logs
         self.delete_policy = delete_policy
+        self.config_file = config_file
 
         if self.show_runner_id_on_logs is None:
             self.show_runner_id_on_logs = SHOW_RUNNER_ID_IN_LOGS
@@ -437,6 +439,7 @@ class JobRunner:
         self.log(
             "Deleting objects: " + ", ".join([f"{d}" for d in descriptors]),
         )
+        self.client.load_kube_config(config_file=self.config_file)
         self.client.query(self._create_body_operation_queries(DeleteNamespaceResource))
         self.log("Job deleted")
 

@@ -283,6 +283,7 @@ class KubernetesJobOperator(KubernetesJobOperatorDefaultsBase):
             logger=self.logger if hasattr(self, "logger") else None,
             auto_load_kube_config=True,
             name_prefix=self._create_job_name(self.task_id),
+            config_file=self.config_file
         )
 
     def get_template_env(self) -> jinja2.Environment:

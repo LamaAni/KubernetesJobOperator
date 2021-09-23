@@ -546,7 +546,6 @@ class KubeApiRestClient:
         Returns:
             ApiClient: The api client.
         """
-        self.load_kube_config()
         return self._api_client
 
     def load_kube_config(
