@@ -316,6 +316,7 @@ class KubeApiRestQuery(Task):
 
                 # connecting
                 self._set_connection_state(KubeApiRestQueryConnectionState.Connecting)
+                client.reload_client_from_config()
                 request_info = client.api_client.call_api(
                     resource_path=self.resource_path,
                     method=self.method,
@@ -511,6 +512,7 @@ class KubeApiRestClient:
     def __init__(
         self,
         auto_load_kube_config: bool = True,
+        config_file: str = None
     ):
         """Creates a new kubernetes api rest client."""
         super().__init__()
@@ -520,6 +522,7 @@ class KubeApiRestClient:
         self.auto_load_kube_config = auto_load_kube_config  # type:ignore
         self._kube_config: kube_config.Configuration = None  # type:ignore
         self._api_client: ApiClient = None  # type:ignore
+        self.config_file: str = config_file
 
     @property
     def is_kube_config_loaded(self) -> bool:
@@ -581,6 +584,9 @@ class KubeApiRestClient:
         )
 
         self._api_client: ApiClient = ApiClient(configuration=self.kube_config)
+
+    def reload_client_from_config(self):
+        self.load_kube_config(config_file=self.config_file)
 
     def get_default_namespace(self) -> str:
         """Returns the default namespace for the current config."""

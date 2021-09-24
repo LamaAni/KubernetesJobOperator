@@ -80,7 +80,7 @@ class JobRunner:
             "body must be a dictionary, a list of dictionaries with at least one value, or string yaml"
         )
 
-        self._client = KubeApiRestClient(auto_load_kube_config=auto_load_kube_config)
+        self._client = KubeApiRestClient(auto_load_kube_config=auto_load_kube_config, config_file=config_file)
         self._is_body_ready = False
         self._body = body
         self.logger: Logger = logger
@@ -98,7 +98,6 @@ class JobRunner:
         self.show_executor_logs = show_executor_logs
         self.show_error_logs = show_error_logs
         self.delete_policy = delete_policy
-        self.config_file = config_file
 
         if self.show_runner_id_on_logs is None:
             self.show_runner_id_on_logs = SHOW_RUNNER_ID_IN_LOGS
@@ -439,7 +438,6 @@ class JobRunner:
         self.log(
             "Deleting objects: " + ", ".join([f"{d}" for d in descriptors]),
         )
-        self.client.load_kube_config(config_file=self.config_file)
         self.client.query(self._create_body_operation_queries(DeleteNamespaceResource))
         self.log("Job deleted")
 
