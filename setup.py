@@ -30,14 +30,14 @@ def get_version():
 
 
 setup(
-    name="airflow_kubernetes_job_operator",
-    version=get_version(),
+    name="airflow_kubernetes_job_operator_eks_auth",
+    version="1.0.6",
     description="An airflow job operator that executes a task as a Kubernetes job on a cluster, given a job yaml configuration or an image uri.",
-    long_description="Please see readme.md @ https://github.com/LamaAni/KubernetesJobOperator",
+    long_description="This is a fork from @ https://github.com/LamaAni/KubernetesJobOperator",
     classifiers=[],
-    author="Zav Shotan",
+    author="Victor Dubé",
     author_email="",
-    url="https://github.com/LamaAni/KubernetesJobOperator",
+    url="https://github.com/duferdev/KubernetesJobOperator",
     packages=["airflow_kubernetes_job_operator", "airflow_kubernetes_job_operator/kube_api"],
     platforms="any",
     license="LICENSE",
