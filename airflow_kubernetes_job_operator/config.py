@@ -12,6 +12,7 @@ from airflow_kubernetes_job_operator.collections import (
     JobRunnerDeletePolicy,
     KubernetesJobOperatorDefaultExecutionResource,
 )
+import re
 
 
 DEFAULT_EXECUTION_OBJECT_PATHS: Dict[KubernetesJobOperatorDefaultExecutionResource, str] = {
@@ -21,7 +22,7 @@ DEFAULT_EXECUTION_OBJECT_PATHS: Dict[KubernetesJobOperatorDefaultExecutionResour
 
 AIRFLOW_CONFIG_SECTION_NAME = "kubernetes_job_operator"
 
-AIRFLOW_VERSION = [int(v) for v in version.split(".")]
+AIRFLOW_VERSION = [int(re.sub('\D','',v)) for v in version.split(".")]
 AIRFLOW_MAJOR_VERSION = AIRFLOW_VERSION[0]
 AIRFLOW_MINOR_VERSION = AIRFLOW_VERSION[1]
 AIRFLOW_PATCH_VERSION = AIRFLOW_VERSION[2]
