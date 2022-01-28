@@ -7,7 +7,7 @@ verify_ssl = true
 pytest = "*"
 black = "*"
 flake8 = "*"
-apache-airflow = "==1.10.14"
+apache-airflow = "==2.2.0"
 
 
 [packages]
