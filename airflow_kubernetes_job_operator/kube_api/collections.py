@@ -322,6 +322,7 @@ for kind in [
     KubeResourceKind(api_version="v1", name="Event", auto_include_in_watch=False),
     KubeResourceKind(api_version="batch/v1", name="Job", parse_kind_state=KubeResourceKind.parse_state_job),
     KubeResourceKind(api_version="apps/v1", name="Deployment"),
+    KubeResourceKind(api_version="v1", name="ConfigMap"),
 ]:
     KubeResourceKind.register_global_kind(kind)
 
