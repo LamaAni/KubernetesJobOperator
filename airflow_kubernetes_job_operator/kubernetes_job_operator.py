@@ -291,7 +291,7 @@ class KubernetesJobOperator(KubernetesJobOperatorDefaultsBase):
             delete_policy=self.delete_policy,
             logger=self.logger if hasattr(self, "logger") else None,
             auto_load_kube_config=True,
-            name_prefix=self._create_kubernetes_job_name_prefix(self.name_prefix or self.task_id),
+            name_prefix=self._create_kubernetes_job_name_prefix(self.name_prefix if self.name_prefix is not None else self.task_id),
             name_postfix=self.name_postfix,
             random_name_postfix_length=self.random_name_postfix_length,
         )
