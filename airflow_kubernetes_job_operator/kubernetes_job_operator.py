@@ -293,7 +293,7 @@ class KubernetesJobOperator(KubernetesJobOperatorDefaultsBase):
             auto_load_kube_config=True,
             name_prefix=self._create_kubernetes_job_name_prefix(self.name_prefix or self.task_id),
             name_postfix=self.name_postfix,
-            random_name_postfix_length=random_name_postfix_length,
+            random_name_postfix_length=self.random_name_postfix_length,
         )
 
     def get_template_env(self) -> jinja2.Environment:
