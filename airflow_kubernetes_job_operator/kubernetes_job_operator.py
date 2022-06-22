@@ -62,7 +62,8 @@ class KubernetesJobOperator(KubernetesJobOperatorDefaultsBase):
         arguments: List[str] = None,
         image: str = None,
         name_prefix: str = None,
-        name_postfix: int = None,
+        name_postfix: str = None,
+        random_name_postfix_length: int = 8,
         namespace: str = None,
         envs: dict = None,
         body: Union[str, dict, List[dict]] = None,
@@ -91,7 +92,8 @@ class KubernetesJobOperator(KubernetesJobOperatorDefaultsBase):
             arguments (List[str], optional): The kubernetes pod arguments. Defaults to None.
             image (str, optional): The kubernetes container image to use. Defaults to None.
             name_prefix (str, optional): The kubernetes resource(s) name prefix. Defaults to (corrected) task_id.
-            name_postfix (int, optional): Add a random string to all resource names if > 0. Defaults to 8
+            name_postfix (str, optional): The postfix for all resource name. Defaults to None.
+            random_name_postfix_length (int, optional): Add a random string to all resource names if > 0. Defaults to 8.
             namespace (str, optional): The kubernetes namespace to run in. Defaults to current namespace.
             envs (dict, optional): A dictionary of key value pairs that is loaded into the environment variables.
                 Defaults to None.
@@ -166,6 +168,7 @@ class KubernetesJobOperator(KubernetesJobOperatorDefaultsBase):
         self.body = body
         self.name_prefix = name_prefix
         self.name_postfix = name_postfix
+        self.random_name_postfix_length = random_name_postfix_length
         self.namespace = namespace
         self.get_logs = get_logs
         self.on_kube_api_event = on_kube_api_event
@@ -289,7 +292,8 @@ class KubernetesJobOperator(KubernetesJobOperatorDefaultsBase):
             logger=self.logger if hasattr(self, "logger") else None,
             auto_load_kube_config=True,
             name_prefix=self._create_kubernetes_job_name_prefix(self.name_prefix or self.task_id),
-            name_postfix=self.name_prefix,
+            name_postfix=self.name_postfix,
+            random_name_postfix_length=random_name_postfix_length,
         )
 
     def get_template_env(self) -> jinja2.Environment:
