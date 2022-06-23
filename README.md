@@ -173,9 +173,9 @@ export AIRFLOW__[section]__[item] = value
 
 # Why would this be better than the [KubernetesPodOperator](https://github.com/apache/airflow/blob/master/airflow/contrib/operators/kubernetes_pod_operator.p)?
 
-The KubernetesJobOperator allows for more execution options thank the KubernetesPodOperator such as multiple resource execution, custom resource executions, creation event and pod log tracking, proper resource deletion after task is complete, on error and when task is cancelled and more.
+The KubernetesJobOperator allows more advanced features such as multiple resource execution, custom resource executions, creation event and pod log tracking, proper resource deletion (after task is complete or on error, when task is cancelled) and more.
 
-Further, in the KubernetesPodOperator the monitoring between the worker pod and airflow is done by an internal loop which executes and consumes worker resources. In this operator, an async threaded approach was taken which reduces resource consumption on the worker. Further, since the logging and parsing of data is done outside of the main worker thread the worker is "free" do handle other tasks without interruption.
+Further, in the KubernetesPodOperator the monitoring between the worker pod and airflow is done by an internal loop which consumes worker resources. In this operator, an async threaded approach was taken which reduces resource consumption on the worker. Further, since the logging and parsing of data is done outside of the main worker thread, the worker is "free" do handle other tasks without interruption.
 
 Finally, using the KubernetesJobOperator you are free to use other resources like the kubernetes [Job](https://kubernetes.io/docs/concepts/workloads/controllers/jobs-run-to-completion/) to execute your tasks. These are better designed for use in kubernetes and are "up with the times".
 
