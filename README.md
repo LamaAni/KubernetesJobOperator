@@ -6,6 +6,8 @@ An airflow operator that executes a task in a kubernetes cluster, given a yaml c
 
 Contributions are welcome. See [here](https://docs.github.com/en/free-pro-team@latest/github/collaborating-with-issues-and-pull-requests/creating-a-pull-request-from-a-fork).
 
+If you enjoyed using this repo, please consider posting in the [use cases and testimonials](https://github.com/LamaAni/KubernetesJobOperator/issues/40) issue. 
+
 ### Supports
 
 1. Running tasks as Kubernetes Jobs.
