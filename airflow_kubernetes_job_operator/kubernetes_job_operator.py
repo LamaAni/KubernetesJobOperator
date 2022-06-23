@@ -92,8 +92,8 @@ class KubernetesJobOperator(KubernetesJobOperatorDefaultsBase):
             arguments (List[str], optional): The kubernetes pod arguments. Defaults to None.
             image (str, optional): The kubernetes container image to use. Defaults to None.
             name_prefix (str, optional): The kubernetes resource(s) name prefix. Defaults to (corrected) task_id.
-            name_postfix (str, optional): The postfix for all resource name. Defaults to None.
-            random_name_postfix_length (int, optional): Add a random string to all resource names if > 0. Defaults to 8.
+            name_postfix (str, optional): The kuberntes resource(s) name postfix. Defaults to None.
+            random_name_postfix_length (int, optional): Add a random string to all kuberntes resource(s) names if > 0. Defaults to 8.
             namespace (str, optional): The kubernetes namespace to run in. Defaults to current namespace.
             envs (dict, optional): A dictionary of key value pairs that is loaded into the environment variables.
                 Defaults to None.
