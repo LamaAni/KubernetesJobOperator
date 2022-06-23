@@ -185,6 +185,9 @@ command | None | A list of commands to be sent. i.e. ["echo","ok"]
 arguments | None | A list of arguments to be sent to the docker image.
 image | None | An image to use. (Overrides the main pod image)
 namespace | None | A namespace to use (Overrides/adds a namespace to main resource)
+name_prefix | task_id | The kubernetes resource(s) name prefix
+name_postfix | None | The kuberntes resource(s) name postfix
+random_name_postfix_length | 8 | Add a random string to all kuberntes resource(s) names if > 0
 envs | None | A dictionary of envs to add to the main job pod.
 body | None | The body of the job to use. Can be string, dictionary.
 body_filepath | None | A filepath to the yaml config file. Can use a relative filepath.
