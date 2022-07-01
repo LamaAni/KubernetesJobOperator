@@ -22,7 +22,7 @@ If you enjoyed using this repo, please consider posting in the [use cases and te
 7. XCom
 8. Log based events
 9. Tested and working on [google cloud composer](https://cloud.google.com/composer).
-10. Airflow > 2.0.0 (BETA)
+10. Airflow > 2.0.0
 
 ### Two operator classes are available
 
