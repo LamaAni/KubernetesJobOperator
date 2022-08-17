@@ -9,6 +9,8 @@ Pipefile.lock
 Pipfile.lock
 .venvs/
 
+airflow-webserver.pid
+
 # ignore the test airflow db.
 tests/airflow.db
 tests/logs/
