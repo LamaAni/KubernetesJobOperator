@@ -7,7 +7,8 @@ verify_ssl = true
 black = "*"
 
 [packages]
-apache-airflow = "==2.1.2"
+sqlalchemy = "< 1.4.0"
+apache-airflow = "==2.3.3"
 airflow-db-logger = "==2.0.2"
 kubernetes = "*"
 zthreading = "*"
