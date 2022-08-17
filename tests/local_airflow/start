@@ -10,6 +10,7 @@ fi
 CUR_DIR=$(dirname "$(realpath "${BASH_SOURCE[0]}")")
 REPO_PATH="$(realpath "$CUR_DIR/../../")"
 
+source "$REPO_PATH/.env" || exit $?
 source "$CUR_DIR/configure" || exit $?
 
 if [ "$1" == "reset" ]; then

@@ -1,5 +1,4 @@
 from airflow_kubernetes_job_operator.kube_api import KubeResourceKind, KubeApiConfiguration
-from utils import print_default_kube_configuration
 
 KubeApiConfiguration.add_kube_config_search_location("~/composer_kube_config")  # second
 KubeApiConfiguration.add_kube_config_search_location("~/gcs/dags/config/hcjobs-kubeconfig.yaml")  # first
@@ -11,4 +10,3 @@ KubeApiConfiguration.register_kind(
     parse_kind_state=KubeResourceKind.parse_state_job,
 )
 
-print_default_kube_configuration()

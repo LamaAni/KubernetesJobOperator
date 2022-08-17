@@ -1,6 +1,6 @@
 from utils import default_args, name_from_file
-import logging
 from airflow import DAG
+from datetime import datetime, date
 
 from airflow.models import TaskInstance
 from airflow.operators.python_operator import PythonOperator
@@ -9,6 +9,7 @@ from airflow_kubernetes_job_operator.kubernetes_legacy_job_operator import Kuber
 dag = DAG(
     name_from_file(__file__),
     default_args=default_args,
+    start_date=datetime.today(),
     description="Test base job operator",
     schedule_interval=None,
     catchup=False,
@@ -38,5 +39,7 @@ with dag:
     )
 
 if __name__ == "__main__":
+    from airflow.utils.state import State  # noqa F401
+
     dag.clear()
     dag.run()
