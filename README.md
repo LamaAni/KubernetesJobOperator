@@ -228,12 +228,12 @@ spec:
         - infinity
 ```
 
-When executed, only the status of the main container will be taken into account when determining the state of the task. 
+When executed, only the status of the main container will be taken into account when determining the state of the task.
 **Note**, if the delete policy is not one of `Always`,`IfFailed`, the sidecar will continue executing on failure.
 
 # XCom
 
-The implementation of XCom via the KubernetesJobOperator differes from the one by KuberenetesPodsOperator, 
+The implementation of XCom via the KubernetesJobOperator differes from the one by KuberenetesPodsOperator,
 and therefore no backward compatible implementation for XCom currently exists.
 
 To use xcom with KubernetesJobOperator simply add a log line to your pod log output,
@@ -243,6 +243,64 @@ To use xcom with KubernetesJobOperator simply add a log line to your pod log out
 ```
 
 Note the value of the xcom must be in json format (for the default parser).
+
+# Kubernetes RBAC rules
+
+Service account for the execution this operator uses rules:
+
+```
+rules:
+  # for get logs from job to airflow logs
+  - verbs:
+      - get
+      - watch
+      - list
+    apiGroups:
+      - ''
+    resources:
+      - pods/log
+      - pods
+  # for execute the job
+  - verbs:
+      - create
+      - get
+      - delete
+      - watch
+      - list
+      - patch
+      - update
+    apiGroups:
+      - batch
+    resources:
+      - jobs
+  # for use configmaps in the job
+  - verbs:
+      - create
+      - get
+      - delete
+      - watch
+      - list
+      - patch
+      - update
+    apiGroups:
+      - ''
+    resources:
+      - configmaps
+  # for use secrets in the job
+  - verbs:
+      - create
+      - get
+      - delete
+      - watch
+      - list
+      - patch
+      - update
+    apiGroups:
+      - ''
+    resources:
+      - secrets
+```
+
 
 # Contribution
 
