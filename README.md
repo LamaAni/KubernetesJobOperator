@@ -250,7 +250,7 @@ Service account for the execution this operator uses rules:
 
 ```
 rules:
-  # for get logs from job to airflow logs
+  # Required when reading logs for the executed job.
   - verbs:
       - get
       - watch
