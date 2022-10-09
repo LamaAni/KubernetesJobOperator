@@ -246,7 +246,7 @@ Note the value of the xcom must be in json format (for the default parser).
 
 # Kubernetes RBAC rules
 
-Service account for the execution this operator uses rules:
+The following are the [Kubernetes service account](https://jamesdefabia.github.io/docs/user-guide/service-accounts/) [RBAC](https://kubernetes.io/docs/reference/access-authn-authz/rbac/) rules required for executing jobs via the operator.
 
 ```
 rules:
