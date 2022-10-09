@@ -260,7 +260,7 @@ rules:
     resources:
       - pods/log
       - pods
-  # for execute the job
+  # Required for executing the job
   - verbs:
       - create
       - get
