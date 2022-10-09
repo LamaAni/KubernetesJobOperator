@@ -286,7 +286,7 @@ rules:
       - ''
     resources:
       - configmaps
-  # for use secrets in the job
+  # Required if reading secrets in the job.
   - verbs:
       - create
       - get
