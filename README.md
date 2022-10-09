@@ -273,7 +273,7 @@ rules:
       - batch
     resources:
       - jobs
-  # for use configmaps in the job
+  # Required for using configmaps in the job
   - verbs:
       - create
       - get
