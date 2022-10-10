@@ -228,12 +228,12 @@ spec:
         - infinity
 ```
 
-When executed, only the status of the main container will be taken into account when determining the state of the task. 
+When executed, only the status of the main container will be taken into account when determining the state of the task.
 **Note**, if the delete policy is not one of `Always`,`IfFailed`, the sidecar will continue executing on failure.
 
 # XCom
 
-The implementation of XCom via the KubernetesJobOperator differes from the one by KuberenetesPodsOperator, 
+The implementation of XCom via the KubernetesJobOperator differes from the one by KuberenetesPodsOperator,
 and therefore no backward compatible implementation for XCom currently exists.
 
 To use xcom with KubernetesJobOperator simply add a log line to your pod log output,
@@ -243,6 +243,63 @@ To use xcom with KubernetesJobOperator simply add a log line to your pod log out
 ```
 
 Note the value of the xcom must be in json format (for the default parser).
+
+# Kubernetes RBAC rules
+
+The following are the [Kubernetes service account](https://jamesdefabia.github.io/docs/user-guide/service-accounts/) [RBAC](https://kubernetes.io/docs/reference/access-authn-authz/rbac/) rules required for executing jobs via the operator.
+
+```
+rules:
+  # Required when reading logs for the executed job.
+  - verbs:
+      - get
+      - watch
+      - list
+    apiGroups:
+      - ''
+    resources:
+      - pods/log
+      - pods
+  # Required for executing the job
+  - verbs:
+      - create
+      - get
+      - delete
+      - watch
+      - list
+      - patch
+      - update
+    apiGroups:
+      - batch
+    resources:
+      - jobs
+  # Required for using configmaps in the job
+  - verbs:
+      - create
+      - get
+      - delete
+      - watch
+      - list
+      - patch
+      - update
+    apiGroups:
+      - ''
+    resources:
+      - configmaps
+  # Required if reading secrets in the job.
+  - verbs:
+      - create
+      - get
+      - delete
+      - watch
+      - list
+      - patch
+      - update
+    apiGroups:
+      - ''
+    resources:
+      - secrets
+```
 
 # Contribution
 
