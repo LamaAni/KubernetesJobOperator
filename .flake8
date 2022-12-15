@@ -1,0 +1,10 @@
+[flake8]
+ignore = E203, W503
+max-line-length = 120
+
+exclude = 
+    .*
+    build/*
+    dist/*
+    *.egg-info/*
+    ./jobs/old_jobs/*

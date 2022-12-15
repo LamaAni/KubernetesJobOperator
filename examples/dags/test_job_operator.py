@@ -28,4 +28,3 @@ KubernetesJobOperator(
     image="ubuntu",
     command=["bash", "-c", "echo start; sleep 10; echo end"],
 )
-

@@ -1,9 +1,7 @@
 import os
-import yaml
 import json
 import kubernetes
 import kubernetes.config.kube_config
-from tests.utils import logging
 from airflow_kubernetes_job_operator.kube_api import KubeApiRestClient, GetAPIResources, GetAPIVersions
 
 

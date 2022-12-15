@@ -30,7 +30,6 @@ if IS_AIRFLOW_ONE:
         def __init__(self, **kwargs) -> None:
             super().__init__(**kwargs)
 
-
 else:
     from airflow.models import BaseOperator
 
@@ -93,13 +92,15 @@ class KubernetesJobOperator(KubernetesJobOperatorDefaultsBase):
             image (str, optional): The kubernetes container image to use. Defaults to None.
             name_prefix (str, optional): The kubernetes resource(s) name prefix. Defaults to (corrected) task_id.
             name_postfix (str, optional): The kuberntes resource(s) name postfix. Defaults to None.
-            random_name_postfix_length (int, optional): Add a random string to all kuberntes resource(s) names if > 0. Defaults to 8.
+            random_name_postfix_length (int, optional): Add a random string to all kuberntes resource(s) names if > 0.
+                Defaults to 8.
             namespace (str, optional): The kubernetes namespace to run in. Defaults to current namespace.
             envs (dict, optional): A dictionary of key value pairs that is loaded into the environment variables.
                 Defaults to None.
             body (Union[str, dict, List[dict]], optional):
                 The dictionary/list[dictionary] or yaml that defines the job yaml.
-                None = use KubernetesJobOperator default job yaml (https://github.com/LamaAni/KubernetesJobOperator/blob/master/airflow_kubernetes_job_operator/templates/job_default.yaml)
+                None = use KubernetesJobOperator default job yaml
+                    (https://github.com/LamaAni/KubernetesJobOperator/blob/master/airflow_kubernetes_job_operator/templates/job_default.yaml)
             body_filepath (str, optional): A filepath to the job yaml or json configuration. Can be a relative path.
                 Defaults to None -> use body.
             image_pull_policy (str, optional): The kubernetes image pull policy. Defaults to None.
@@ -268,7 +269,7 @@ class KubernetesJobOperator(KubernetesJobOperatorDefaultsBase):
                     self._update_container_yaml(container=container)
                 self._update_main_container_yaml(containers[0])
 
-                ## adding env resources
+                # adding env resources
         for c in o.values():
             if isinstance(c, dict):
                 self._update_override_params(c)
@@ -291,7 +292,9 @@ class KubernetesJobOperator(KubernetesJobOperatorDefaultsBase):
             delete_policy=self.delete_policy,
             logger=self.logger if hasattr(self, "logger") else None,
             auto_load_kube_config=True,
-            name_prefix=self._create_kubernetes_job_name_prefix(self.name_prefix if self.name_prefix is not None else self.task_id),
+            name_prefix=self._create_kubernetes_job_name_prefix(
+                self.name_prefix if self.name_prefix is not None else self.task_id
+            ),
             name_postfix=self.name_postfix,
             random_name_postfix_length=self.random_name_postfix_length,
         )
@@ -353,7 +356,7 @@ class KubernetesJobOperator(KubernetesJobOperatorDefaultsBase):
                 )
                 has_been_updated = True
             if has_been_updated:
-                self.log.info(f"XCom updated, keys: " + ", ".join(values_dict.keys()))
+                self.log.info("XCom updated, keys: " + ", ".join(values_dict.keys()))
 
     def execute(self, context):
         """Call to execute the kubernetes job.

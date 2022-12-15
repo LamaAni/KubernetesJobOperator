@@ -22,12 +22,12 @@ If you enjoyed using this repo, please consider posting in the [use cases and te
 7. XCom
 8. Log based events
 9. Tested and working on [google cloud composer](https://cloud.google.com/composer).
-10. Airflow > 2.0.0
+10. Airflow > 2.0.0 (Airflow 1 is supported but deprecated)
 
 ### Two operator classes are available
 
 1. KubernetesJobOperator - Supply a kubernetes configuration (yaml file, yaml string or a list of python dictionaries) as the body of the task.
-1. KubernetesLegacyJobOperator - Defaults to a kubernetes job definition, and supports the same arguments as the KubernetesPodOperator. i.e. replace with the KubernetesPodOperator for legacy support.
+1. KubernetesLegacyJobOperator (only airflow 2.0 and up) - Defaults to a kubernetes job definition, and supports the same arguments as the KubernetesPodOperator. i.e. replace with the KubernetesPodOperator for legacy support. (requires installing apache-airflow-providers-cncf-kubernetes package)
 
 # Install
 
@@ -173,30 +173,30 @@ export AIRFLOW__[section]__[item] = value
 
 # Kubernetes job operator input variables
 
-argument| default value | description
-|---|---|---|
-command | None | A list of commands to be sent. i.e. ["echo","ok"]
-arguments | None | A list of arguments to be sent to the docker image.
-image | None | An image to use. (Overrides the main pod image)
-namespace | None | A namespace to use (Overrides/adds a namespace to main resource)
-name_prefix | task_id | The kubernetes resource(s) name prefix
-name_postfix | None | The kuberntes resource(s) name postfix
-random_name_postfix_length | 8 | Add a random string to all kuberntes resource(s) names if > 0
-envs | None | A dictionary of envs to add to the main job pod.
-body | None | The body of the job to use. Can be string, dictionary.
-body_filepath | None | A filepath to the yaml config file. Can use a relative filepath.
-image_pull_policy | Always | The kubernetes image pull policy (str)
-delete_policy | IfSucceeded | The resources delete policy. Can be one of: Always, Never, IfSucceeded, IfFailed (Str)
-in_cluster | None | Use in cluster creds.
-config_file | None | Use this kubernetes config file.
-get_logs | True | Retrive the executing pod logs (for all resources)
-cluster_context | The cluster context name to use.
-startup_timeout_seconds | 10 | The max number of seconds to create the job before timeout is called
-validate_body_on_init | False | Can be set to true only if jinja is disabled. Process the yaml when the object is created.
-enable_jinja| True | Enable jinja on the body (str, or file), and the following args: command, arguments, image, envs, body, namespace, config_file, cluster_context
-jinja_job_args | None | A dictionary or object to be used in the jinja template to render arguments. The jinja args are loaded under the keyword "job".
-on_kube_api_event | None | A method to capture kube api log events. By default is none. log output pattern: `::kube_api:[name]=value`
-parse_xcom_event| json parser | Parse the result of xcom events, `::kube_api:xcom={json values...}`
+| argument                   | default value                    | description                                                                                                                                     |
+| -------------------------- | -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| command                    | None                             | A list of commands to be sent. i.e. ["echo","ok"]                                                                                               |
+| arguments                  | None                             | A list of arguments to be sent to the docker image.                                                                                             |
+| image                      | None                             | An image to use. (Overrides the main pod image)                                                                                                 |
+| namespace                  | None                             | A namespace to use (Overrides/adds a namespace to main resource)                                                                                |
+| name_prefix                | task_id                          | The kubernetes resource(s) name prefix                                                                                                          |
+| name_postfix               | None                             | The kuberntes resource(s) name postfix                                                                                                          |
+| random_name_postfix_length | 8                                | Add a random string to all kuberntes resource(s) names if > 0                                                                                   |
+| envs                       | None                             | A dictionary of envs to add to the main job pod.                                                                                                |
+| body                       | None                             | The body of the job to use. Can be string, dictionary.                                                                                          |
+| body_filepath              | None                             | A filepath to the yaml config file. Can use a relative filepath.                                                                                |
+| image_pull_policy          | Always                           | The kubernetes image pull policy (str)                                                                                                          |
+| delete_policy              | IfSucceeded                      | The resources delete policy. Can be one of: Always, Never, IfSucceeded, IfFailed (Str)                                                          |
+| in_cluster                 | None                             | Use in cluster creds.                                                                                                                           |
+| config_file                | None                             | Use this kubernetes config file.                                                                                                                |
+| get_logs                   | True                             | Retrive the executing pod logs (for all resources)                                                                                              |
+| cluster_context            | The cluster context name to use. |
+| startup_timeout_seconds    | 10                               | The max number of seconds to create the job before timeout is called                                                                            |
+| validate_body_on_init      | False                            | Can be set to true only if jinja is disabled. Process the yaml when the object is created.                                                      |
+| enable_jinja               | True                             | Enable jinja on the body (str, or file), and the following args: command, arguments, image, envs, body, namespace, config_file, cluster_context |
+| jinja_job_args             | None                             | A dictionary or object to be used in the jinja template to render arguments. The jinja args are loaded under the keyword "job".                 |
+| on_kube_api_event          | None                             | A method to capture kube api log events. By default is none. log output pattern: `::kube_api:[name]=value`                                      |
+| parse_xcom_event           | json parser                      | Parse the result of xcom events, `::kube_api:xcom={json values...}`                                                                             |
 
 # Metadata annotations
 

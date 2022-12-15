@@ -82,6 +82,4 @@ KubernetesJobOperator(
 
 
 if __name__ == "__main__":
-    dag.schedule_interval = None
-    dag.clear()
-    dag.run()
+    dag.test()

@@ -1,6 +1,6 @@
 from utils import default_args, name_from_file
 from airflow import DAG
-from datetime import datetime, date
+from datetime import datetime
 
 from airflow.models import TaskInstance
 from airflow.operators.python_operator import PythonOperator

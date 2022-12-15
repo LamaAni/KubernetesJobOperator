@@ -22,7 +22,7 @@ DEFAULT_EXECUTION_OBJECT_PATHS: Dict[KubernetesJobOperatorDefaultExecutionResour
 
 AIRFLOW_CONFIG_SECTION_NAME = "kubernetes_job_operator"
 
-AIRFLOW_VERSION = [int(re.sub('\D','',v)) for v in version.split(".")]
+AIRFLOW_VERSION = [int(re.sub(r"\D", "", v)) for v in version.split(".")]
 AIRFLOW_MAJOR_VERSION = AIRFLOW_VERSION[0]
 AIRFLOW_MINOR_VERSION = AIRFLOW_VERSION[1]
 AIRFLOW_PATCH_VERSION = AIRFLOW_VERSION[2]
@@ -102,7 +102,7 @@ SHOW_RUNNER_ID_IN_LOGS: bool = get("show_runner_id", False)
 KUBE_CONFIG_EXTRA_LOCATIONS: str = get("kube_config_extra_locations", "", otype=str, allow_empty=True)
 if not_empty_string(KUBE_CONFIG_EXTRA_LOCATIONS):
     for loc in KUBE_CONFIG_EXTRA_LOCATIONS.split(",").reverse():
-        log = loc.strip()
+        loc = loc.strip()
         if len(loc) == 0:
             continue
         kube_api_config.DEFAULT_KUBE_CONFIG_LOCATIONS.insert(0, loc)

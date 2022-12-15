@@ -10,12 +10,22 @@ fi
 CUR_DIR=$(dirname "$(realpath "${BASH_SOURCE[0]}")")
 REPO_PATH="$(realpath "$CUR_DIR/../../")"
 
+mkdir -p "$REPO_PATH/.local" "$REPO_PATH/.local/logs" || exit $?
+
 export PYTHONPATH="$REPO_PATH"
 export AIRFLOW_HOME="$REPO_PATH/tests/local_airflow"
+export AIRFLOW_CONFIG="$REPO_PATH/.local/airflow.cfg"
 export AIRFLOW__CORE__DAGS_FOLDER="$REPO_PATH/tests/dags"
 export AIRFLOW__CORE__PLUGINS_FOLDER="$REPO_PATH/tests/plugins"
 export AIRFLOW__CORE__BASE_LOG_FOLDER="$REPO_PATH/.local/logs"
+export AIRFLOW__LOGGING__BASE_LOG_FOLDER="$REPO_PATH/.local/logs"
+export AIRFLOW__WEBSERVER__RBAC="False"
+export AIRFLOW__WEBSERVER__AUTHENTICATE="False"
+
 SQLITE_DB_FILE="$REPO_PATH/.local/airflow.db"
 export AIRFLOW__CORE__SQL_ALCHEMY_CONN="sqlite:///${SQLITE_DB_FILE}"
+export AIRFLOW__DATABASE__SQL_ALCHEMY_CONN="sqlite:///${SQLITE_DB_FILE}"
 echo "PYTHONPATH=$PYTHONPATH"
-env | grep "AIRFLOW"
+
+env | grep "AIRFLOW" >|"$REPO_PATH/.local/airflow.env"
+cat "$REPO_PATH/.local/airflow.env"

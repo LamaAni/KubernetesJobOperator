@@ -1,5 +1,4 @@
 from tests.utils import logging, load_yaml_objects
-from time import sleep
 from typing import Type
 from airflow_kubernetes_job_operator.kube_api import (
     KubeApiRestClient,

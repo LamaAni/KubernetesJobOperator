@@ -50,4 +50,3 @@ KubernetesLegacyJobOperator(
     dag=dag,
     is_delete_operator_pod=True,
 )
-

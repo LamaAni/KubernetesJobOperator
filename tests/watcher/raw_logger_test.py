@@ -1,11 +1,6 @@
 import kubernetes
-import os
-import yaml
-
-import dateutil.parser
-from datetime import datetime
 from tests.watcher.utils import logging
-from airflow_kubernetes_job_operator.kube_api.watchers import KubeApiPodLogWatcher, KubeApiNamespaceWatcherKind
+from airflow_kubernetes_job_operator.kube_api.watchers import KubeApiPodLogWatcher
 
 logging.basicConfig(level="INFO")
 

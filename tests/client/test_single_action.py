@@ -1,11 +1,8 @@
 import os
 import yaml
-import kubernetes
-import kubernetes.config.kube_config
 from tests.utils import logging
-from zthreading.tasks import Task
 from airflow_kubernetes_job_operator.kube_api.client import KubeApiRestClient
-from airflow_kubernetes_job_operator.kube_api import CreateNamespaceResource, DeleteNamespaceResource
+from airflow_kubernetes_job_operator.kube_api import DeleteNamespaceResource
 
 
 def load_yaml_obj_configs(fpath: str):

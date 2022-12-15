@@ -1,7 +1,6 @@
-import warnings
 import kubernetes.client as k8s
 
-from typing import List, Optional, Union, Dict
+from typing import List, Union
 from airflow_kubernetes_job_operator.exceptions import KubernetesJobOperatorException
 from airflow_kubernetes_job_operator.kube_api.collections import KubeResourceDescriptor
 from airflow_kubernetes_job_operator.job_runner import JobRunnerDeletePolicy
@@ -12,63 +11,61 @@ from airflow_kubernetes_job_operator.config import (
     DEFAULT_EXECUTION_OBJECT_PATHS,
     KubernetesJobOperatorDefaultExecutionResource,
 )
+
 from airflow_kubernetes_job_operator.kubernetes_legacy_pod_generators import (
     create_legacy_kubernetes_pod,
-    Volume,
-    Port,
-    VolumeMount,
     Secret,
-    Resources,
-    Affinity,
-    PodRuntimeInfoEnv,
 )
 
 
 class KubernetesLegacyJobOperator(KubernetesJobOperator):
+    BASE_CONTAINER_NAME: str = "main"
+
     def __init__(
         self,
         *args,
-        namespace: Optional[str] = None,
-        image: Optional[str] = None,
-        name: Optional[str] = None,
-        cmds: Optional[List[str]] = None,
-        arguments: Optional[List[str]] = None,
-        ports: Optional[List[Port]] = None,
-        volume_mounts: Optional[List[VolumeMount]] = None,
-        volumes: Optional[List[Volume]] = None,
-        env_vars: Optional[Union[dict, List[k8s.V1EnvVar]]] = None,
-        env_from: Optional[List[k8s.V1EnvFromSource]] = None,
-        secrets: Optional[List[Secret]] = None,
-        in_cluster: Optional[bool] = None,
-        cluster_context: Optional[str] = None,
-        labels: Optional[Dict] = None,
+        namespace: str = None,
+        image: str = None,
+        name: str = None,
+        random_name_suffix: bool = True,
+        cmds: List[str] = None,
+        arguments: List[str] = None,
+        ports: List[k8s.V1ContainerPort] = None,
+        volume_mounts: List[k8s.V1VolumeMount] = None,
+        volumes: List[k8s.V1Volume] = None,
+        env_vars: List[k8s.V1EnvVar] = None,
+        env_from: List[k8s.V1EnvFromSource] = None,
+        secrets: List[Secret] = None,
+        in_cluster: bool = None,
+        cluster_context: str = None,
+        labels: dict = None,
         reattach_on_restart: bool = True,
         startup_timeout_seconds: int = 120,
         get_logs: bool = True,
-        image_pull_policy: Optional[str] = None,
-        annotations: Optional[Dict] = None,
-        resources: Optional[Resources] = None,
-        affinity: Optional[Affinity] = None,
-        config_file: Optional[str] = None,
-        node_selectors: Optional[dict] = None,
-        node_selector: Optional[dict] = None,
-        image_pull_secrets: Optional[Union[List[k8s.V1LocalObjectReference], str]] = None,
-        service_account_name: Optional[str] = None,
-        is_delete_operator_pod: bool = False,
+        image_pull_policy: str = None,
+        annotations: dict = None,
+        container_resources: k8s.V1ResourceRequirements = None,
+        affinity: k8s.V1Affinity = None,
+        config_file: str = None,
+        node_selector: dict = None,
+        image_pull_secrets: List[k8s.V1LocalObjectReference] = None,
+        service_account_name: str = None,
+        is_delete_operator_pod: bool = True,
         hostnetwork: bool = False,
-        tolerations: Optional[List[k8s.V1Toleration]] = None,
-        security_context: Optional[Dict] = None,
-        dnspolicy: Optional[str] = None,
-        schedulername: Optional[str] = None,
-        full_pod_spec: Optional[k8s.V1Pod] = None,
-        init_containers: Optional[List[k8s.V1Container]] = None,
+        tolerations: List[k8s.V1Toleration] = None,
+        security_context: dict = None,
+        container_security_context: dict = None,
+        dnspolicy: str = None,
+        schedulername: str = None,
+        full_pod_spec: k8s.V1Pod = None,
+        init_containers: List[k8s.V1Container] = None,
         log_events_on_failure: bool = False,
         do_xcom_push: bool = False,
-        pod_template_file: Optional[str] = None,
-        priority_class_name: Optional[str] = None,
-        pod_runtime_info_envs: List[PodRuntimeInfoEnv] = None,
-        termination_grace_period: Optional[int] = None,
-        configmaps: Optional[str] = None,
+        pod_template_file: str = None,
+        priority_class_name: str = None,
+        pod_runtime_info_envs: List[k8s.V1EnvVar] = None,
+        termination_grace_period: int = None,
+        configmaps: List[str] = None,
         # job operator args
         body: str = None,
         body_filepath: str = None,
@@ -90,78 +87,80 @@ class KubernetesLegacyJobOperator(KubernetesJobOperator):
 
         NOTE: xcom has not been implemented.
 
-        :param image: Docker image you wish to launch. Defaults to dockerhub.io,
-            but fully qualified URLS will point to custom repositories
-        :type image: str
-        :param namespace: the namespace to run within kubernetes
-        :type namespace: str
-        :param name: The name prefix for the executing pod. (default: task_id)
-        :type name: str
+        .. seealso::
+            For more information on how to use this operator, take a look at the guide:
+            :ref:`howto/operator:KubernetesPodOperator`
+
+        .. note::
+            If you use `Google Kubernetes Engine <https://cloud.google.com/kubernetes-engine/>`__
+            and Airflow is not running in the same cluster, consider using
+            :class:`~airflow.providers.google.cloud.operators.kubernetes_engine.GKEStartPodOperator`, which
+            simplifies the authorization process.
+
+        :param namespace: the namespace to run within kubernetes.
+        :param image: Docker image you wish to launch. Defaults to hub.docker.com,
+            but fully qualified URLS will point to custom repositories. (templated)
+        :param name: name of the pod in which the task will run, will be used (plus a random
+            suffix if random_name_suffix is True) to generate a pod id (DNS-1123 subdomain,
+            containing only [a-z0-9.-]).
+        :param random_name_suffix: if True, will generate a random suffix.
         :param cmds: entrypoint of the container. (templated)
-            The docker images's entrypoint is used if this is not provide.
-        :type cmds: list[str]
+            The docker images's entrypoint is used if this is not provided.
         :param arguments: arguments of the entrypoint. (templated)
             The docker image's CMD is used if this is not provided.
-        :type arguments: list[str]
-        :param image_pull_policy: Specify a policy to cache or always pull an image
-        :type image_pull_policy: str
-        :param image_pull_secrets: Any image pull secrets to be given to the pod.
-                                If more than one secret is required, provide a
-                                comma separated list: secret_a,secret_b
-        :type image_pull_secrets: str
-        :param ports: ports for launched pod
-        :type ports: list
-        :param volume_mounts: volumeMounts for launched pod
-        :type volume_mounts: list[airflow.contrib.kubernetes.volume_mount.VolumeMount]
-        :param volumes: volumes for launched pod. Includes ConfigMaps and PersistentVolumes
-        :type volumes: list[airflow.contrib.kubernetes.volume.Volume]
-        :param labels: labels to apply to the Pod
-        :type labels: dict
-        :param startup_timeout_seconds: timeout in seconds to startup the pod
-        :type startup_timeout_seconds: int
-        :param name: name of the task you want to run,
-            will be used to generate a pod id
-        :type name: str
+        :param ports: ports for the launched pod.
+        :param volume_mounts: volumeMounts for the launched pod.
+        :param volumes: volumes for the launched pod. Includes ConfigMaps and PersistentVolumes.
         :param env_vars: Environment variables initialized in the container. (templated)
-        :type env_vars: dict
-        :param secrets: Kubernetes secrets to inject in the container,
+        :param env_from: (Optional) List of sources to populate environment variables in the container.
+        :param secrets: Kubernetes secrets to inject in the container.
             They can be exposed as environment vars or files in a volume.
-        :type secrets: list[airflow.contrib.kubernetes.secret.Secret]
-        :param in_cluster: run kubernetes client with in_cluster configuration (if None autodetect)
-        :type in_cluster: bool
+        :param in_cluster: run kubernetes client with in_cluster configuration.
         :param cluster_context: context that points to kubernetes cluster.
             Ignored when in_cluster is True. If None, current-context is used.
-        :type cluster_context: str
-        :param get_logs: get the stdout of the container as logs of the tasks
-        :type get_logs: bool
+        :param reattach_on_restart: if the worker dies while the pod is running, reattach and monitor
+            during the next try. If False, always create a new pod for each try.
+        :param labels: labels to apply to the Pod. (templated)
+        :param startup_timeout_seconds: timeout in seconds to startup the pod.
+        :param get_logs: get the stdout of the container as logs of the tasks.
+        :param image_pull_policy: Specify a policy to cache or always pull an image.
         :param annotations: non-identifying metadata you can attach to the Pod.
-                            Can be a large range of data, and can include characters
-                            that are not permitted by labels.
-        :type annotations: dict
-        :param resources: A dict containing a group of resources requests and limits
-        :type resources: dict
-        :param affinity: A dict containing a group of affinity scheduling rules
-        :type affinity: dict
-        :param node_selectors: A dict containing a group of scheduling rules
-        :type node_selectors: dict
-        :param config_file: The path to the Kubernetes config file
-        :type config_file: str
+            Can be a large range of data, and can include characters
+            that are not permitted by labels.
+        :param container_resources: resources for the launched pod. (templated)
+        :param affinity: affinity scheduling rules for the launched pod.
+        :param config_file: The path to the Kubernetes config file. (templated)
+            If not specified, default value is ``~/.kube/config``
+        :param node_selector: A dict containing a group of scheduling rules.
+        :param image_pull_secrets: Any image pull secrets to be given to the pod.
+            If more than one secret is required, provide a
+            comma separated list: secret_a,secret_b
+        :param service_account_name: Name of the service account
         :param is_delete_operator_pod: What to do when the pod reaches its final
-            state, or the execution is interrupted.
-            If False (default): do nothing, If True: delete the pod if succeeded
-        :type is_delete_operator_pod: bool
-        :param hostnetwork: If True enable host networking on the pod
-        :type hostnetwork: bool
-        :param tolerations: A list of kubernetes tolerations
-        :type tolerations: list tolerations
-        :param configmaps: A list of configmap names objects that we
-            want mount as env variables
-        :type configmaps: list[str]
-        :param pod_runtime_info_envs: environment variables about
-                                    pod runtime information (ip, namespace, nodeName, podName)
-        :type pod_runtime_info_envs: list[PodRuntimeEnv]
-        :param dnspolicy: Specify a dnspolicy for the pod
-        :type dnspolicy: str
+            state, or the execution is interrupted. If True (default), delete the
+            pod; if False, leave the pod.
+        :param hostnetwork: If True enable host networking on the pod.
+        :param tolerations: A list of kubernetes tolerations.
+        :param security_context: security options the pod should run with (PodSecurityContext).
+        :param container_security_context: security options the container should run with.
+        :param dnspolicy: dnspolicy for the pod.
+        :param schedulername: Specify a schedulername for the pod
+        :param full_pod_spec: The complete podSpec
+        :param init_containers: init container for the launched Pod
+        :param log_events_on_failure: Log the pod's events if a failure occurs
+        :param do_xcom_push: If True, the content of the file
+            /airflow/xcom/return.json in the container will also be pushed to an
+            XCom when the container completes.
+        :param pod_template_file: path to pod template file (templated)
+        :param priority_class_name: priority class name for the launched Pod
+        :param pod_runtime_info_envs: (Optional) A list of environment variables,
+            to be set in the container.
+        :param termination_grace_period: Termination grace period if task killed in UI,
+            defaults to kubernetes default
+        :param configmaps: (Optional) A list of names of config maps from which it collects ConfigMaps
+            to populate the environment variables with. The contents of the target
+            ConfigMap's Data field will represent the key-value pairs as environment variables.
+            Extends env_from.
 
         Added arguments:
 
@@ -229,24 +228,17 @@ class KubernetesLegacyJobOperator(KubernetesJobOperator):
         self.volume_mounts = volume_mounts or []
         self.volumes = volumes or []
         self.secrets = secrets or []
-        if node_selectors:
-            # Node selectors is incorrect based on k8s API
-            warnings.warn("node_selectors is deprecated. Please use node_selector instead.", DeprecationWarning)
-            self.node_selector = node_selectors
-        elif node_selector:
-            self.node_selector = node_selector
-        else:
-            self.node_selector = {}
-
+        self.node_selector = node_selector or {}
         self.annotations = annotations or {}
         self.affinity = affinity or {}
-        self.resources = self._set_resources(resources)
+        self.container_resources = container_resources
         self.image_pull_secrets = image_pull_secrets
         self.service_account_name = service_account_name
         self.hostnetwork = hostnetwork
         self.tolerations = tolerations or []
         self.configmaps = configmaps or []
         self.security_context = security_context or {}
+        self.container_security_context = container_security_context or {}
         self.pod_runtime_info_envs = pod_runtime_info_envs or []
         self.dnspolicy = dnspolicy
 
@@ -264,14 +256,6 @@ class KubernetesLegacyJobOperator(KubernetesJobOperator):
         self.env_vars = env_vars
         self.schedulername = schedulername
         self.priority_class_name = priority_class_name
-
-    def _set_resources(self, resources):
-        # Legacy
-        inputResource = Resources()
-        if resources:
-            for item in resources.keys():
-                setattr(inputResource, item, resources[item])
-        return inputResource
 
     def prepare_and_update_body(self):
         # call to prepare the raw body.
