@@ -8,7 +8,6 @@ black = "*"
 flake8 = "*"
 
 [packages]
-sqlalchemy = "< 1.4.0"
 apache-airflow = ">=2.3.3"
 apache-airflow-providers-cncf-kubernetes=">=4.3.0"
 airflow-db-logger = ">=2.0.3"
