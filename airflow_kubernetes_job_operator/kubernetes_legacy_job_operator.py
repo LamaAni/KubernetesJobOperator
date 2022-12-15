@@ -12,6 +12,7 @@ from airflow_kubernetes_job_operator.config import (
     DEFAULT_EXECUTION_OBJECT_PATHS,
     KubernetesJobOperatorDefaultExecutionResource,
 )
+
 from airflow_kubernetes_job_operator.kubernetes_legacy_pod_generators import (
     create_legacy_kubernetes_pod,
     Volume,

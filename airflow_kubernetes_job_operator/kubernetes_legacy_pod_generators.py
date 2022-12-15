@@ -1,6 +1,6 @@
 from typing import TYPE_CHECKING, List
 from airflow.contrib.operators.kubernetes_pod_operator import KubernetesPodOperator
-from airflow_kubernetes_job_operator.config import AIRFLOW_MAJOR_VERSION, AIRFLOW_PATCH_VERSION
+from airflow_kubernetes_job_operator.config import AIRFLOW_MAJOR_VERSION, AIRFLOW_MINOR_VERSION, AIRFLOW_PATCH_VERSION
 
 
 # Loading libraries with backwards compatability
@@ -17,8 +17,11 @@ if AIRFLOW_MAJOR_VERSION == 1 and AIRFLOW_PATCH_VERSION <= 10:
 else:
     if AIRFLOW_MAJOR_VERSION == 1:
         from airflow.contrib.kubernetes.pod_runtime_info_env import PodRuntimeInfoEnv
-    else:
+    elif AIRFLOW_MAJOR_VERSION == 2 and AIRFLOW_MINOR_VERSION < 4:
         from airflow.providers.cncf.kubernetes.backcompat.pod_runtime_info_env import PodRuntimeInfoEnv
+    else:
+        from airflow.kubernetes.pod_runtime_info_env import PodRuntimeInfoEnv
+
     from kubernetes.client import CoreV1Api, models as k8s
     from kubernetes.client import (
         V1ResourceRequirements as Resources,
