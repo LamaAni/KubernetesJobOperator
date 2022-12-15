@@ -4,15 +4,16 @@ from airflow_kubernetes_job_operator.config import AIRFLOW_MAJOR_VERSION, AIRFLO
 
 
 # Loading libraries with backwards compatability
-if AIRFLOW_MAJOR_VERSION <2:
-    def create_legacy_kubernetes_pod_airflow_from_provider(*args,**kwargs):
+if AIRFLOW_MAJOR_VERSION < 2:
+
+    def create_legacy_kubernetes_pod_airflow_from_provider(*args, **kwargs):
         raise KubernetesJobOperatorException("Kubernetes legacy job operator is supported for airflow 2.0 and up")
+
 else:
 
     from kubernetes.client import CoreV1Api, models as k8s
     from airflow.kubernetes.secret import Secret
     from kubernetes.client.models import V1Secret
-
 
     if TYPE_CHECKING:
         from airflow_kubernetes_job_operator.kubernetes_legacy_job_operator import KubernetesLegacyJobOperator
@@ -45,86 +46,45 @@ else:
                 env_from.append(map)
 
         pod = operator.full_pod_spec or k8s.V1Pod(
-                api_version="v1",
-                kind="Pod",
-                metadata=k8s.V1ObjectMeta(
-                    namespace=operator.namespace,
-                    labels=operator.labels,
-                    name=operator.name_prefix,
-                    annotations=operator.annotations,
-                ),
-                spec=k8s.V1PodSpec(
-                    node_selector=operator.node_selector,
-                    affinity=operator.affinity,
-                    tolerations=operator.tolerations,
-                    init_containers=operator.init_containers,
-                    containers=[
-                        k8s.V1Container(
-                            image=operator.image,
-                            name=operator.BASE_CONTAINER_NAME,
-                            command=operator.command,
-                            ports=operator.ports,
-                            image_pull_policy=operator.image_pull_policy,
-                            resources=operator.container_resources,
-                            volume_mounts=operator.volume_mounts,
-                            args=operator.arguments,
-                            env=operator.env_vars,
-                            env_from=operator.env_from,
-                            security_context=operator.container_security_context,
-                        )
-                    ],
-                    image_pull_secrets=operator.image_pull_secrets,
-                    service_account_name=operator.service_account_name,
-                    host_network=operator.hostnetwork,
-                    security_context=operator.security_context,
-                    dns_policy=operator.dnspolicy,
-                    scheduler_name=operator.schedulername,
-                    restart_policy="Never",
-                    priority_class_name=operator.priority_class_name,
-                    volumes=operator.volumes,
-                ),
-            )
-
-        # pod = operator.full_pod_spec or k8s.V1Pod(
-        #     api_version="v1",
-        #     kind="Pod",
-        #     metadata=k8s.V1ObjectMeta(
-        #         namespace=operator.namespace,
-        #         labels=operator.labels,
-        #         name=operator.name_prefix,
-        #         annotations=operator.annotations,
-        #     ),
-        #     spec=k8s.V1PodSpec(
-        #         termination_grace_period_seconds=operator.termination_grace_period,
-        #         node_selector=operator.node_selector,
-        #         affinity=operator.affinity,
-        #         tolerations=operator.tolerations,
-        #         init_containers=operator.init_containers,
-        #         containers=[
-        #             k8s.V1Container(
-        #                 name="main",
-        #                 image=operator.image,
-        #                 command=operator.command,
-        #                 ports=operator.ports,
-        #                 resources=operator.resources,
-        #                 volume_mounts=operator.volume_mounts,
-        #                 args=operator.arguments,
-        #                 env=env_vars,
-        #                 env_from=env_from,
-        #                 image_pull_policy=operator.image_pull_policy,
-        #             )
-        #         ],
-        #         image_pull_secrets=operator.image_pull_secrets,
-        #         service_account_name=operator.service_account_name,
-        #         host_network=operator.hostnetwork,
-        #         security_context=operator.security_context,
-        #         dns_policy=operator.dnspolicy,
-        #         scheduler_name=operator.schedulername,
-        #         restart_policy="Never",
-        #         priority_class_name=operator.priority_class_name,
-        #         volumes=operator.volumes,
-        #     ),
-        # )
+            api_version="v1",
+            kind="Pod",
+            metadata=k8s.V1ObjectMeta(
+                namespace=operator.namespace,
+                labels=operator.labels,
+                name=operator.name_prefix,
+                annotations=operator.annotations,
+            ),
+            spec=k8s.V1PodSpec(
+                node_selector=operator.node_selector,
+                affinity=operator.affinity,
+                tolerations=operator.tolerations,
+                init_containers=operator.init_containers,
+                containers=[
+                    k8s.V1Container(
+                        image=operator.image,
+                        name=operator.BASE_CONTAINER_NAME,
+                        command=operator.command,
+                        ports=operator.ports,
+                        image_pull_policy=operator.image_pull_policy,
+                        resources=operator.container_resources,
+                        volume_mounts=operator.volume_mounts,
+                        args=operator.arguments,
+                        env=operator.env_vars,
+                        env_from=operator.env_from,
+                        security_context=operator.container_security_context,
+                    )
+                ],
+                image_pull_secrets=operator.image_pull_secrets,
+                service_account_name=operator.service_account_name,
+                host_network=operator.hostnetwork,
+                security_context=operator.security_context,
+                dns_policy=operator.dnspolicy,
+                scheduler_name=operator.schedulername,
+                restart_policy="Never",
+                priority_class_name=operator.priority_class_name,
+                volumes=operator.volumes,
+            ),
+        )
 
         for secret in operator.secrets:
             pod = secret.attach_to_pod(pod)
