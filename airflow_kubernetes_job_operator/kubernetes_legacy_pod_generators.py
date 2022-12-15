@@ -12,6 +12,7 @@ if AIRFLOW_MAJOR_VERSION < 2:
 else:
 
     from kubernetes.client import models as k8s
+    from airflow.kubernetes.secret import Secret  # noqa F401
 
     if TYPE_CHECKING:
         from airflow_kubernetes_job_operator.kubernetes_legacy_job_operator import KubernetesLegacyJobOperator
