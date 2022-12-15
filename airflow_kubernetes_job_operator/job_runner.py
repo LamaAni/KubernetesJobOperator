@@ -10,7 +10,6 @@ from airflow_kubernetes_job_operator.utils import random_string
 from airflow_kubernetes_job_operator.collections import JobRunnerDeletePolicy, JobRunnerException
 from airflow_kubernetes_job_operator.config import SHOW_RUNNER_ID_IN_LOGS
 from airflow_kubernetes_job_operator.kube_api import (
-    EventHandler,
     KubeApiConfiguration,
     GetAPIVersions,
     KubeLogApiEvent,

@@ -393,7 +393,7 @@ class KubeResourceDescriptor:
 
     @property
     def spec(self) -> dict:
-        return self.body.get("spec")
+        return self.body.get("spec", {})
 
     @property
     def status(self) -> dict:
@@ -422,10 +422,6 @@ class KubeResourceDescriptor:
     @property
     def metadata(self) -> dict:
         return self.body.get("metadata", {})
-
-    @property
-    def spec(self) -> dict:
-        return self.body.get("spec", {})
 
     @property
     def api_version(self) -> str:

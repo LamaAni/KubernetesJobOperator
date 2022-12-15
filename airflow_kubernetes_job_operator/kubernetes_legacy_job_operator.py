@@ -1,7 +1,6 @@
-import warnings
 import kubernetes.client as k8s
 
-from typing import List, Optional, Union, Dict
+from typing import List, Union
 from airflow_kubernetes_job_operator.exceptions import KubernetesJobOperatorException
 from airflow_kubernetes_job_operator.kube_api.collections import KubeResourceDescriptor
 from airflow_kubernetes_job_operator.job_runner import JobRunnerDeletePolicy

@@ -1,6 +1,6 @@
 from typing import TYPE_CHECKING, List
 from airflow_kubernetes_job_operator.exceptions import KubernetesJobOperatorException
-from airflow_kubernetes_job_operator.config import AIRFLOW_MAJOR_VERSION, AIRFLOW_MINOR_VERSION, AIRFLOW_PATCH_VERSION
+from airflow_kubernetes_job_operator.config import AIRFLOW_MAJOR_VERSION
 
 
 # Loading libraries with backwards compatability
@@ -11,9 +11,7 @@ if AIRFLOW_MAJOR_VERSION < 2:
 
 else:
 
-    from kubernetes.client import CoreV1Api, models as k8s
-    from airflow.kubernetes.secret import Secret
-    from kubernetes.client.models import V1Secret
+    from kubernetes.client import models as k8s
 
     if TYPE_CHECKING:
         from airflow_kubernetes_job_operator.kubernetes_legacy_job_operator import KubernetesLegacyJobOperator
