@@ -32,7 +32,10 @@ def get_version():
 setup(
     name="airflow_kubernetes_job_operator",
     version=get_version(),
-    description="An airflow job operator that executes a task as a Kubernetes job on a cluster, given a job yaml configuration or an image uri.",
+    description=(
+        "An airflow job operator that executes a task as a Kubernetes job on a cluster, "
+        "given a job yaml configuration or an image uri."
+    ),
     long_description="Please see readme.md @ https://github.com/LamaAni/KubernetesJobOperator",
     classifiers=[],
     author="Zav Shotan",

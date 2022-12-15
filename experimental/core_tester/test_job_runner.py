@@ -2,7 +2,6 @@ import kubernetes
 import os
 import yaml
 from utils import logging, load_raw_formatted_file
-from datetime import datetime
 from airflow_kubernetes_job_operator.job_runner import JobRunner
 
 logging.basicConfig(level="INFO")

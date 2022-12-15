@@ -1,2 +1,2 @@
-from kubernetes.client import CoreV1Api
-from kubernetes.client import CustomObjectsApi
+from kubernetes.client import CoreV1Api  # noqa F401
+from kubernetes.client import CustomObjectsApi  # noqa F401

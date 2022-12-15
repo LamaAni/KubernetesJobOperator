@@ -9,4 +9,3 @@ KubeApiConfiguration.register_kind(
     api_version="hc.dto.cbsinteractive.com/v1alpha1",
     parse_kind_state=KubeResourceKind.parse_state_job,
 )
-

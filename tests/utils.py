@@ -65,7 +65,7 @@ def load_default_kube_config():
         -----------------------------------------------------------------------
         Context: {KubeApiConfiguration.get_active_context_info(config)}
         home directory: {os.path.expanduser('~')}
-        Config host: {config.host} 
+        Config host: {config.host}
         Config filepath: {config.filepath}
         Default namespace: {KubeApiConfiguration.get_default_namespace(config)}
         Executing dags in python version: {print_version}

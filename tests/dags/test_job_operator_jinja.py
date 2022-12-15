@@ -1,5 +1,4 @@
 from utils import default_args, name_from_file
-from datetime import timedelta
 from airflow import DAG
 from airflow_kubernetes_job_operator import (
     KubernetesJobOperator,
