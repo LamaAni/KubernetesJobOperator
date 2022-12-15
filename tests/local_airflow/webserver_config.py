@@ -15,16 +15,17 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-"""Default configuration for the Airflow webserver"""
+"""Default configuration for the Airflow webserver."""
+from __future__ import annotations
+
 import os
 
-from flask_appbuilder.security.manager import AUTH_DB
+from airflow.www.fab_security.manager import AUTH_DB
 
-# from flask_appbuilder.security.manager import AUTH_LDAP
-# from flask_appbuilder.security.manager import AUTH_OAUTH
-# from flask_appbuilder.security.manager import AUTH_OID
-# from flask_appbuilder.security.manager import AUTH_REMOTE_USER
-
+# from airflow.www.fab_security.manager import AUTH_LDAP
+# from airflow.www.fab_security.manager import AUTH_OAUTH
+# from airflow.www.fab_security.manager import AUTH_OID
+# from airflow.www.fab_security.manager import AUTH_REMOTE_USER
 
 basedir = os.path.abspath(os.path.dirname(__file__))
 
@@ -47,13 +48,13 @@ WTF_CSRF_ENABLED = True
 AUTH_TYPE = AUTH_DB
 
 # Uncomment to setup Full admin role name
-# AUTH_ROLE_ADMIN = 'Admin'
+AUTH_ROLE_ADMIN = "Admin"
 
-# Uncomment to setup Public role name, no authentication needed
-AUTH_ROLE_PUBLIC = 'Admin'
+# Uncomment and set to desired role to enable access without authentication
+AUTH_ROLE_PUBLIC = "Admin"
 
 # Will allow user self registration
-# AUTH_USER_REGISTRATION = True
+AUTH_USER_REGISTRATION = False
 
 # The recaptcha it's automatically enabled for user self registration is active and the keys are necessary
 # RECAPTCHA_PRIVATE_KEY = PRIVATE_KEY

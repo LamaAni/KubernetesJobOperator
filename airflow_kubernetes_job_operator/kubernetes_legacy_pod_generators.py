@@ -1,6 +1,5 @@
 from typing import TYPE_CHECKING, List
 from airflow_kubernetes_job_operator.exceptions import KubernetesJobOperatorException
-from airflow.contrib.operators.kubernetes_pod_operator import KubernetesPodOperator
 from airflow_kubernetes_job_operator.config import AIRFLOW_MAJOR_VERSION, AIRFLOW_MINOR_VERSION, AIRFLOW_PATCH_VERSION
 
 

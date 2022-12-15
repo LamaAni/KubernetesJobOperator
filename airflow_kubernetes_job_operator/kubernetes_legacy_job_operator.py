@@ -16,13 +16,11 @@ from airflow_kubernetes_job_operator.config import (
 from airflow_kubernetes_job_operator.kubernetes_legacy_pod_generators import (
     create_legacy_kubernetes_pod,
     Secret,
-    Resources,
-    Affinity,
 )
 
 
 class KubernetesLegacyJobOperator(KubernetesJobOperator):
-    BASE_CONTAINER_NAME:str="main"
+    BASE_CONTAINER_NAME: str = "main"
 
     def __init__(
         self,
@@ -231,17 +229,17 @@ class KubernetesLegacyJobOperator(KubernetesJobOperator):
         self.volume_mounts = volume_mounts or []
         self.volumes = volumes or []
         self.secrets = secrets or []
-        self.node_selector = node_selector or  {}
+        self.node_selector = node_selector or {}
         self.annotations = annotations or {}
         self.affinity = affinity or {}
-        self.container_resources = self._set_resources(container_resources)
+        self.container_resources = container_resources
         self.image_pull_secrets = image_pull_secrets
         self.service_account_name = service_account_name
         self.hostnetwork = hostnetwork
         self.tolerations = tolerations or []
         self.configmaps = configmaps or []
         self.security_context = security_context or {}
-        self.container_security_context=container_security_context or {}
+        self.container_security_context = container_security_context or {}
         self.pod_runtime_info_envs = pod_runtime_info_envs or []
         self.dnspolicy = dnspolicy
 
@@ -259,14 +257,6 @@ class KubernetesLegacyJobOperator(KubernetesJobOperator):
         self.env_vars = env_vars
         self.schedulername = schedulername
         self.priority_class_name = priority_class_name
-
-    def _set_resources(self, resources):
-        # Legacy
-        inputResource = Resources()
-        if resources:
-            for item in resources.keys():
-                setattr(inputResource, item, resources[item])
-        return inputResource
 
     def prepare_and_update_body(self):
         # call to prepare the raw body.

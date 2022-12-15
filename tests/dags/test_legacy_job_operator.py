@@ -30,17 +30,10 @@ echo "Complete"
 """
 with dag:
     KubernetesLegacyJobOperator(
-        task_id="legacy-test-job-success",
+        task_id="legacy-test-job-success-no-delete",
         image="ubuntu",
         cmds=["bash", "-c", bash_script],
         is_delete_operator_pod=False,
-        secrets=[
-            Secret(
-                deploy_type="volume",
-                deploy_target="/tmp",
-                secret="test-secret",
-            )
-        ],
     )
 
     KubernetesLegacyJobOperator(
@@ -89,6 +82,4 @@ with dag:
     )
 
 if __name__ == "__main__":
-    dag.clear()
-    # dag.clear()
-    dag.run()
+    dag.test()
