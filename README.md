@@ -27,7 +27,7 @@ If you enjoyed using this repo, please consider posting in the [use cases and te
 ### Two operator classes are available
 
 1. KubernetesJobOperator - Supply a kubernetes configuration (yaml file, yaml string or a list of python dictionaries) as the body of the task.
-1. KubernetesLegacyJobOperator (only airflow 2.0 and up) - Defaults to a kubernetes job definition, and supports the same arguments as the KubernetesPodOperator. i.e. replace with the KubernetesPodOperator for legacy support. (requires installing apache-airflow-providers-cncf-kubernetes package)
+1. KubernetesLegacyJobOperator (only airflow 2.0 and up) - Defaults to a kubernetes job definition, and supports the same arguments as the KubernetesPodOperator. i.e. replace with the KubernetesPodOperator for legacy support. 
 
 # Install
 
@@ -241,6 +241,64 @@ To use xcom with KubernetesJobOperator simply add a log line to your pod log out
 
 Note the value of the xcom must be in json format (for the default parser).
 
+
+# Kubernetes RBAC rules
+
+The following are the [Kubernetes service account](https://jamesdefabia.github.io/docs/user-guide/service-accounts/) [RBAC](https://kubernetes.io/docs/reference/access-authn-authz/rbac/) rules required for executing jobs via the operator.
+
+```
+rules:
+  # Required when reading logs for the executed job.
+  - verbs:
+      - get
+      - watch
+      - list
+    apiGroups:
+      - ''
+    resources:
+      - pods/log
+      - pods
+  # Required for executing the job
+  - verbs:
+      - create
+      - get
+      - delete
+      - watch
+      - list
+      - patch
+      - update
+    apiGroups:
+      - batch
+    resources:
+      - jobs
+  # Required for using configmaps in the job
+  - verbs:
+      - create
+      - get
+      - delete
+      - watch
+      - list
+      - patch
+      - update
+    apiGroups:
+      - ''
+    resources:
+      - configmaps
+  # Required if reading secrets in the job.
+  - verbs:
+      - create
+      - get
+      - delete
+      - watch
+      - list
+      - patch
+      - update
+    apiGroups:
+      - ''
+    resources:
+      - secrets
+```
+
 # Why would this be better than the [KubernetesPodOperator](https://github.com/apache/airflow/blob/master/airflow/contrib/operators/kubernetes_pod_operator.p)?
 
 The KubernetesJobOperator allows more advanced features such as multiple resource execution, custom resource executions, creation event and pod log tracking, proper resource deletion (after task is complete or on error, when task is cancelled) and more.
@@ -248,6 +306,7 @@ The KubernetesJobOperator allows more advanced features such as multiple resourc
 Further, in the KubernetesPodOperator the monitoring between the worker pod and airflow is done by an internal loop which consumes worker resources. In this operator, an async threaded approach was taken which reduces resource consumption on the worker. Further, since the logging and parsing of data is done outside of the main worker thread, the worker is "free" do handle other tasks without interruption.
 
 Finally, using the KubernetesJobOperator you are free to use other resources like the kubernetes [Job](https://kubernetes.io/docs/concepts/workloads/controllers/jobs-run-to-completion/) to execute your tasks. These are better designed for use in kubernetes and are "up with the times".
+
 
 # Contribution
 
