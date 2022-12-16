@@ -9,8 +9,9 @@ fi
 : "${RUN_PATH:="$(realpath "$(dirname "${BASH_SOURCE[0]}")")"}"
 : "${IMAGE_TAG:="airflow_kubernetes_job_operator_example_image"}"
 : "${DAGS_PATH:="$(realpath "$RUN_PATH/../../tests/dags")"}"
+: "${KUBE_CONFIG:="$HOME/.kube/config"}"
 
 docker build -t "$IMAGE_TAG" "$RUN_PATH" &&
     docker run -it --rm --network host \
-        -v "$HOME/.kube/config:/home/airflow/.kube/config" \
+        -v "$KUBE_CONFIG:/home/airflow/.kube/config" \
         -v "$DAGS_PATH:/opt/airflow/dags" "$IMAGE_TAG"
