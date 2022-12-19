@@ -617,8 +617,8 @@ class KubeApiRestClient:
 
         for q in queries:
             self._active_queries.add(q)
-            q.on(q.query_ended_event_name, lambda query, client: remove_from_pending(query))
             q.on(q.error_event_name, lambda query, err: remove_from_pending(query, err))
+            q.on(q.query_ended_event_name, lambda query, client: remove_from_pending(query))
             q.pipe(handler)
 
         return handler

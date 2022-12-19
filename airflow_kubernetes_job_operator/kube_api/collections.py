@@ -196,11 +196,11 @@ class KubeResourceKind:
     @classmethod
     def all(cls) -> List["KubeResourceKind"]:
         global kinds_collection
-        return kinds_collection.values()
+        return list(kinds_collection.values())
 
     @classmethod
-    def parseable(cls) -> List["KubeResourceKind"]:
-        """Returns all parseable kinds (i.e. have parse_kind_state not None)"""
+    def parsable(cls) -> List["KubeResourceKind"]:
+        """Returns all parsable kinds (i.e. have parse_kind_state not None)"""
         return [k for k in cls.all() if k.parse_kind_state is not None]
 
     @classmethod
@@ -211,7 +211,7 @@ class KubeResourceKind:
     @classmethod
     def all_names(cls) -> List[str]:
         global kinds_collection
-        return kinds_collection.keys()
+        return list(kinds_collection.keys())
 
     @classmethod
     def register_global_kind(cls, kind: "KubeResourceKind"):
@@ -292,6 +292,13 @@ class KubeResourceKind:
 
         pod_phase = status.get("phase")
         if pod_phase == "Pending":
+            # check for image pull back-off
+            container_statuses: List[dict] = status.get("containerStatuses", [])
+            for container_status in container_statuses:
+                waiting_reason = container_status.get("state", {}).get("waiting", {}).get("reason")
+                if waiting_reason == "ImagePullBackOff":
+                    return KubeResourceState.Failed
+
             return KubeResourceState.Pending
         elif pod_phase == "Succeeded":
             return KubeResourceState.Succeeded

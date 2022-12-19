@@ -275,22 +275,19 @@ class JobRunner:
         self.prepare_body()
 
         # prepare the run objects.
-        namespaces: List[str] = []
-        all_kinds: List[KubeResourceKind] = list(KubeResourceKind.watchable())
         descriptors = [KubeResourceDescriptor(r) for r in self.body]
-
         assert len(descriptors) > 0, JobRunnerException("You must have at least one resource to execute.")
-
-        state_object = descriptors[0]
-
         assert all(d.kind is not None for d in descriptors), JobRunnerException(
             "All resources in execution must have a recognizable object kind: (resource['kind'] is not None)"
         )
 
-        assert state_object.kind.parse_kind_state is not None, JobRunnerException(
-            "The first object in the object list must have a kind with a parseable state, "
+        # The resource, for which the execution state (running/errored/done) is determined
+        execution_state_resource = descriptors[0]
+
+        assert execution_state_resource.kind.parse_kind_state is not None, JobRunnerException(
+            "The first object in the object list must have a kind with a parsable state, "
             + "where the states Failed or Succeeded are returned when the object finishes execution."
-            + f"Active kinds with parseable states are: {[k.name for k in KubeResourceKind.parseable()]}. "
+            + f"Active kinds with parsable states are: {[k.name for k in KubeResourceKind.parsable()]}. "
             + "To register new kinds or add a parse_kind_state use "
             + "KubeResourceKind.register_global_kind(..) and associated methods. "
             + "more information cab be found @ "
@@ -298,26 +295,27 @@ class JobRunner:
         )
 
         # scan the api and get all current watchable kinds.
-        watchable_kinds = GetAPIVersions.get_existing_api_kinds(self.client, all_kinds)
+        resource_kinds = list(set([r.kind for r in descriptors if isinstance(r.kind, KubeResourceKind)]))
+        resource_namespaces = list(set([r.namespace for r in descriptors if isinstance(r.namespace, str)]))
 
+        existing_kinds = GetAPIVersions.get_existing_api_kinds(
+            self.client,
+            resource_kinds,
+        )
+
+        # Validating all resources
         for resource in descriptors:
             assert resource.kind is not None, JobRunnerException("Cannot execute an object without a kind")
-            assert resource.kind in watchable_kinds, JobRunnerException(
+            assert resource.kind in existing_kinds, JobRunnerException(
                 "All resources specified in the execution (the body) must exist in the api. "
-                + f"The kind {str(state_object.kind)} was not found."
+                + f"The kind {str(resource.kind)} was not found."
             )
-            all_kinds.append(resource.kind)
-            if resource.namespace is not None:
-                namespaces.append(resource.namespace)
-
-        namespaces = list(set(namespaces))
-        all_kinds = list(set(all_kinds))
-
-        for kind in KubeResourceKind.watchable():
-            if kind not in watchable_kinds:
+            if not resource.kind.watchable():
                 self.log(
-                    f"Could not find kind '{kind}' in the api server. "
-                    + "This kind is not watched and events will not be logged",
+                    (
+                        f"The resource '{resource.name}' kind '{resource.kind.name}' is not watchable, "
+                        "and its events/logs will not be logged"
+                    ),
                     level=logging.WARNING,
                 )
 
@@ -325,10 +323,14 @@ class JobRunner:
         self.log(f"Executing context: {context_info.get('name','unknown')}")
         self.log(f"Executing cluster: {context_info.get('context',{}).get('cluster')}")
 
+        # The watchable kinds are all globally known kinds and and all resource kinds
+        # which are watchable. Legacy support
+        watchable_kinds = list(set(KubeResourceKind.watchable() + [k for k in resource_kinds if k.watchable()]))
+
         # create the watcher
         watcher = NamespaceWatchQuery(
             kinds=watchable_kinds,
-            namespace=list(set(namespaces)),  # type:ignore
+            namespace=resource_namespaces,  # type:ignore
             timeout=timeout,
             watch_pod_logs=self.show_pod_logs,
             label_selector=self.job_label_selector,
@@ -358,21 +360,21 @@ class JobRunner:
             )
 
         self.log(f"Started watcher for kinds: {', '.join(list(watcher.kinds.keys()))}")
-        self.log(f"Watching namespaces: {', '.join(namespaces)}")
+        self.log(f"Watching namespaces: {', '.join(resource_namespaces)}")
 
         # Creating the objects to run
         run_query_handler = self.client.query_async(self._create_body_operation_queries(CreateNamespaceResource))
         # binding the errors.
         run_query_handler.on(run_query_handler.error_event_name, lambda sender, err: watcher.emit_error(err))
 
-        self.log(f"Waiting for {state_object.namespace}/{state_object.name} to finish...")
+        self.log(f"Waiting for {execution_state_resource.namespace}/{execution_state_resource.name} to finish...")
 
         try:
             final_state: KubeResourceState = watcher.wait_for_state(
                 [KubeResourceState.Failed, KubeResourceState.Succeeded, KubeResourceState.Deleted],  # type:ignore
-                kind=state_object.kind,
-                name=state_object.name,
-                namespace=state_object.namespace,
+                kind=execution_state_resource.kind,
+                name=execution_state_resource.name,
+                namespace=execution_state_resource.namespace,
                 timeout=timeout,
             )
         except Exception as ex:
@@ -382,7 +384,7 @@ class JobRunner:
             raise ex
 
         if final_state == KubeResourceState.Deleted:
-            self.log(f"Failed to execute. Main resource {state_object} was delete", level=logging.ERROR)
+            self.log(f"Failed to execute. Main resource {execution_state_resource} was delete", level=logging.ERROR)
             self.abort()
             raise JobRunnerException("Resource was deleted while execution was running, execution failed.")
 
@@ -392,7 +394,7 @@ class JobRunner:
             # print the object states.
             kinds = [o.kind.name for o in watcher.watched_objects]
             queries: List[GetNamespaceResources] = []
-            for namespace in namespaces:
+            for namespace in resource_namespaces:
                 for kind in set(kinds):
                     queries.append(GetNamespaceResources(kind, namespace, label_selector=self.job_label_selector))
             self.log("Reading result error (status) objects..")

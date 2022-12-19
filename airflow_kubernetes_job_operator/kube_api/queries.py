@@ -377,7 +377,7 @@ class GetAPIVersions(KubeApiRestQuery):
     def parse_data(self, data):
         """Override data parse"""
         rslt = json.loads(data)
-        prased = {}
+        parsed = {}
         for grp in rslt.get("groups", []):
             group_name = grp.get("name")
             preferred = grp.get("preferredVersion", {}).get("version")
@@ -385,26 +385,31 @@ class GetAPIVersions(KubeApiRestQuery):
                 group_version = ver_info.get("groupVersion")
                 version = ver_info.get("version")
                 assert group_version is not None, KubeApiException("Invalid group version returned from the api")
-                prased[group_version] = {
+                parsed[group_version] = {
                     "group_name": group_name,
                     "is_preferred": preferred == version,
                     "version": version,
                     "group": grp,
                 }
-        return prased
+        return parsed
 
     @classmethod
-    def get_existing_api_kinds(cls, client: KubeApiRestClient, all_kinds: List[KubeResourceKind] = None):
+    def get_existing_api_kinds(
+        cls,
+        client: KubeApiRestClient,
+        all_kinds: List[KubeResourceKind] = None,
+    ):
         """Filter the list of kinds an returns only the api kinds
         found on the server.
 
         Args:
             all_kinds (List[KubeResourceKind], optional): The resource kinds to check. If none
-            checks all available kinds. Defaults to None.
+                checks all available kinds. Defaults to None = list of all defined kinds.
 
         Returns:
             List[KubeResourceKind]: The list of kinds that exist on the server.
         """
-        all_kinds = all_kinds or KubeResourceKind.all()
+
         apis = client.query(GetAPIVersions())
+        all_kinds = all_kinds or KubeResourceKind.all()
         return [k for k in all_kinds if k.api_version == "v1" or k.api_version in apis]
