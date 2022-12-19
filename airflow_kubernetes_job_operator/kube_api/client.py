@@ -97,7 +97,7 @@ class KubeApiRestQuery(Task):
         """
         assert use_asyncio is not True, NotImplementedError("AsyncIO not yet implemented.")
         super().__init__(
-            self._exdcute_query,
+            self._execute_query,
             use_async_loop=use_asyncio or KubeApiRestQuery.default_use_asyncio,
             use_daemon_thread=True,
             thread_name=f"{self.__class__.__name__} {id(self)}",
@@ -221,18 +221,20 @@ class KubeApiRestQuery(Task):
         """
         return True
 
-    def _exdcute_query(self, client: "KubeApiRestClient"):
+    def _execute_query(self, client: "KubeApiRestClient"):
         self._set_connection_state(KubeApiRestQueryConnectionState.Disconnected, False)
         self.emit(self.query_started_event_name, self, client)
         self.pre_request(client)
 
         try:
             self.query_loop(client)
+            self.post_request(client)
+        except Exception as ex:
+            self.emit_error(err=ex)
+            raise ex
         finally:
+            self.emit(self.query_ended_event_name, self, client)
             self._set_connection_state(KubeApiRestQueryConnectionState.Disconnected)
-
-        self.post_request(client)
-        self.emit(self.query_ended_event_name, self, client)
 
     def query_loop(self, client: "KubeApiRestClient"):
         """Overridable. The main query loop. Called to execute the query.
@@ -605,16 +607,18 @@ class KubeApiRestClient:
 
         pending = set(queries)
 
-        def remove_from_pending(q):
+        def remove_from_pending(q, err: Exception = None):
             if q in pending:
                 pending.remove(q)
+            if err:
+                handler.emit_error(err)
             if len(pending) == 0:
                 handler.stop_all_streams()
 
         for q in queries:
             self._active_queries.add(q)
+            q.on(q.error_event_name, lambda query, err: remove_from_pending(query, err))
             q.on(q.query_ended_event_name, lambda query, client: remove_from_pending(query))
-            q.on(q.error_event_name, lambda query, err: remove_from_pending(query))
             q.pipe(handler)
 
         return handler
