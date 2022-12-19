@@ -292,6 +292,13 @@ class KubeResourceKind:
 
         pod_phase = status.get("phase")
         if pod_phase == "Pending":
+            # check for image pull back-off
+            container_statuses: List[dict] = status.get("containerStatuses", [])
+            for container_status in container_statuses:
+                waiting_reason = container_status.get("state", {}).get("waiting", {}).get("reason")
+                if waiting_reason == "ImagePullBackOff":
+                    return KubeResourceState.Failed
+
             return KubeResourceState.Pending
         elif pod_phase == "Succeeded":
             return KubeResourceState.Succeeded

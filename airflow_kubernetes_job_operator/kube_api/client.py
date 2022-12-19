@@ -230,11 +230,11 @@ class KubeApiRestQuery(Task):
             self.query_loop(client)
             self.post_request(client)
         except Exception as ex:
-            self.emit_error(err=ex)
+            self.emit_error(ex)
             raise ex
         finally:
-            self.emit(self.query_ended_event_name, self, client)
             self._set_connection_state(KubeApiRestQueryConnectionState.Disconnected)
+            self.emit(self.query_ended_event_name, self, client)
 
     def query_loop(self, client: "KubeApiRestClient"):
         """Overridable. The main query loop. Called to execute the query.
@@ -607,11 +607,11 @@ class KubeApiRestClient:
 
         pending = set(queries)
 
-        def remove_from_pending(q, err: Exception = None):
+        def remove_from_pending(q, ex: Exception = None):
             if q in pending:
                 pending.remove(q)
-            if err:
-                handler.emit_error(err)
+            if ex:
+                handler.emit_error(ex)
             if len(pending) == 0:
                 handler.stop_all_streams()
 
