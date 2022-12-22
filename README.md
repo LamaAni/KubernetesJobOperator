@@ -51,7 +51,7 @@ pip install git+https://github.com/LamaAni/KubernetesJobOperator.git@[tag]
 
 # TL;DR
 
-When using from within kubernetes, please use the following [RBAC rules](https://github.com/LamaAni/KubernetesJobOperator#kubernetes-rbac-rules).
+When using from within kubernetes, please use the following [RBAC rules](https://github.com/LamaAni/KubernetesJobOperator#kubernetes-rbac-rules) for the pod service account.
 
 ### Example airflow DAG
 
