@@ -51,6 +51,8 @@ pip install git+https://github.com/LamaAni/KubernetesJobOperator.git@[tag]
 
 # TL;DR
 
+To using from within kubernetes, please use the following [RBAC rules](https://github.com/LamaAni/KubernetesJobOperator#kubernetes-rbac-rules).
+
 ### Example airflow DAG
 
 ```python
@@ -244,7 +246,7 @@ Note the value of the xcom must be in json format (for the default parser).
 
 # Kubernetes RBAC rules
 
-The following are the [Kubernetes service account](https://jamesdefabia.github.io/docs/user-guide/service-accounts/) [RBAC](https://kubernetes.io/docs/reference/access-authn-authz/rbac/) rules required for executing jobs via the operator.
+The following are the [Kubernetes service account](https://jamesdefabia.github.io/docs/user-guide/service-accounts/) [RBAC](https://kubernetes.io/docs/reference/access-authn-authz/rbac/) rules required for executing jobs via the operator. You can find how to configure a service account, with rules [here](https://kubernetes.io/docs/tasks/configure-pod-container/configure-service-account/). 
 
 ```
 rules:
