@@ -1,0 +1,64 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: jo-airflow-role
+rules:
+  - apiGroups:
+      - '*'
+    resources:
+      - '*'
+    verbs:
+      - '*'
+  # - nonResourceURLs:
+  #     - '*'
+  #   verbs:
+  #     - '*'
+  # # Required when reading logs for the executed job.
+  # - verbs:
+  #     - get
+  #     - watch
+  #     - list
+  #   apiGroups:
+  #     - ''
+  #   resources:
+  #     - pods/log
+  #     - pods
+  # # Required for executing the job
+  # - verbs:
+  #     - create
+  #     - get
+  #     - delete
+  #     - watch
+  #     - list
+  #     - patch
+  #     - update
+  #   apiGroups:
+  #     - batch
+  #   resources:
+  #     - jobs
+  # # Required for using configmaps in the job
+  # - verbs:
+  #     - create
+  #     - get
+  #     - delete
+  #     - watch
+  #     - list
+  #     - patch
+  #     - update
+  #   apiGroups:
+  #     - ''
+  #   resources:
+  #     - configmaps
+  # # Required if reading secrets in the job.
+  # - verbs:
+  #     - create
+  #     - get
+  #     - delete
+  #     - watch
+  #     - list
+  #     - patch
+  #     - update
+  #   apiGroups:
+  #     - ''
+  #   resources:
+  #     - secrets

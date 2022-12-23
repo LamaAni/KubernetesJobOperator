@@ -1,0 +1,26 @@
+#!/bin/bash
+source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
+
+function apply() {
+    local manifest=""
+
+    export DAGS_PATH
+    export DATA_PATH
+    export IMAGE_TAG
+    
+    for f in $(find "$RUN_PATH" -name "*.yaml"); do
+        echo "Adding $f"
+        manifest="$manifest
+---
+$(cat "$f" | envsubst)
+"
+    done
+
+    echo "Applying:"
+    echo "---------------------"
+    echo "$manifest"
+    echo
+    echo "$manifest" | kubectl apply "$@" -f - || return $?
+}
+
+apply "$@" || exit $?
