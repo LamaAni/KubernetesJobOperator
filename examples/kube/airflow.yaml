@@ -11,7 +11,7 @@ subjects:
   - kind: ServiceAccount
     name: jo-airflow-service-account
 roleRef:
-  kind: ClusterRole
+  kind: Role
   name: jo-airflow-role
   apiGroup: rbac.authorization.k8s.io
 ---
