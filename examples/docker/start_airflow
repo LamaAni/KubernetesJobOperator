@@ -9,11 +9,17 @@ if [ "$#" -eq 0 ]; then
     airflow version
     echo "----------------------"
     airflow db init || exit $?
-
+    echo "----------------------"
+    echo "Init complete. Starting airflow"
+    echo "----------------------"
+    airflow webserver &
+    WEBSERVER_PID="$!"
+    echo "Started webserver"
     airflow scheduler &
     SCHEDULER_PID="$!"
-    airflow webserver
-    kill "$SCHEDULER_PID"
+    echo "Started scheduler"
+    wait "$SCHEDULER_PID"
+    kill "$WEBSERVER_PID"
 else
     airflow "$@"
 fi

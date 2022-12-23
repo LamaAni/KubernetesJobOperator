@@ -1,17 +1,7 @@
 #!/bin/bash
-type realpath &>/dev/null
-if [ $? -ne 0 ]; then
-    function realpath() {
-        [[ $1 = /* ]] && echo "$1" || echo "$PWD/${1#./}"
-    }
-fi
+source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 
-: "${RUN_PATH:="$(realpath "$(dirname "${BASH_SOURCE[0]}")")"}"
-: "${IMAGE_TAG:="airflow_kubernetes_job_operator_example_image"}"
-: "${DAGS_PATH:="$(realpath "$RUN_PATH/../../tests/dags")"}"
-: "${KUBE_CONFIG:="$HOME/.kube/config"}"
-
-docker build -t "$IMAGE_TAG" "$RUN_PATH" &&
+"$RUN_PATH/build_image" &&
     docker run -it --rm --network host \
         -v "$KUBE_CONFIG:/home/airflow/.kube/config" \
         -v "$DAGS_PATH:/opt/airflow/dags" "$IMAGE_TAG"

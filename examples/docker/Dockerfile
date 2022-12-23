@@ -1,6 +1,6 @@
 FROM apache/airflow
 
-RUN pip3 install --user airflow-kubernetes-job-operator
+RUN pip3 install --user "airflow-kubernetes-job-operator>=2.0.11"
 
 COPY --chown=airflow webserver_config.py .
 COPY --chown=airflow start_airflow .
