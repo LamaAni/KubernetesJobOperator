@@ -24,9 +24,9 @@ If you enjoyed using this repo, please consider posting in the [use cases and te
 9. Tested and working on [google cloud composer](https://cloud.google.com/composer).
 10. Airflow > 2.0.0 (Airflow 1 is supported but deprecated)
 
-##### Note, [issue](https://github.com/LamaAni/KubernetesJobOperator/issues/54) with AWS
+##### Note, [Issue](https://github.com/LamaAni/KubernetesJobOperator/issues/54) with AWS
 
-Currently there is an [issue](https://github.com/LamaAni/KubernetesJobOperator/issues/54) when running long tasks on AWS (disconnected by peer). We are looking for a solution for it, but have no AWS resoirces for testing. Contributions welcome. 
+When running long tasks on AWS we are disconnected form the server (Connection broken: ConnectionResetError, 104, 'Connection reset by peer'), see [here](https://github.com/LamaAni/KubernetesJobOperator/issues/54) and [here](https://github.com/LamaAni/KubernetesJobOperator/issues/54). We are looking for a solution for it, but have no AWS resoirces for testing. Contributions welcome. 
 
 ### Two operator classes are available
 
