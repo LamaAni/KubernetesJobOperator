@@ -24,14 +24,14 @@ If you enjoyed using this repo, please consider posting in the [use cases and te
 9. Tested and working on [google cloud composer](https://cloud.google.com/composer).
 10. Airflow > 2.0.0 (Airflow 1 is supported but deprecated)
 
-### Known issues
-
-1. When running long tasks on AWS the job is activly disconnected from the server (Connection broken: ConnectionResetError, 104, 'Connection reset by peer'), see [here](https://github.com/LamaAni/KubernetesJobOperator/issues/54) and [here](https://github.com/LamaAni/KubernetesJobOperator/issues/54). We are looking for a solution for it, but have no AWS resources for testing. Contributions welcome. 
-
 ### Two operator classes are available
 
 1. KubernetesJobOperator - Supply a kubernetes configuration (yaml file, yaml string or a list of python dictionaries) as the body of the task.
 1. KubernetesLegacyJobOperator (only airflow 2.0 and up) - Defaults to a kubernetes job definition, and supports the same arguments as the KubernetesPodOperator. i.e. replace with the KubernetesPodOperator for legacy support. 
+
+### Known issues
+
+1. When running long tasks on AWS the job is activly disconnected from the server (Connection broken: ConnectionResetError, 104, 'Connection reset by peer'), see [here](https://github.com/LamaAni/KubernetesJobOperator/issues/54) and [here](https://github.com/LamaAni/KubernetesJobOperator/issues/54). We are looking for a solution for it, but have no AWS resources for testing. Contributions welcome. 
 
 # Install
 
