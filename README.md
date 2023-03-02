@@ -24,6 +24,10 @@ If you enjoyed using this repo, please consider posting in the [use cases and te
 9. Tested and working on [google cloud composer](https://cloud.google.com/composer).
 10. Airflow > 2.0.0 (Airflow 1 is supported but deprecated)
 
+##### Note, issue with AWS
+
+Currently there is an issue when running long tasks on AWS, where there is a token disconnect (disconnected by peer). We are looking for a solution for it, but have no AWS resoirces for testing. Contributions welcome. 
+
 ### Two operator classes are available
 
 1. KubernetesJobOperator - Supply a kubernetes configuration (yaml file, yaml string or a list of python dictionaries) as the body of the task.
