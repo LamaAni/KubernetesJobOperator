@@ -26,7 +26,7 @@ If you enjoyed using this repo, please consider posting in the [use cases and te
 
 ### Known issues
 
-1. When running long tasks on AWS the job is activly disconnected from the server (Connection broken: ConnectionResetError, 104, 'Connection reset by peer'), see [here](https://github.com/LamaAni/KubernetesJobOperator/issues/54) and [here](https://github.com/LamaAni/KubernetesJobOperator/issues/54). We are looking for a solution for it, but have no AWS resoirces for testing. Contributions welcome. 
+1. When running long tasks on AWS the job is activly disconnected from the server (Connection broken: ConnectionResetError, 104, 'Connection reset by peer'), see [here](https://github.com/LamaAni/KubernetesJobOperator/issues/54) and [here](https://github.com/LamaAni/KubernetesJobOperator/issues/54). We are looking for a solution for it, but have no AWS resources for testing. Contributions welcome. 
 
 ### Two operator classes are available
 
