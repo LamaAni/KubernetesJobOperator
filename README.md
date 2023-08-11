@@ -204,6 +204,7 @@ export AIRFLOW__[section]__[item] = value
 | jinja_job_args             | None                             | A dictionary or object to be used in the jinja template to render arguments. The jinja args are loaded under the keyword "job".                 |
 | on_kube_api_event          | None                             | A method to capture kube api log events. By default is none. log output pattern: `::kube_api:[name]=value`                                      |
 | parse_xcom_event           | json parser                      | Parse the result of xcom events, `::kube_api:xcom={json values...}`                                                                             |
+| mount_files_from_secret    | None                             | A dictionary of dictionaries of { 'secret_name': {'secret_key': 'load filepath'}}. Loads secrets from a Kubernetes secrets collection, to specific paths within the main pod (Volume from secret). Secret must be created before use this option.                                                         |
 
 # Metadata annotations
 
