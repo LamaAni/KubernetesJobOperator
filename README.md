@@ -6,7 +6,7 @@ An airflow operator that executes a task in a kubernetes cluster, given a yaml c
 
 Contributions are welcome. See [here](https://docs.github.com/en/free-pro-team@latest/github/collaborating-with-issues-and-pull-requests/creating-a-pull-request-from-a-fork).
 
-If you enjoyed using this repo, please consider posting in the [use cases and testimonials](https://github.com/LamaAni/KubernetesJobOperator/issues/40) issue. 
+If you enjoyed using this repo, please consider posting in the [use cases and testimonials](https://github.com/LamaAni/KubernetesJobOperator/issues/40) issue.
 
 ### Supports
 
@@ -27,11 +27,11 @@ If you enjoyed using this repo, please consider posting in the [use cases and te
 ### Two operator classes are available
 
 1. KubernetesJobOperator - Supply a kubernetes configuration (yaml file, yaml string or a list of python dictionaries) as the body of the task.
-1. KubernetesLegacyJobOperator (only airflow 2.0 and up) - Defaults to a kubernetes job definition, and supports the same arguments as the KubernetesPodOperator. i.e. replace with the KubernetesPodOperator for legacy support. 
+1. KubernetesLegacyJobOperator (only airflow 2.0 and up) - Defaults to a kubernetes job definition, and supports the same arguments as the KubernetesPodOperator. i.e. replace with the KubernetesPodOperator for legacy support.
 
 ### Known issues
 
-1. When running long tasks on AWS the job is activly disconnected from the server (Connection broken: ConnectionResetError, 104, 'Connection reset by peer'), see [here](https://github.com/LamaAni/KubernetesJobOperator/issues/54) and [here](https://github.com/LamaAni/KubernetesJobOperator/issues/54). We are looking for a solution for it, but have no AWS resources for testing. Contributions welcome. 
+1. When running long tasks on AWS the job is activly disconnected from the server (Connection broken: ConnectionResetError, 104, 'Connection reset by peer'), see [here](https://github.com/LamaAni/KubernetesJobOperator/issues/54) and [here](https://github.com/LamaAni/KubernetesJobOperator/issues/54). We are looking for a solution for it, but have no AWS resources for testing. Contributions welcome.
 
 # Install
 
@@ -189,6 +189,7 @@ export AIRFLOW__[section]__[item] = value
 | name_postfix               | None                             | The kuberntes resource(s) name postfix                                                                                                          |
 | random_name_postfix_length | 8                                | Add a random string to all kuberntes resource(s) names if > 0                                                                                   |
 | envs                       | None                             | A dictionary of envs to add to the main job pod.                                                                                                |
+| labels                     | None                             | A dictionary of labels to add to the manifests. |
 | body                       | None                             | The body of the job to use. Can be string, dictionary.                                                                                          |
 | body_filepath              | None                             | A filepath to the yaml config file. Can use a relative filepath.                                                                                |
 | image_pull_policy          | Always                           | The kubernetes image pull policy (str)                                                                                                          |
@@ -231,12 +232,12 @@ spec:
         - infinity
 ```
 
-When executed, only the status of the main container will be taken into account when determining the state of the task. 
+When executed, only the status of the main container will be taken into account when determining the state of the task.
 **Note**, if the delete policy is not one of `Always`,`IfFailed`, the sidecar will continue executing on failure.
 
 # XCom
 
-The implementation of XCom via the KubernetesJobOperator differes from the one by KuberenetesPodsOperator, 
+The implementation of XCom via the KubernetesJobOperator differes from the one by KuberenetesPodsOperator,
 and therefore no backward compatible implementation for XCom currently exists.
 
 To use xcom with KubernetesJobOperator simply add a log line to your pod log output,
@@ -250,7 +251,7 @@ Note the value of the xcom must be in json format (for the default parser).
 
 # Kubernetes RBAC rules
 
-The following are the [Kubernetes service account](https://jamesdefabia.github.io/docs/user-guide/service-accounts/) [RBAC](https://kubernetes.io/docs/reference/access-authn-authz/rbac/) rules required for executing jobs via the operator. You can find how to configure a service account, with rules [here](https://kubernetes.io/docs/tasks/configure-pod-container/configure-service-account/). 
+The following are the [Kubernetes service account](https://jamesdefabia.github.io/docs/user-guide/service-accounts/) [RBAC](https://kubernetes.io/docs/reference/access-authn-authz/rbac/) rules required for executing jobs via the operator. You can find how to configure a service account, with rules [here](https://kubernetes.io/docs/tasks/configure-pod-container/configure-service-account/).
 
 ```yaml
 apiVersion: rbac.authorization.k8s.io/v1

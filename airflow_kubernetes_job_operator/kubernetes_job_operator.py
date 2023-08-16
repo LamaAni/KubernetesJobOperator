@@ -79,6 +79,7 @@ class KubernetesJobOperator(KubernetesJobOperatorDefaultsBase):
         jinja_job_args: dict = None,
         on_kube_api_event: callable = None,
         parse_xcom_event: xcom_value_parser = xcom_value_parser,
+        labels: dict = None,
         **kwargs,
     ):
         """A operator that executes an airflow task given a configuration yaml or as a kubernetes job.
@@ -115,6 +116,8 @@ class KubernetesJobOperator(KubernetesJobOperatorDefaultsBase):
             enable_jinja (bool, optional): If true enable jinja in args. Defaults to True.
             jinja_job_args (dict, optional): An key value pair argument list to be added on top
                 of airflow argument list. Defaults to None.
+            labels (dict, optional): A dictionary of key value pairs that is inserted to the job labels.
+                Defaults to None.
 
         Advanced:
             validate_body_on_init (bool, optional): If true, validates the body before the
@@ -175,6 +178,7 @@ class KubernetesJobOperator(KubernetesJobOperatorDefaultsBase):
         self.on_kube_api_event = on_kube_api_event
         self.parse_xcom_event = parse_xcom_event
         self.delete_policy = delete_policy
+        self.labels = labels
 
         # kubernetes config properties.
         self.config_file = config_file
@@ -197,6 +201,7 @@ class KubernetesJobOperator(KubernetesJobOperatorDefaultsBase):
                 "namespace",
                 "config_file",
                 "cluster_context",
+                "labels",
             ]
 
         # Used for debugging
@@ -297,6 +302,7 @@ class KubernetesJobOperator(KubernetesJobOperatorDefaultsBase):
             ),
             name_postfix=self.name_postfix,
             random_name_postfix_length=self.random_name_postfix_length,
+            labels=self.labels,
         )
 
     def get_template_env(self) -> jinja2.Environment:
