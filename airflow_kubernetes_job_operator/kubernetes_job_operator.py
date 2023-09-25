@@ -80,6 +80,7 @@ class KubernetesJobOperator(KubernetesJobOperatorDefaultsBase):
         on_kube_api_event: callable = None,
         parse_xcom_event: xcom_value_parser = xcom_value_parser,
         labels: dict = None,
+        mount_files_from_secret: dict = None,
         **kwargs,
     ):
         """A operator that executes an airflow task given a configuration yaml or as a kubernetes job.
@@ -117,6 +118,9 @@ class KubernetesJobOperator(KubernetesJobOperatorDefaultsBase):
             jinja_job_args (dict, optional): An key value pair argument list to be added on top
                 of airflow argument list. Defaults to None.
             labels (dict, optional): A dictionary of key value pairs that is inserted to the job labels.
+                Defaults to None.
+            mount_files_from_secret (dict, optional): A dictionary of dictionaries of { 'secret_name': {'secret_key': 'load filepath'}}.
+                Loads secrets from a Kubernetes secrets collection, to specific paths within the main pod (Volume from secret).
                 Defaults to None.
 
         Advanced:
@@ -157,6 +161,8 @@ class KubernetesJobOperator(KubernetesJobOperatorDefaultsBase):
         )
 
         assert envs is None or isinstance(envs, dict), ValueError("The env collection must be a dict or None")
+        assert mount_files_from_secret is None or isinstance(mount_files_from_secret, dict), ValueError(
+            "The mount_files_from_secret collection must be a dict or None")
         assert image is None or isinstance(image, str), ValueError("image must be a string or None")
 
         # Job properties.
@@ -179,6 +185,7 @@ class KubernetesJobOperator(KubernetesJobOperatorDefaultsBase):
         self.parse_xcom_event = parse_xcom_event
         self.delete_policy = delete_policy
         self.labels = labels
+        self.mount_files_from_secret = mount_files_from_secret
 
         # kubernetes config properties.
         self.config_file = config_file
@@ -202,6 +209,7 @@ class KubernetesJobOperator(KubernetesJobOperatorDefaultsBase):
                 "config_file",
                 "cluster_context",
                 "labels",
+                "mount_files_from_secret",
             ]
 
         # Used for debugging
@@ -236,6 +244,18 @@ class KubernetesJobOperator(KubernetesJobOperatorDefaultsBase):
     def _to_kubernetes_env_list(cls, envs: dict):
         return [{"name": k, "value": f"{envs[k]}"} for k in envs.keys()]
 
+    @classmethod
+    def _to_kubernetes_pod_secrets_file_mount_volume_list(cls, mount_files_from_secret: dict):
+        result_list = []
+        for secret_name, v in mount_files_from_secret.items():
+            for secret_key, path_to_file in v.items():
+                result_list.append({
+                    "name": f"__auto_mounted_secret_files_{secret_name}",
+                    "mountPath": path_to_file,
+                    "subPath": secret_key,
+                })
+        return result_list
+
     def _get_kubernetes_env_list(self):
         return self._to_kubernetes_env_list(self.envs or {})
 
@@ -265,6 +285,11 @@ class KubernetesJobOperator(KubernetesJobOperatorDefaultsBase):
             container["image"] = self.image
         if self.image_pull_policy:
             container["imagePullPolicy"] = self.image_pull_policy
+        if self.mount_files_from_secret:
+            container["volumeMounts"] = [
+                *container.get("volumeMounts", []),
+                *self._to_kubernetes_pod_secrets_file_mount_volume_list(self.mount_files_from_secret or {}),
+            ]
 
     def _update_override_params(self, o: dict):
         if "spec" in o and "containers" in o.get("spec", {}):
@@ -274,7 +299,13 @@ class KubernetesJobOperator(KubernetesJobOperatorDefaultsBase):
                     self._update_container_yaml(container=container)
                 self._update_main_container_yaml(containers[0])
 
-                # adding env resources
+            # adding volume mounts from secrets which created before use the operator
+            if self.mount_files_from_secret:
+                o["spec"]["volumes"] = [
+                    *o["spec"].get("volumes", []),
+                    *[{"name": f"__auto_mounted_secret_files_{k}", "secret": {"secretName": k}} for k, _ in self.mount_files_from_secret.items()],
+                ]
+
         for c in o.values():
             if isinstance(c, dict):
                 self._update_override_params(c)
