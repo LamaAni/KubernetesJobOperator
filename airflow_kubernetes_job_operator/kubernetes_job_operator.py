@@ -68,6 +68,7 @@ class KubernetesJobOperator(KubernetesJobOperatorDefaultsBase):
         body: Union[str, dict, List[dict]] = None,
         body_filepath: str = None,
         image_pull_policy: str = None,
+        image_pull_secrets: List[str] = None,
         delete_policy: Union[str, JobRunnerDeletePolicy] = DEFAULT_DELETE_POLICY,
         in_cluster: bool = None,
         config_file: str = None,
@@ -106,6 +107,7 @@ class KubernetesJobOperator(KubernetesJobOperatorDefaultsBase):
             body_filepath (str, optional): A filepath to the job yaml or json configuration. Can be a relative path.
                 Defaults to None -> use body.
             image_pull_policy (str, optional): The kubernetes image pull policy. Defaults to None.
+            image_pull_secrets (List[str], optional):  List of the kubernetes image pull secrets. Defaults to None.
             delete_policy (Union[str, JobRunnerDeletePolicy], optional): The delete policy to use.
                 e.g. What to do when the task finishes. Defaults to DEFAULT_DELETE_POLICY.
             in_cluster (bool, optional): If true, currently running in cluster. Defaults to autodetect.
@@ -175,6 +177,7 @@ class KubernetesJobOperator(KubernetesJobOperatorDefaultsBase):
         self.image = image
         self.envs = envs
         self.image_pull_policy = image_pull_policy
+        self.image_pull_secrets = image_pull_secrets
         self.body = body
         self.name_prefix = name_prefix
         self.name_postfix = name_postfix
@@ -210,6 +213,7 @@ class KubernetesJobOperator(KubernetesJobOperatorDefaultsBase):
                 "cluster_context",
                 "labels",
                 "mount_files_from_secret",
+                "image_pull_secrets",
             ]
 
         # Used for debugging
@@ -255,6 +259,10 @@ class KubernetesJobOperator(KubernetesJobOperatorDefaultsBase):
                     "subPath": secret_key,
                 })
         return result_list
+
+    @classmethod
+    def _to_kubernetes_image_pull_secrets_list(cls, image_pull_secrets: List[str]):
+        return [{"name": k} for k in image_pull_secrets]
 
     def _get_kubernetes_env_list(self):
         return self._to_kubernetes_env_list(self.envs or {})
@@ -305,6 +313,15 @@ class KubernetesJobOperator(KubernetesJobOperatorDefaultsBase):
                     *o["spec"].get("volumes", []),
                     *[{"name": f"__auto_mounted_secret_files_{k}", "secret": {"secretName": k}} for k, _ in self.mount_files_from_secret.items()],
                 ]
+
+            # add image pull secrets
+            if self.image_pull_secrets:
+                image_pull_secrets_list = [
+                    *o["spec"].get("imagePullSecrets", []),
+                    *self._to_kubernetes_image_pull_secrets_list(self.image_pull_secrets or []),
+                ]
+                # remove doubles if exists
+                o["spec"]["imagePullSecrets"] = [dict(t) for t in {tuple(x.items()) for x in image_pull_secrets_list}]
 
         for c in o.values():
             if isinstance(c, dict):

@@ -193,6 +193,7 @@ export AIRFLOW__[section]__[item] = value
 | body                       | None                             | The body of the job to use. Can be string, dictionary.                                                                                          |
 | body_filepath              | None                             | A filepath to the yaml config file. Can use a relative filepath.                                                                                |
 | image_pull_policy          | Always                           | The kubernetes image pull policy (str)                                                                                                          |
+| image_pull_secrets         | None                             | List of the kubernetes image pull secrets                                                                                                        |
 | delete_policy              | IfSucceeded                      | The resources delete policy. Can be one of: Always, Never, IfSucceeded, IfFailed (Str)                                                          |
 | in_cluster                 | None                             | Use in cluster creds.                                                                                                                           |
 | config_file                | None                             | Use this kubernetes config file.                                                                                                                |
