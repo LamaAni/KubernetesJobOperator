@@ -1,7 +1,14 @@
+import os
 from datetime import timedelta
 from utils import default_args, name_from_file
 from airflow import DAG
-from airflow_kubernetes_job_operator.kubernetes_job_operator import KubernetesJobOperator
+from airflow_kubernetes_job_operator.kubernetes_job_operator import (
+    KubernetesJobOperator,
+)
+
+print(
+    "\n".join([f"{k} = {v}" for k, v in os.environ.items() if k.startswith("AIRFLOW")])
+)
 
 dag = DAG(
     name_from_file(__file__),
@@ -30,4 +37,5 @@ KubernetesJobOperator(
 
 if __name__ == "__main__":
     from tests.test_utils import test_dag
+
     test_dag(dag)
