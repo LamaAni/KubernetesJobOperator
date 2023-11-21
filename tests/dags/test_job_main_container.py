@@ -15,5 +15,5 @@ with dag:
     KubernetesJobOperator(task_id="test_main_container", body_filepath=__file__ + ".yaml")
 
 if __name__ == "__main__":
-    dag.clear()
-    dag.run()
+    from tests.test_utils import test_dag
+    test_dag(dag)

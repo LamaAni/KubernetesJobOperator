@@ -1,5 +1,6 @@
 import jinja2
 import json
+from logging import Logger
 from typing import List, Union
 from airflow.utils.decorators import apply_defaults
 from airflow_kubernetes_job_operator.kube_api import KubeResourceState, KubeLogApiEvent
@@ -45,7 +46,8 @@ def xcom_value_parser(value: str) -> dict:
         assert isinstance(value, dict), "Value must be a json object (dict)"
     except Exception as ex:
         raise KubernetesJobOperatorException(
-            "XCom messages (with default parser) must be in json object format:", *ex.args
+            "XCom messages (with default parser) must be in json object format:",
+            *ex.args,
         )
     return value
 
@@ -136,14 +138,18 @@ class KubernetesJobOperator(KubernetesJobOperatorDefaultsBase):
 
         super().__init__(task_id=task_id, **kwargs)
 
-        assert body_filepath is not None or body is not None or image is not None, ValueError(
+        assert (
+            body_filepath is not None or body is not None or image is not None
+        ), ValueError(
             "body is None, body_filepath is None and an image was not defined. Unknown image to execute."
         )
 
         body = body or self._read_body_from_file(
             resolve_relative_path(
-                body_filepath or DEFAULT_EXECUTION_OBJECT_PATHS[DEFAULT_EXECTION_OBJECT],
-                self.resolve_relative_path_callstack_offset + (2 if AIRFLOW_MAJOR_VERSION > 1 else 1),
+                body_filepath
+                or DEFAULT_EXECUTION_OBJECT_PATHS[DEFAULT_EXECTION_OBJECT],
+                self.resolve_relative_path_callstack_offset
+                + (2 if AIRFLOW_MAJOR_VERSION > 1 else 1),
             )
         )
 
@@ -157,15 +163,22 @@ class KubernetesJobOperator(KubernetesJobOperatorDefaultsBase):
             except Exception:
                 delete_policy = None
 
-        assert delete_policy is not None and isinstance(delete_policy, JobRunnerDeletePolicy), ValueError(
+        assert delete_policy is not None and isinstance(
+            delete_policy, JobRunnerDeletePolicy
+        ), ValueError(
             f"Invalid delete policy. Valid values are ({JobRunnerDeletePolicy.__module__}.JobRunnerDeletePolicy):"
             + f" {[str(v) for v in JobRunnerDeletePolicy]}"
         )
 
-        assert envs is None or isinstance(envs, dict), ValueError("The env collection must be a dict or None")
-        assert mount_files_from_secret is None or isinstance(mount_files_from_secret, dict), ValueError(
-            "The mount_files_from_secret collection must be a dict or None")
-        assert image is None or isinstance(image, str), ValueError("image must be a string or None")
+        assert envs is None or isinstance(envs, dict), ValueError(
+            "The env collection must be a dict or None"
+        )
+        assert mount_files_from_secret is None or isinstance(
+            mount_files_from_secret, dict
+        ), ValueError("The mount_files_from_secret collection must be a dict or None")
+        assert image is None or isinstance(image, str), ValueError(
+            "image must be a string or None"
+        )
 
         # Job properties.
         self._job_is_executing = False
@@ -249,15 +262,19 @@ class KubernetesJobOperator(KubernetesJobOperatorDefaultsBase):
         return [{"name": k, "value": f"{envs[k]}"} for k in envs.keys()]
 
     @classmethod
-    def _to_kubernetes_pod_secrets_file_mount_volume_list(cls, mount_files_from_secret: dict):
+    def _to_kubernetes_pod_secrets_file_mount_volume_list(
+        cls, mount_files_from_secret: dict
+    ):
         result_list = []
         for secret_name, v in mount_files_from_secret.items():
             for secret_key, path_to_file in v.items():
-                result_list.append({
-                    "name": f"__auto_mounted_secret_files_{secret_name}",
-                    "mountPath": path_to_file,
-                    "subPath": secret_key,
-                })
+                result_list.append(
+                    {
+                        "name": f"__auto_mounted_secret_files_{secret_name}",
+                        "mountPath": path_to_file,
+                        "subPath": secret_key,
+                    }
+                )
         return result_list
 
     @classmethod
@@ -296,7 +313,9 @@ class KubernetesJobOperator(KubernetesJobOperatorDefaultsBase):
         if self.mount_files_from_secret:
             container["volumeMounts"] = [
                 *container.get("volumeMounts", []),
-                *self._to_kubernetes_pod_secrets_file_mount_volume_list(self.mount_files_from_secret or {}),
+                *self._to_kubernetes_pod_secrets_file_mount_volume_list(
+                    self.mount_files_from_secret or {}
+                ),
             ]
 
     def _update_override_params(self, o: dict):
@@ -311,17 +330,27 @@ class KubernetesJobOperator(KubernetesJobOperatorDefaultsBase):
             if self.mount_files_from_secret:
                 o["spec"]["volumes"] = [
                     *o["spec"].get("volumes", []),
-                    *[{"name": f"__auto_mounted_secret_files_{k}", "secret": {"secretName": k}} for k, _ in self.mount_files_from_secret.items()],
+                    *[
+                        {
+                            "name": f"__auto_mounted_secret_files_{k}",
+                            "secret": {"secretName": k},
+                        }
+                        for k, _ in self.mount_files_from_secret.items()
+                    ],
                 ]
 
             # add image pull secrets
             if self.image_pull_secrets:
                 image_pull_secrets_list = [
                     *o["spec"].get("imagePullSecrets", []),
-                    *self._to_kubernetes_image_pull_secrets_list(self.image_pull_secrets or []),
+                    *self._to_kubernetes_image_pull_secrets_list(
+                        self.image_pull_secrets or []
+                    ),
                 ]
                 # remove doubles if exists
-                o["spec"]["imagePullSecrets"] = [dict(t) for t in {tuple(x.items()) for x in image_pull_secrets_list}]
+                o["spec"]["imagePullSecrets"] = [
+                    dict(t) for t in {tuple(x.items()) for x in image_pull_secrets_list}
+                ]
 
         for c in o.values():
             if isinstance(c, dict):
@@ -338,12 +367,17 @@ class KubernetesJobOperator(KubernetesJobOperatorDefaultsBase):
     def create_job_runner(self) -> JobRunner:
         """Override this method to create your own or augment the job runner"""
         # create the job runner.
+        logger: Logger = None
+        if hasattr(self, "logger"):
+            logger = self.logger
+            if not isinstance(self.logger, Logger):
+                logger = logger()
         return JobRunner(
             body=self.body,
             namespace=self.namespace,
             show_pod_logs=self.get_logs,
             delete_policy=self.delete_policy,
-            logger=self.logger if hasattr(self, "logger") else None,
+            logger=logger,
             auto_load_kube_config=True,
             name_prefix=self._create_kubernetes_job_name_prefix(
                 self.name_prefix if self.name_prefix is not None else self.task_id
@@ -426,7 +460,6 @@ class KubernetesJobOperator(KubernetesJobOperatorDefaultsBase):
         )
         self._job_is_executing = True
         try:
-
             rslt = self.job_runner.execute_job(
                 watcher_start_timeout=self.startup_timeout_seconds,
                 timeout=self._internal_wait_kuberentes_object_timeout,
@@ -455,6 +488,9 @@ class KubernetesJobOperator(KubernetesJobOperatorDefaultsBase):
             try:
                 self.job_runner.abort()
             except Exception:
-                self.log.error("Failed to delete an aborted/killed" + " job! The job may still be executing.")
+                self.log.error(
+                    "Failed to delete an aborted/killed"
+                    + " job! The job may still be executing."
+                )
 
         return super().on_kill()

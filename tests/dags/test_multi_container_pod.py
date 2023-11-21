@@ -24,5 +24,5 @@ with dag:
 
 
 if __name__ == "__main__":
-    dag.clear()
-    dag.run()
+    from tests.test_utils import test_dag
+    test_dag(dag)

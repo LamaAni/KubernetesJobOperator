@@ -15,7 +15,7 @@ envs = {
     "PASS_ARG": "a test",
 }
 
-total_time_seconds = round(timedelta(hours=8).total_seconds())
+total_time_seconds = round(timedelta(hours=4).total_seconds())
 
 KubernetesJobOperator(
     task_id="test-long-job-success",
@@ -29,5 +29,5 @@ KubernetesJobOperator(
 
 
 if __name__ == "__main__":
-    dag.clear()
-    dag.run()
+    from tests.test_utils import test_dag
+    test_dag(dag)
