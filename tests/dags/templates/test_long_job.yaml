@@ -15,13 +15,13 @@ spec:
               #/usr/bin/env bash
               : "${SLEEP_INTERVAL:=10}"
               echo "Starting $PASS_ARG (Sleep interval $SLEEP_INTERVAL)"
-              cur_count=0
+              elapsed_time=0
               while true; do
-                  cur_count=$((cur_count + 1))
-                  if [ "$cur_count" -ge "$TIC_COUNT" ]; then
+                  elapsed_time=$((elapsed_time + $SLEEP_INTERVAL))
+                  if [ "$elapsed_time" -ge "$TIC_COUNT" ]; then
                       break
                   fi
-                  date
+                  echo "Elapsed $elapsed_time [seconds]"
                   sleep $SLEEP_INTERVAL
               done
               echo "Complete"
