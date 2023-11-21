@@ -84,6 +84,6 @@ KubernetesJobOperator(
 
 
 if __name__ == "__main__":
-    from test_utils import test_dag
+    from tests.test_utils import test_dag
 
     test_dag(dag)

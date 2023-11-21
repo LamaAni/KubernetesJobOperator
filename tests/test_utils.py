@@ -3,5 +3,5 @@ from datetime import datetime, timezone
 
 
 def test_dag(dag: DAG):
-    dag.clear()
+    # dag.clear()
     dag.test(datetime.now(tz=timezone.utc))
