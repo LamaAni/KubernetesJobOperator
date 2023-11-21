@@ -22,7 +22,7 @@ envs = {
     "PASS_ARG": "a test",
 }
 
-total_time_seconds = round(timedelta(hours=4).total_seconds())
+total_time_seconds = round(timedelta(hours=4.5).total_seconds())
 
 KubernetesJobOperator(
     task_id="test-long-job-success",
