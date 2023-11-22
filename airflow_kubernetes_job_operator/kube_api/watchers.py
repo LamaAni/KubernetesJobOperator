@@ -1,5 +1,5 @@
 import json
-from datetime import datetime, timedelta
+from datetime import datetime
 from logging import Logger
 from weakref import WeakSet, WeakValueDictionary
 from typing import List, Dict, Tuple, Union
@@ -231,7 +231,7 @@ class NamespaceWatchQuery(KubeApiRestQuery):
         read_logs = GetPodLogs(
             name=name,
             namespace=namespace,
-            since=datetime.now() + timedelta(seconds=20),
+            since=self.pod_log_since,
             follow=follow,
             container=container,
             add_container_name_to_log=False if is_single else True,

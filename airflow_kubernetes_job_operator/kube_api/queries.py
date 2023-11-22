@@ -180,7 +180,7 @@ class GetPodLogs(KubeApiRestQuery):
         self.kind = kind
         self.name: str = name
         self.namespace: str = namespace
-        if since.tzinfo is None:
+        if since and since.tzinfo is None:
             since = since.astimezone()
 
         self.since: datetime = since
@@ -248,13 +248,6 @@ class GetPodLogs(KubeApiRestQuery):
             )
 
     def __update_query_since(self):
-        # since timestamp in seconds
-        # since_seconds = int(
-        #     self.__get_last_read_line_timestamp()
-        #     .replace(tzinfo=timezone.utc)
-        #     .timestamp()
-        # )
-
         # Updating the since argument.
         since = self._get_last_read_line_timestamp()
         self.query_params["sinceTime"] = since.isoformat()
