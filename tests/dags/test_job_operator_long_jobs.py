@@ -18,6 +18,7 @@ envs = {
 }
 
 total_time_seconds = round(timedelta(hours=4.5).total_seconds())
+sleep_interval = round(timedelta(seconds=60).total_seconds())
 
 KubernetesJobOperator(
     task_id="test-long-job-success",
@@ -25,6 +26,7 @@ KubernetesJobOperator(
     envs={
         "PASS_ARG": "a long test",
         "TIC_COUNT": str(total_time_seconds),
+        "SLEEP_INTERVAL": str(sleep_interval),
     },
     dag=dag,
 )
