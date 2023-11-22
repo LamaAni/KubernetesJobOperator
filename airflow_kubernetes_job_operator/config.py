@@ -15,9 +15,15 @@ from airflow_kubernetes_job_operator.collections import (
 import re
 
 
-DEFAULT_EXECUTION_OBJECT_PATHS: Dict[KubernetesJobOperatorDefaultExecutionResource, str] = {
-    KubernetesJobOperatorDefaultExecutionResource.Job: resolve_path("./templates/job_default.yaml"),
-    KubernetesJobOperatorDefaultExecutionResource.Pod: resolve_path("./templates/pod_default.yaml"),
+DEFAULT_EXECUTION_OBJECT_PATHS: Dict[
+    KubernetesJobOperatorDefaultExecutionResource, str
+] = {
+    KubernetesJobOperatorDefaultExecutionResource.Job: resolve_path(
+        "./templates/job_default.yaml"
+    ),
+    KubernetesJobOperatorDefaultExecutionResource.Pod: resolve_path(
+        "./templates/pod_default.yaml"
+    ),
 }
 
 AIRFLOW_CONFIG_SECTION_NAME = "kubernetes_job_operator"
@@ -62,7 +68,9 @@ def get(
         allow_empty = False
 
     if val is None or (not allow_empty and len(val.strip()) == 0):
-        assert default is not None, f"Airflow configuration {collection}.{key} not found, and no default value"
+        assert (
+            default is not None
+        ), f"Airflow configuration {collection}.{key} not found, and no default value"
         return default
 
     if otype == bool:
@@ -79,7 +87,9 @@ def get(
 # Airflow config values
 
 # Job runner
-DEFAULT_DELETE_POLICY: JobRunnerDeletePolicy = get("delete_policy", JobRunnerDeletePolicy.IfSucceeded)
+DEFAULT_DELETE_POLICY: JobRunnerDeletePolicy = get(
+    "delete_policy", JobRunnerDeletePolicy.IfSucceeded
+)
 
 # Default bodies
 DEFAULT_EXECTION_OBJECT: KubernetesJobOperatorDefaultExecutionResource = get(
@@ -99,7 +109,9 @@ DEFAULT_VALIDATE_BODY_ON_INIT: bool = get("validate_body_on_init", False)
 SHOW_RUNNER_ID_IN_LOGS: bool = get("show_runner_id", False)
 
 # Client config
-KUBE_CONFIG_EXTRA_LOCATIONS: str = get("kube_config_extra_locations", "", otype=str, allow_empty=True)
+KUBE_CONFIG_EXTRA_LOCATIONS: str = get(
+    "kube_config_extra_locations", "", otype=str, allow_empty=True
+)
 if not_empty_string(KUBE_CONFIG_EXTRA_LOCATIONS):
     for loc in KUBE_CONFIG_EXTRA_LOCATIONS.split(",").reverse():
         loc = loc.strip()

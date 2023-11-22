@@ -4,8 +4,15 @@ from typing import List, Union
 from airflow_kubernetes_job_operator.exceptions import KubernetesJobOperatorException
 from airflow_kubernetes_job_operator.kube_api.collections import KubeResourceDescriptor
 from airflow_kubernetes_job_operator.job_runner import JobRunnerDeletePolicy
-from airflow_kubernetes_job_operator.utils import resolve_relative_path, dict_merge, dict_remove_empty_cols
-from airflow_kubernetes_job_operator.kubernetes_job_operator import KubernetesJobOperator, xcom_value_parser
+from airflow_kubernetes_job_operator.utils import (
+    resolve_relative_path,
+    dict_merge,
+    dict_remove_empty_cols,
+)
+from airflow_kubernetes_job_operator.kubernetes_job_operator import (
+    KubernetesJobOperator,
+    xcom_value_parser,
+)
 from airflow_kubernetes_job_operator.config import (
     DEFAULT_VALIDATE_BODY_ON_INIT,
     DEFAULT_EXECUTION_OBJECT_PATHS,
@@ -191,7 +198,9 @@ class KubernetesLegacyJobOperator(KubernetesJobOperator):
             body_filepath = resolve_relative_path(body_filepath, 2)
 
         if full_pod_spec is not None and body_filepath is None:
-            body_filepath = DEFAULT_EXECUTION_OBJECT_PATHS[KubernetesJobOperatorDefaultExecutionResource.Pod]
+            body_filepath = DEFAULT_EXECUTION_OBJECT_PATHS[
+                KubernetesJobOperatorDefaultExecutionResource.Pod
+            ]
 
         super().__init__(
             command=cmds or [],
@@ -220,7 +229,9 @@ class KubernetesLegacyJobOperator(KubernetesJobOperator):
         assert image is not None, "You must provide an image"
 
         # If true, loaded from yaml and should not override spec.
-        self.loaded_from_full_spec = full_pod_spec is not None or body is not None or body_filepath is not None
+        self.loaded_from_full_spec = (
+            full_pod_spec is not None or body is not None or body_filepath is not None
+        )
 
         # adding self properties.
         self.labels = labels or {}

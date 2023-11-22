@@ -78,7 +78,9 @@ def to_kubernetes_valid_name(name, max_length=50, start_trim_offset=10):
     Returns:
         [type] -- [description]
     """
-    assert start_trim_offset < max_length, "start_trim_offset must be smaller then max_length"
+    assert (
+        start_trim_offset < max_length
+    ), "start_trim_offset must be smaller then max_length"
     name = re.sub(r"[^a-z0-9]", "-", name.lower())
 
     if len(name) > max_length:

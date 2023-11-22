@@ -7,7 +7,10 @@ from uuid import uuid4
 from typing import Callable, List, Type, Union
 from airflow_kubernetes_job_operator.kube_api.utils import not_empty_string
 from airflow_kubernetes_job_operator.utils import random_string
-from airflow_kubernetes_job_operator.collections import JobRunnerDeletePolicy, JobRunnerException
+from airflow_kubernetes_job_operator.collections import (
+    JobRunnerDeletePolicy,
+    JobRunnerException,
+)
 from airflow_kubernetes_job_operator.config import SHOW_RUNNER_ID_IN_LOGS
 from airflow_kubernetes_job_operator.kube_api import (
     KubeApiConfiguration,
@@ -88,7 +91,9 @@ class JobRunner:
         self._id = str(uuid4())
 
         self.name_postfix = (
-            name_postfix or "" if random_name_postfix_length <= 0 else random_string((random_name_postfix_length))
+            name_postfix or ""
+            if random_name_postfix_length <= 0
+            else random_string((random_name_postfix_length))
         )
         self.name_prefix = name_prefix
 
@@ -127,7 +132,9 @@ class JobRunner:
         return f"{self.job_runner_instance_id_label_name}={self.id}"
 
     @classmethod
-    def register_custom_prepare_kind(cls, kind: Union[KubeResourceKind, str], preapre_kind: Callable):
+    def register_custom_prepare_kind(
+        cls, kind: Union[KubeResourceKind, str], preapre_kind: Callable
+    ):
         """Register a global kind preparation method. Runs before execution on a copy.
 
         Args:
@@ -137,7 +144,9 @@ class JobRunner:
         if isinstance(kind, str):
             kind = KubeResourceKind.get_kind(kind)
 
-        assert isinstance(kind, KubeResourceKind), ValueError("kind must be an instance of KubeResourceKind or string")
+        assert isinstance(kind, KubeResourceKind), ValueError(
+            "kind must be an instance of KubeResourceKind or string"
+        )
         cls.custom_prepare_kinds[kind.name] = preapre_kind
 
     @classmethod
@@ -145,7 +154,9 @@ class JobRunner:
         assert isinstance(body, dict), ValueError("Body must be a dictionary")
         assert isinstance(labels, dict), ValueError("labels must be a dictionary")
 
-        if isinstance(body.get("spec", None), dict) or isinstance(body.get("metadata", None), dict):
+        if isinstance(body.get("spec", None), dict) or isinstance(
+            body.get("metadata", None), dict
+        ):
             body.setdefault("metadata", {})
             metadata = body["metadata"]
             if "labels" not in metadata:
@@ -161,11 +172,15 @@ class JobRunner:
         assert isinstance(body, dict), ValueError("Body must be a dictionary")
         descriptor = KubeResourceDescriptor(body)
 
-        assert isinstance(descriptor.spec.get("template", None), dict), JobRunnerException(
+        assert isinstance(
+            descriptor.spec.get("template", None), dict
+        ), JobRunnerException(
             "Cannot create a job without a template, 'spec.template' is missing or not a dictionary"
         )
 
-        assert isinstance(descriptor.spec.get("template", {}).get("spec", None), dict), JobRunnerException(
+        assert isinstance(
+            descriptor.spec.get("template", {}).get("spec", None), dict
+        ), JobRunnerException(
             "Cannot create a job without a template spec, 'spec.template.spec' is missing or not a dictionary"
         )
 
@@ -212,7 +227,9 @@ class JobRunner:
         assert isinstance(body, dict), ValueError("Body but be a dictionary")
 
         kind_name: str = body.get("kind", None)
-        if kind_name is None or not KubeResourceKind.has_kind(kind_name.strip().lower()):
+        if kind_name is None or not KubeResourceKind.has_kind(
+            kind_name.strip().lower()
+        ):
             raise JobRunnerException(
                 f"Unrecognized kubernetes object kind: '{kind_name}', "
                 + f"Allowed core kinds are {KubeResourceKind.all_names()}. "
@@ -225,9 +242,17 @@ class JobRunner:
         descriptor = KubeResourceDescriptor(body)
         assert descriptor.spec is not None, ValueError("body['spec'] is not defined")
 
-        descriptor.metadata.setdefault("namespace", self.namespace or self.client.get_default_namespace())
-        name_parts = [v for v in [self.name_prefix, descriptor.name, self.name_postfix] if not_empty_string(v)]
-        assert len(name_parts) > 0, JobRunnerException("Invalid name or auto generated name")
+        descriptor.metadata.setdefault(
+            "namespace", self.namespace or self.client.get_default_namespace()
+        )
+        name_parts = [
+            v
+            for v in [self.name_prefix, descriptor.name, self.name_postfix]
+            if not_empty_string(v)
+        ]
+        assert len(name_parts) > 0, JobRunnerException(
+            "Invalid name or auto generated name"
+        )
         descriptor.name = "-".join(name_parts)
 
         self._update_metadata_labels(body, self.labels)
@@ -237,7 +262,9 @@ class JobRunner:
 
         return body
 
-    def _create_body_operation_queries(self, operator: Type[ConfigureNamespaceResource]) -> List[KubeApiRestQuery]:
+    def _create_body_operation_queries(
+        self, operator: Type[ConfigureNamespaceResource]
+    ) -> List[KubeApiRestQuery]:
         queries = []
         for obj in self.body:
             q = operator(obj)
@@ -252,9 +279,13 @@ class JobRunner:
         Args:
             level ([type], optional): The log level. Defaults to logging.INFO.
         """
-        marker = f"job-runner-{self.id}" if self.show_runner_id_on_logs else "job-runner"
+        marker = (
+            f"job-runner-{self.id}" if self.show_runner_id_on_logs else "job-runner"
+        )
         if self.show_executor_logs:
-            self.logger.log(level, f"{{{marker}}}: {args[0] if len(args)>0 else ''}", *args[1:])
+            self.logger.log(
+                level, f"{{{marker}}}: {args[0] if len(args)>0 else ''}", *args[1:]
+            )
 
     def execute_job(
         self,
@@ -277,7 +308,9 @@ class JobRunner:
 
         # prepare the run objects.
         descriptors = [KubeResourceDescriptor(r) for r in self.body]
-        assert len(descriptors) > 0, JobRunnerException("You must have at least one resource to execute.")
+        assert len(descriptors) > 0, JobRunnerException(
+            "You must have at least one resource to execute."
+        )
         assert all(d.kind is not None for d in descriptors), JobRunnerException(
             "All resources in execution must have a recognizable object kind: (resource['kind'] is not None)"
         )
@@ -285,7 +318,9 @@ class JobRunner:
         # The resource, for which the execution state (running/errored/done) is determined
         execution_state_resource = descriptors[0]
 
-        assert execution_state_resource.kind.parse_kind_state is not None, JobRunnerException(
+        assert (
+            execution_state_resource.kind.parse_kind_state is not None
+        ), JobRunnerException(
             "The first object in the object list must have a kind with a parsable state, "
             + "where the states Failed or Succeeded are returned when the object finishes execution."
             + f"Active kinds with parsable states are: {[k.name for k in KubeResourceKind.parsable()]}. "
@@ -296,8 +331,12 @@ class JobRunner:
         )
 
         # scan the api and get all current watchable kinds.
-        resource_kinds = list(set([r.kind for r in descriptors if isinstance(r.kind, KubeResourceKind)]))
-        resource_namespaces = list(set([r.namespace for r in descriptors if isinstance(r.namespace, str)]))
+        resource_kinds = list(
+            set([r.kind for r in descriptors if isinstance(r.kind, KubeResourceKind)])
+        )
+        resource_namespaces = list(
+            set([r.namespace for r in descriptors if isinstance(r.namespace, str)])
+        )
 
         existing_kinds = GetAPIVersions.get_existing_api_kinds(
             self.client,
@@ -306,7 +345,9 @@ class JobRunner:
 
         # Validating all resources
         for resource in descriptors:
-            assert resource.kind is not None, JobRunnerException("Cannot execute an object without a kind")
+            assert resource.kind is not None, JobRunnerException(
+                "Cannot execute an object without a kind"
+            )
             assert resource.kind in existing_kinds, JobRunnerException(
                 "All resources specified in the execution (the body) must exist in the api. "
                 + f"The kind {str(resource.kind)} was not found."
@@ -320,13 +361,20 @@ class JobRunner:
                     level=logging.WARNING,
                 )
 
-        context_info = KubeApiConfiguration.get_active_context_info(self.client.kube_config)
+        context_info = KubeApiConfiguration.get_active_context_info(
+            self.client.kube_config
+        )
         self.log(f"Executing context: {context_info.get('name','unknown')}")
         self.log(f"Executing cluster: {context_info.get('context',{}).get('cluster')}")
 
         # The watchable kinds are all globally known kinds and and all resource kinds
         # which are watchable. Legacy support
-        watchable_kinds = list(set(KubeResourceKind.watchable() + [k for k in resource_kinds if k.watchable()]))
+        watchable_kinds = list(
+            set(
+                KubeResourceKind.watchable()
+                + [k for k in resource_kinds if k.watchable()]
+            )
+        )
 
         # create the watcher
         watcher = NamespaceWatchQuery(
@@ -338,7 +386,9 @@ class JobRunner:
         )
 
         def handle_kube_api_event(event: KubeLogApiEvent):
-            self.log(f"{event.line.get_context_header()} KubeApiEvent {event.name} of {len(event.value)} [chars]")
+            self.log(
+                f"{event.line.get_context_header()} KubeApiEvent {event.name} of {len(event.value)} [chars]"
+            )
             if on_kube_api_event:
                 on_kube_api_event(event)
 
@@ -364,30 +414,51 @@ class JobRunner:
         self.log(f"Watching namespaces: {', '.join(resource_namespaces)}")
 
         # Creating the objects to run
-        run_query_handler = self.client.query_async(self._create_body_operation_queries(CreateNamespaceResource))
+        run_query_handler = self.client.query_async(
+            self._create_body_operation_queries(CreateNamespaceResource)
+        )
         # binding the errors.
-        run_query_handler.on(run_query_handler.error_event_name, lambda sender, err: watcher.emit_error(err))
+        run_query_handler.on(
+            run_query_handler.error_event_name,
+            lambda sender, err: watcher.emit_error(err),
+        )
 
-        self.log(f"Waiting for {execution_state_resource.namespace}/{execution_state_resource.name} to finish...")
+        self.log(
+            f"Waiting for {execution_state_resource.namespace}/{execution_state_resource.name} to finish..."
+        )
 
         try:
             final_state: KubeResourceState = watcher.wait_for_state(
-                [KubeResourceState.Failed, KubeResourceState.Succeeded, KubeResourceState.Deleted],  # type:ignore
+                [
+                    KubeResourceState.Failed,
+                    KubeResourceState.Succeeded,
+                    KubeResourceState.Deleted,
+                ],  # type:ignore
                 kind=execution_state_resource.kind,
                 name=execution_state_resource.name,
                 namespace=execution_state_resource.namespace,
                 timeout=timeout,
             )
         except Exception as ex:
-            self.log("Error while creating resources, aborting execution", level=logging.ERROR)
-            self.log(f"Resources,\n---\n{yaml.dump_all(self.body)}", level=logging.ERROR)
+            self.log(
+                "Error while creating resources, aborting execution",
+                level=logging.ERROR,
+            )
+            self.log(
+                f"Resources,\n---\n{yaml.dump_all(self.body)}", level=logging.ERROR
+            )
             self.abort()
             raise ex
 
         if final_state == KubeResourceState.Deleted:
-            self.log(f"Failed to execute. Main resource {execution_state_resource} was delete", level=logging.ERROR)
+            self.log(
+                f"Failed to execute. Main resource {execution_state_resource} was delete",
+                level=logging.ERROR,
+            )
             self.abort()
-            raise JobRunnerException("Resource was deleted while execution was running, execution failed.")
+            raise JobRunnerException(
+                "Resource was deleted while execution was running, execution failed."
+            )
 
         self.log(f"Job {final_state}")
 
@@ -397,7 +468,11 @@ class JobRunner:
             queries: List[GetNamespaceResources] = []
             for namespace in resource_namespaces:
                 for kind in set(kinds):
-                    queries.append(GetNamespaceResources(kind, namespace, label_selector=self.job_label_selector))
+                    queries.append(
+                        GetNamespaceResources(
+                            kind, namespace, label_selector=self.job_label_selector
+                        )
+                    )
             self.log("Reading result error (status) objects..")
             resources = [KubeResourceDescriptor(o) for o in self.client.query(queries)]
             self.log(
@@ -409,14 +484,25 @@ class JobRunner:
                 if resource.kind is not None:
                     obj_state = resource.kind.parse_state(resource.body)
                 if resource.status is not None:
-                    self.logger.error(f"[{resource}]: {obj_state}, status:\n" + yaml.safe_dump(resource.status))
+                    self.logger.error(
+                        f"[{resource}]: {obj_state}, status:\n"
+                        + yaml.safe_dump(resource.status)
+                    )
                 else:
-                    self.logger.error(f"[{resource}]: Has {obj_state} (status not provided)")
+                    self.logger.error(
+                        f"[{resource}]: Has {obj_state} (status not provided)"
+                    )
 
         if (
             self.delete_policy == JobRunnerDeletePolicy.Always
-            or (self.delete_policy == JobRunnerDeletePolicy.IfFailed and final_state == KubeResourceState.Failed)
-            or (self.delete_policy == JobRunnerDeletePolicy.IfSucceeded and final_state == KubeResourceState.Succeeded)
+            or (
+                self.delete_policy == JobRunnerDeletePolicy.IfFailed
+                and final_state == KubeResourceState.Failed
+            )
+            or (
+                self.delete_policy == JobRunnerDeletePolicy.IfSucceeded
+                and final_state == KubeResourceState.Succeeded
+            )
         ):
             self.log(f"Deleting resources due to policy: {str(self.delete_policy)}")
             self.delete_job()
@@ -434,8 +520,14 @@ class JobRunner:
             body {dict} -- The job description yaml.
         """
         self.log(("Deleting job.."))
-        descriptors: List[KubeResourceDescriptor] = [KubeResourceDescriptor(o) for o in self.body]
-        descriptors = [d for d in descriptors if d.kind is not None and d.name is not None and d.namespace is not None]
+        descriptors: List[KubeResourceDescriptor] = [
+            KubeResourceDescriptor(o) for o in self.body
+        ]
+        descriptors = [
+            d
+            for d in descriptors
+            if d.kind is not None and d.name is not None and d.namespace is not None
+        ]
 
         self.log(
             "Deleting objects: " + ", ".join([f"{d}" for d in descriptors]),
