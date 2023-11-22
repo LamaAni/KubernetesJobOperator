@@ -70,10 +70,12 @@ class KubeResourceKind:
         """
         super().__init__()
 
-        assert isinstance(name, str) and len(name.strip()) > 0, ValueError("Invalid kind name: " + name)
-        assert isinstance(api_version, str) and len(api_version.strip()) > 0, ValueError(
-            "Invalid kind api_version: " + api_version
+        assert isinstance(name, str) and len(name.strip()) > 0, ValueError(
+            "Invalid kind name: " + name
         )
+        assert (
+            isinstance(api_version, str) and len(api_version.strip()) > 0
+        ), ValueError("Invalid kind api_version: " + api_version)
         assert parse_kind_state is None or isinstance(
             parse_kind_state, Callable
         ), "parse_kind_state must be None or a callable"
@@ -184,7 +186,9 @@ class KubeResourceKind:
     @classmethod
     def get_kind(cls, name: str) -> "KubeResourceKind":
         global kinds_collection
-        assert isinstance(name, str) and len(name) > 0, ValueError("Kind must be a non empty string")
+        assert isinstance(name, str) and len(name) > 0, ValueError(
+            "Kind must be a non empty string"
+        )
         name = name.lower()
         assert name in kinds_collection, ValueError(
             f"Unknown kubernetes object kind: {name},"
@@ -240,7 +244,9 @@ class KubeResourceKind:
         return job_status
 
     @staticmethod
-    def _get_container_resource_states_by_name(yaml: dict) -> Dict[str, KubeResourceState]:
+    def _get_container_resource_states_by_name(
+        yaml: dict,
+    ) -> Dict[str, KubeResourceState]:
         container_statuses = yaml.get("status", {}).get("containerStatuses", [])
         state_by_name: dict = {}
         for container_status in container_statuses:
@@ -282,9 +288,13 @@ class KubeResourceKind:
         """
         status: dict = yaml.get("status", {})
         annotations: dict = yaml.get("metadata", {}).get("annotations", {})
-        main_container_name = annotations.get("kubernetes_job_operator.main_container", None)
+        main_container_name = annotations.get(
+            "kubernetes_job_operator.main_container", None
+        )
 
-        container_resource_states = KubeResourceKind._get_container_resource_states_by_name(yaml=yaml)
+        container_resource_states = (
+            KubeResourceKind._get_container_resource_states_by_name(yaml=yaml)
+        )
 
         for container_state in container_resource_states.values():
             if container_state == KubeResourceState.Failed:
@@ -295,7 +305,9 @@ class KubeResourceKind:
             # check for image pull back-off
             container_statuses: List[dict] = status.get("containerStatuses", [])
             for container_status in container_statuses:
-                waiting_reason = container_status.get("state", {}).get("waiting", {}).get("reason")
+                waiting_reason = (
+                    container_status.get("state", {}).get("waiting", {}).get("reason")
+                )
                 if waiting_reason == "ImagePullBackOff":
                     return KubeResourceState.Failed
 
@@ -305,7 +317,10 @@ class KubeResourceKind:
         elif pod_phase == "Failed":
             return KubeResourceState.Failed
         elif pod_phase == "Running":
-            if main_container_name is not None and main_container_name in container_resource_states:
+            if (
+                main_container_name is not None
+                and main_container_name in container_resource_states
+            ):
                 return container_resource_states[main_container_name]
             return KubeResourceState.Running
 
@@ -324,10 +339,16 @@ class KubeResourceKind:
 
 
 for kind in [
-    KubeResourceKind(api_version="v1", name="Pod", parse_kind_state=KubeResourceKind.parse_state_pod),
+    KubeResourceKind(
+        api_version="v1", name="Pod", parse_kind_state=KubeResourceKind.parse_state_pod
+    ),
     KubeResourceKind(api_version="v1", name="Service"),
     KubeResourceKind(api_version="v1", name="Event", auto_include_in_watch=False),
-    KubeResourceKind(api_version="batch/v1", name="Job", parse_kind_state=KubeResourceKind.parse_state_job),
+    KubeResourceKind(
+        api_version="batch/v1",
+        name="Job",
+        parse_kind_state=KubeResourceKind.parse_state_job,
+    ),
     KubeResourceKind(api_version="apps/v1", name="Deployment"),
     KubeResourceKind(api_version="v1", name="ConfigMap"),
     KubeResourceKind(api_version="v1", name="Secret"),
@@ -355,7 +376,9 @@ class KubeResourceDescriptor:
                 Defaults to True.
         """
         super().__init__()
-        assert isinstance(body, dict), ValueError("Error while parsing resource: body must be a dictionary", body)
+        assert isinstance(body, dict), ValueError(
+            "Error while parsing resource: body must be a dictionary", body
+        )
 
         self._body = body
         self._kind = (

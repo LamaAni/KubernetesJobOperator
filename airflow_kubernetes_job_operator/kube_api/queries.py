@@ -7,14 +7,20 @@ from typing import Union, List, Callable
 import dateutil.parser
 from zthreading.events import Event
 
-from airflow_kubernetes_job_operator.kube_api.exceptions import KubeApiClientException, KubeApiException
+from airflow_kubernetes_job_operator.kube_api.exceptions import (
+    KubeApiClientException,
+    KubeApiException,
+)
 from airflow_kubernetes_job_operator.kube_api.utils import kube_logger, not_empty_string
 from airflow_kubernetes_job_operator.kube_api.collections import (
     KubeResourceKind,
     KubeResourceState,
     KubeResourceDescriptor,
 )
-from airflow_kubernetes_job_operator.kube_api.client import KubeApiRestQuery, KubeApiRestClient
+from airflow_kubernetes_job_operator.kube_api.client import (
+    KubeApiRestQuery,
+    KubeApiRestClient,
+)
 
 
 def default_detect_log_level(line: "LogLine", msg: str):
@@ -74,8 +80,12 @@ class LogLine:
 
     def log(self, logger: Logger = kube_logger):
         msg = self.__repr__()
-        auto_detect_method = self.detect_kubernetes_log_level or default_detect_log_level
-        if not self.autodetect_kuberentes_log_level or not isinstance(auto_detect_method, Callable):
+        auto_detect_method = (
+            self.detect_kubernetes_log_level or default_detect_log_level
+        )
+        if not self.autodetect_kuberentes_log_level or not isinstance(
+            auto_detect_method, Callable
+        ):
             logger.info(msg)
         else:
             logger.log(
@@ -142,15 +152,21 @@ class GetPodLogs(KubeApiRestQuery):
 
         """
         assert not_empty_string(name), ValueError("name must be a non empty string")
-        assert not_empty_string(namespace), ValueError("namespace must be a non empty string")
-        assert api_event_match_regexp is None or not_empty_string(api_event_match_regexp), ValueError(
-            "Event match regexp must me none or a non empty string"
+        assert not_empty_string(namespace), ValueError(
+            "namespace must be a non empty string"
         )
-        assert container is None or not_empty_string(container), ValueError("container must be a non empty string")
+        assert api_event_match_regexp is None or not_empty_string(
+            api_event_match_regexp
+        ), ValueError("Event match regexp must me none or a non empty string")
+        assert container is None or not_empty_string(container), ValueError(
+            "container must be a non empty string"
+        )
 
         kind: KubeResourceKind = KubeResourceKind.get_kind("Pod")
         super().__init__(
-            resource_path=kind.compose_resource_path(namespace=namespace, name=name, suffix="log"),
+            resource_path=kind.compose_resource_path(
+                namespace=namespace, name=name, suffix="log"
+            ),
             method="GET",
             timeout=timeout,
             auto_reconnect=follow,
@@ -174,18 +190,28 @@ class GetPodLogs(KubeApiRestQuery):
         self._last_timestamp = None
         self._active_namespace = None
         self.add_container_name_to_log = (
-            add_container_name_to_log if add_container_name_to_log is not None else container is not None
+            add_container_name_to_log
+            if add_container_name_to_log is not None
+            else container is not None
         )
         self.enable_kube_api_events = (
-            enable_kube_api_events if enable_kube_api_events is not None else GetPodLogs.enable_kube_api_events
+            enable_kube_api_events
+            if enable_kube_api_events is not None
+            else GetPodLogs.enable_kube_api_events
         )
-        self.api_event_match_regexp = api_event_match_regexp or GetPodLogs.api_event_match_regexp
+        self.api_event_match_regexp = (
+            api_event_match_regexp or GetPodLogs.api_event_match_regexp
+        )
 
     def pre_request(self, client: "KubeApiRestClient"):
         super().pre_request(client)
 
         # Updating the since argument.
-        last_ts = self.since if self.since is not None and self.since > self._last_timestamp else self._last_timestamp
+        last_ts = (
+            self.since
+            if self.since is not None and self.since > self._last_timestamp
+            else self._last_timestamp
+        )
 
         since_seconds = None
         if last_ts is not None:
@@ -211,7 +237,10 @@ class GetPodLogs(KubeApiRestQuery):
                     name=self.name,
                 )
             )
-            self.auto_reconnect = pod is not None and KubeResourceDescriptor(pod).state == KubeResourceState.Running
+            self.auto_reconnect = (
+                pod is not None
+                and KubeResourceDescriptor(pod).state == KubeResourceState.Running
+            )
             return self.auto_reconnect
         except Exception as ex:
             self.auto_reconnect = False
@@ -253,7 +282,9 @@ class GetPodLogs(KubeApiRestQuery):
                 namespace=self.namespace,
                 message=message_line,
                 timestamp=timestamp,
-                container_name=self.container if self.add_container_name_to_log else None,
+                container_name=self.container
+                if self.add_container_name_to_log
+                else None,
             )
 
             if self.enable_kube_api_events:
@@ -297,10 +328,14 @@ class GetNamespaceResources(KubeApiRestQuery):
             field_selector (str, optional): A kubernetes field selector to filter resources. Defaults to None.
         """
         kind: KubeResourceKind = (
-            kind if isinstance(kind, KubeResourceKind) else KubeResourceKind.get_kind(kind)  # type:ignore
+            kind
+            if isinstance(kind, KubeResourceKind)
+            else KubeResourceKind.get_kind(kind)  # type:ignore
         )
         super().__init__(
-            resource_path=kind.compose_resource_path(namespace=namespace, name=name, api_version=api_version),
+            resource_path=kind.compose_resource_path(
+                namespace=namespace, name=name, api_version=api_version
+            ),
             method="GET",
             query_params={
                 "pretty": False,
@@ -384,7 +419,9 @@ class GetAPIVersions(KubeApiRestQuery):
             for ver_info in grp.get("versions", []):
                 group_version = ver_info.get("groupVersion")
                 version = ver_info.get("version")
-                assert group_version is not None, KubeApiException("Invalid group version returned from the api")
+                assert group_version is not None, KubeApiException(
+                    "Invalid group version returned from the api"
+                )
                 parsed[group_version] = {
                     "group_name": group_name,
                     "is_preferred": preferred == version,
