@@ -445,8 +445,6 @@ class KubeApiRestQuery(Task):
             except Exception as ex:
                 raise ex from KubeApiException("Error while executing query")
 
-        kube_logger.debug(f"{self.debug_tag} Query complete")
-
     def start(self, client: "KubeApiRestClient"):
         """Start the query execution
 
