@@ -5,6 +5,7 @@ import traceback
 import time
 
 from typing import List, Callable, Set, Union
+import uuid
 from weakref import WeakSet
 from zthreading.tasks import Task
 from zthreading.events import Event, EventHandler
@@ -110,6 +111,8 @@ class KubeApiRestQuery(Task):
             thread_name=f"{self.__class__.__name__} {id(self)}",
         )
 
+        self.__query_id = str(uuid.uuid4())
+
         self.resource_path = resource_path
         self.timeout = timeout
         self.path_params = path_params or dict()
@@ -119,6 +122,7 @@ class KubeApiRestQuery(Task):
         self.method = method
         self.files = files
         self.body = body
+
         self.auto_reconnect = auto_reconnect
         self.auto_reconnect_max_attempts = auto_reconnect_max_attempts
         self.auto_reconnect_wait_between_attempts = auto_reconnect_wait_between_attempts
@@ -138,8 +142,14 @@ class KubeApiRestQuery(Task):
         )
 
     @property
+    def query_id(self) -> str:
+        """A unique query id"""
+        return self.__query_id
+
+    @property
     def debug_tag(self) -> str:
-        return f"[{type(self).__name__}][{self.resource_path}]"
+        """The debug log tag"""
+        return f"[{type(self).__name__}][{self.query_id[-4:]}][{self.resource_path}]"
 
     @property
     def query_running(self) -> bool:
@@ -415,16 +425,27 @@ class KubeApiRestQuery(Task):
 
                     # check if can reconnect.
                     if can_reconnect():
-                        kube_logger.debug(f"{self.debug_tag} {exception_message}")
+                        kube_logger.debug(
+                            f"{self.debug_tag} KubeApi query reconnect: {exception_message}"
+                        )
                         continue
+                    else:
+                        kube_logger.debug(
+                            f"{self.debug_tag} KubeApi query disconnected. "
+                            + "Could not reconnect (Auto reconnect: {self.auto_reconnect})"
+                        )
 
                     # check if is currently being stopped or already stopped.
                     if self.is_running and not self._is_being_stopped:
-                        raise err
+                        raise err from KubeApiException("Error while executing query")
+                    else:
+                        kube_logger.debug(f"Query stopped with: {exception_message}")
                 else:
                     raise ex from KubeApiException("Error while executing query")
             except Exception as ex:
                 raise ex from KubeApiException("Error while executing query")
+
+        kube_logger.debug(f"{self.debug_tag} Query complete")
 
     def start(self, client: "KubeApiRestClient"):
         """Start the query execution
