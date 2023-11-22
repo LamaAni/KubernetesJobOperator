@@ -392,16 +392,16 @@ class KubeApiRestQuery(Task):
                     except Exception:
                         pass
 
-                    exeuctor_name = (
+                    executor_name = (
                         f"{self.__class__.__module__}.{self.__class__.__name__}"
                     )
 
                     if isinstance(ex.body, dict):
                         exception_message = (
-                            f"{exeuctor_name}, {ex.reason}: {ex.body.get('message')}"
+                            f"{executor_name}, {ex.reason}: {ex.body.get('message')}"
                         )
                     else:
-                        exception_message = f"{exeuctor_name}, {ex.reason}: {ex.body}"
+                        exception_message = f"{executor_name}, {ex.reason}: {ex.body}"
 
                     err = KubeApiClientException(
                         exception_message, rest_api_exception=ex
