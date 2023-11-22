@@ -1,10 +1,11 @@
 import re
-from logging import Logger
 import logging
-from datetime import datetime
 import json
-from typing import Union, List, Callable
 import dateutil.parser
+
+from logging import Logger
+from datetime import datetime, timezone
+from typing import Union, List, Callable
 from zthreading.events import Event
 
 from airflow_kubernetes_job_operator.kube_api.exceptions import (
@@ -126,6 +127,7 @@ class GetPodLogs(KubeApiRestQuery):
         add_container_name_to_log: bool = None,
         enable_kube_api_events: bool = None,
         api_event_match_regexp: str = None,
+        auto_reset_last_line_timestamp: bool = None,
     ):
         """Returns the pod logs for a pod. Can follow the pod logs
         in real time.
@@ -146,6 +148,9 @@ class GetPodLogs(KubeApiRestQuery):
             api_event_match_regexp (str, optional): Kube api event match regexp.
                 Must have exactly two match groups (event name, value)
                 Defaults to GetPodLogs.api_event_match_regexp
+            auto_reset_last_line_timestamp (bool, optional): If False, dose not reset the last line read timestamp.
+                This would that subsequnt calls to query, will produce newer lines only.
+                Defaults to follow!=true
 
         Event binding:
             To send a kube api event, place the following string in the pod output log,
@@ -175,7 +180,15 @@ class GetPodLogs(KubeApiRestQuery):
         self.kind = kind
         self.name: str = name
         self.namespace: str = namespace
+        if since.tzinfo is None:
+            since = since.astimezone()
+
         self.since: datetime = since
+        self.auto_reset_last_line_timestamp: bool = (
+            auto_reset_last_line_timestamp
+            if auto_reset_last_line_timestamp is not None
+            else not follow
+        )
         self.container = container
         self.query_params = {
             "follow": follow,
@@ -188,7 +201,8 @@ class GetPodLogs(KubeApiRestQuery):
 
         self.since = since
         self.__follow = follow
-        self._last_timestamp = None
+        self.__last_log_line_timestamp = None
+        self.__query_start_tail_offset_seconds = None
         self._active_namespace = None
         self.add_container_name_to_log = (
             add_container_name_to_log
@@ -208,25 +222,20 @@ class GetPodLogs(KubeApiRestQuery):
     def follow(self) -> bool:
         return self.__follow
 
-    def __get_last_since(self):
-        last_ts = (
-            self.since
-            if self.since is not None and self.since > self._last_timestamp
-            else self._last_timestamp
+    def _get_last_read_line_timestamp(self):
+        return (
+            self.__last_log_line_timestamp
+            or self.since
+            or datetime.utcfromtimestamp(0).replace(tzinfo=timezone.utc)
         )
-        since = (datetime.now() - last_ts) if last_ts is not None else None
-        if since is None or since.total_seconds() < 0:
-            return None
-        return since
-
-    def __get_last_since_seconds(self):
-        since = self.__get_last_since()
-        return since.total_seconds() if since else None
 
     def _execute_query(self, client: KubeApiRestClient):
         # Loop override to enable follow.
         # The log query may end at some point (Server may not allow query to run as long)
         # We must create a loop execution for the underlining query.
+
+        if self.auto_reset_last_line_timestamp:
+            self.__last_log_line_timestamp = None
 
         # Sent query will restart execution and call all execution events.
         while True:
@@ -234,17 +243,30 @@ class GetPodLogs(KubeApiRestQuery):
             if not self.follow:
                 break
             kube_logger.debug(
-                f"{self.debug_tag} Get logs query restarted, following (sinceSeconds={self.__get_last_since_seconds()})"
+                f"{self.debug_tag} Get logs query restarted, following"
+                + " (last read line @ {self.__get_last_read_line_timestamp()})"
             )
+
+    def __update_query_since(self):
+        # since timestamp in seconds
+        # since_seconds = int(
+        #     self.__get_last_read_line_timestamp()
+        #     .replace(tzinfo=timezone.utc)
+        #     .timestamp()
+        # )
+
+        # Updating the since argument.
+        since = self._get_last_read_line_timestamp()
+        self.query_params["sinceTime"] = since.isoformat()
 
     def pre_request(self, client: "KubeApiRestClient"):
         super().pre_request(client)
-
-        # Updating the since argument.
-        self.query_params["sinceSeconds"] = self.__get_last_since_seconds()
+        self.__update_query_since()
 
     def on_reconnect(self, client: KubeApiRestClient):
         # updating the since property.
+        self.__update_query_since()
+
         if not self.query_running or not self.auto_reconnect:
             # if the query is not running then we have reached the pods log end.
             # we should disconnect, otherwise we should have had an error.
@@ -289,9 +311,16 @@ class GetPodLogs(KubeApiRestQuery):
 
         return has_events
 
+    def __update_last_timestamp(self, timestamp: datetime):
+        if (
+            self.__last_log_line_timestamp is None
+            or self.__last_log_line_timestamp < timestamp
+        ):
+            self.__last_log_line_timestamp = timestamp
+
     def parse_data(self, message_line: str):
-        self._last_timestamp = datetime.now()
         timestamp = dateutil.parser.isoparse(message_line[: message_line.index(" ")])
+        self.__update_last_timestamp(timestamp)
 
         message = message_line[message_line.index(" ") + 1 :]  # noqa: E203
         message = message.replace("\r", "")

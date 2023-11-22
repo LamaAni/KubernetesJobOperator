@@ -30,5 +30,5 @@ spec:
               value: '10800' # 3 hrs
 
             - name: SLEEP_INTERVAL
-              value: '60'
+              value: '1'
   backoffLimit: 0
