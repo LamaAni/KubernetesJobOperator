@@ -1,5 +1,6 @@
 import jinja2
 import json
+from logging import Logger
 from typing import List, Union
 from airflow.utils.decorators import apply_defaults
 from airflow_kubernetes_job_operator.kube_api import KubeResourceState, KubeLogApiEvent
@@ -366,12 +367,17 @@ class KubernetesJobOperator(KubernetesJobOperatorDefaultsBase):
     def create_job_runner(self) -> JobRunner:
         """Override this method to create your own or augment the job runner"""
         # create the job runner.
+        logger: Logger = None
+        if hasattr(self, "logger"):
+            logger = self.logger
+            if not isinstance(self.logger, Logger):
+                logger = logger()
         return JobRunner(
             body=self.body,
             namespace=self.namespace,
             show_pod_logs=self.get_logs,
             delete_policy=self.delete_policy,
-            logger=self.logger if hasattr(self, "logger") else None,
+            logger=logger,
             auto_load_kube_config=True,
             name_prefix=self._create_kubernetes_job_name_prefix(
                 self.name_prefix if self.name_prefix is not None else self.task_id
@@ -454,7 +460,6 @@ class KubernetesJobOperator(KubernetesJobOperatorDefaultsBase):
         )
         self._job_is_executing = True
         try:
-
             rslt = self.job_runner.execute_job(
                 watcher_start_timeout=self.startup_timeout_seconds,
                 timeout=self._internal_wait_kuberentes_object_timeout,

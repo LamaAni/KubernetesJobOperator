@@ -2,7 +2,11 @@ import os
 import json
 import kubernetes
 import kubernetes.config.kube_config
-from airflow_kubernetes_job_operator.kube_api import KubeApiRestClient, GetAPIResources, GetAPIVersions
+from airflow_kubernetes_job_operator.kube_api import (
+    KubeApiRestClient,
+    GetAPIResources,
+    GetAPIVersions,
+)
 
 
 client = KubeApiRestClient()

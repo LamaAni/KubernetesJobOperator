@@ -97,6 +97,8 @@ def resolve_file(fpath: str, offset=1):
     return os.path.abspath(fpath)
 
 
-logging.basicConfig(level="INFO", format=style.GRAY("[%(asctime)s][%(levelname)7s]") + " %(message)s")
+logging.basicConfig(
+    level="INFO", format=style.GRAY("[%(asctime)s][%(levelname)7s]") + " %(message)s"
+)
 print_version = str(sys.version).replace("\n", " ")
 logging.info(f"Running in python version: {print_version}")

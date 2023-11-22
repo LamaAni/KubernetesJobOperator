@@ -1,7 +1,9 @@
 from datetime import timedelta
 from utils import default_args, name_from_file
 from airflow import DAG
-from airflow_kubernetes_job_operator.kubernetes_job_operator import KubernetesJobOperator
+from airflow_kubernetes_job_operator.kubernetes_job_operator import (
+    KubernetesJobOperator,
+)
 
 dag = DAG(
     name_from_file(__file__),
@@ -15,7 +17,8 @@ envs = {
     "PASS_ARG": "a test",
 }
 
-total_time_seconds = round(timedelta(hours=8).total_seconds())
+total_time_seconds = round(timedelta(hours=4.5).total_seconds())
+sleep_interval = round(timedelta(seconds=60).total_seconds())
 
 KubernetesJobOperator(
     task_id="test-long-job-success",
@@ -23,11 +26,13 @@ KubernetesJobOperator(
     envs={
         "PASS_ARG": "a long test",
         "TIC_COUNT": str(total_time_seconds),
+        "SLEEP_INTERVAL": str(sleep_interval),
     },
     dag=dag,
 )
 
 
 if __name__ == "__main__":
-    dag.clear(reset_dag_runs=True)
-    dag.run()
+    from tests.test_utils import test_dag
+
+    test_dag(dag)

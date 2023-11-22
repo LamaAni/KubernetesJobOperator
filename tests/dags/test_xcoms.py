@@ -4,7 +4,9 @@ from datetime import datetime
 
 from airflow.models import TaskInstance
 from airflow.operators.python_operator import PythonOperator
-from airflow_kubernetes_job_operator.kubernetes_legacy_job_operator import KubernetesJobOperator
+from airflow_kubernetes_job_operator.kubernetes_legacy_job_operator import (
+    KubernetesJobOperator,
+)
 
 dag = DAG(
     name_from_file(__file__),
@@ -39,7 +41,6 @@ with dag:
     )
 
 if __name__ == "__main__":
-    from airflow.utils.state import State  # noqa F401
+    from tests.test_utils import test_dag
 
-    dag.clear()
-    dag.run()
+    test_dag(dag)

@@ -6,7 +6,11 @@ from airflow_kubernetes_job_operator.kube_api import KubeApiRestClient
 from airflow_kubernetes_job_operator.kube_api import GetNamespaceResources
 
 KubeResourceKind.register_global_kind(
-    KubeResourceKind("HCjob", "hc.dto.cbsinteractive.com/v1alpha1", parse_kind_state=KubeResourceKind.parse_state_job)
+    KubeResourceKind(
+        "HCjob",
+        "hc.dto.cbsinteractive.com/v1alpha1",
+        parse_kind_state=KubeResourceKind.parse_state_job,
+    )
 )
 
 client = KubeApiRestClient()

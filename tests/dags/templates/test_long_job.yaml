@@ -13,18 +13,22 @@ spec:
             - -c
             - |
               #/usr/bin/env bash
-              echo "Starting $PASS_ARG"
-              cur_count=0
+              : "${SLEEP_INTERVAL:=10}"
+              echo "Starting $PASS_ARG (Sleep interval $SLEEP_INTERVAL)"
+              elapsed_time=0
               while true; do
-                  cur_count=$((cur_count + 1))
-                  if [ "$cur_count" -ge "$TIC_COUNT" ]; then
+                  sleep $SLEEP_INTERVAL
+                  elapsed_time=$((elapsed_time + $SLEEP_INTERVAL))
+                  echo "Elapsed $elapsed_time [seconds]"
+                  if [ "$elapsed_time" -ge "$TIC_COUNT" ]; then
                       break
                   fi
-                  date
-                  sleep 1
               done
               echo "Complete"
           env:
             - name: TIC_COUNT
               value: '10800' # 3 hrs
+
+            - name: SLEEP_INTERVAL
+              value: '1'
   backoffLimit: 0

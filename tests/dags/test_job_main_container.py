@@ -1,6 +1,8 @@
 from utils import default_args, name_from_file
 from airflow import DAG
-from airflow_kubernetes_job_operator.kubernetes_job_operator import KubernetesJobOperator
+from airflow_kubernetes_job_operator.kubernetes_job_operator import (
+    KubernetesJobOperator,
+)
 
 
 dag = DAG(
@@ -12,8 +14,11 @@ dag = DAG(
 )
 
 with dag:
-    KubernetesJobOperator(task_id="test_main_container", body_filepath=__file__ + ".yaml")
+    KubernetesJobOperator(
+        task_id="test_main_container", body_filepath=__file__ + ".yaml"
+    )
 
 if __name__ == "__main__":
-    dag.clear()
-    dag.run()
+    from tests.test_utils import test_dag
+
+    test_dag(dag)

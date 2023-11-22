@@ -17,7 +17,11 @@ from airflow_kubernetes_job_operator.kube_api import (
 kubernetes.client.CoreV1Api().delete_namespaced_service
 
 KubeResourceKind.register_global_kind(
-    KubeResourceKind("HCjob", "hc.dto.cbsinteractive.com/v1alpha1", parse_kind_state=KubeResourceKind.parse_state_job)
+    KubeResourceKind(
+        "HCjob",
+        "hc.dto.cbsinteractive.com/v1alpha1",
+        parse_kind_state=KubeResourceKind.parse_state_job,
+    )
 )
 
 
@@ -68,7 +72,9 @@ watcher = NamespaceWatchQuery(namespace=namespace, label_selector=label_selector
 watcher.pipe_to_logger(logging)
 client.query_async(watcher)
 watcher.wait_until_running()
-logging.info(f"Watcher started for {task_id}, watch kinds: " + ", ".join(watcher.kinds.keys()))
+logging.info(
+    f"Watcher started for {task_id}, watch kinds: " + ", ".join(watcher.kinds.keys())
+)
 
 logging.info(f"Sending {task} to server with dependencies...")
 client.query_async(apply_on_objects(CreateNamespaceResource))

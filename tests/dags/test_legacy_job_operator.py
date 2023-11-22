@@ -1,7 +1,9 @@
 from utils import default_args, name_from_file
 import kubernetes.client as k8s
 from airflow import DAG
-from airflow_kubernetes_job_operator.kubernetes_legacy_job_operator import KubernetesLegacyJobOperator
+from airflow_kubernetes_job_operator.kubernetes_legacy_job_operator import (
+    KubernetesLegacyJobOperator,
+)
 
 dag = DAG(
     name_from_file(__file__),
