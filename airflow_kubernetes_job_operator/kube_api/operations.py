@@ -2,7 +2,10 @@ from logging import Logger
 from typing import Union
 from zthreading.events import Event
 
-from airflow_kubernetes_job_operator.kube_api.collections import KubeResourceDescriptor, KubeResourceKind
+from airflow_kubernetes_job_operator.kube_api.collections import (
+    KubeResourceDescriptor,
+    KubeResourceKind,
+)
 from airflow_kubernetes_job_operator.kube_api.client import KubeApiRestQuery
 
 
@@ -43,7 +46,9 @@ class ConfigureNamespaceResource(KubeApiRestQuery):
         resource_path = (
             self._descriptor.kind.compose_resource_path(self._descriptor.namespace)
             if method == "POST"
-            else self._descriptor.kind.compose_resource_path(self._descriptor.namespace, self._descriptor.name)
+            else self._descriptor.kind.compose_resource_path(
+                self._descriptor.namespace, self._descriptor.name
+            )
         )
 
         super().__init__(
@@ -120,7 +125,9 @@ class DeleteNamespaceResource(ConfigureNamespaceResource):
             propagation_policy ([type], optional): Delete propagation policy. See kubernetes. Defaults to None.
             use_asyncio ([type], optional): NOT IMPLEMENTED. Defaults to None.
         """
-        assert grace_period_seconds is not None, ValueError("Grace period seconds must be defined.")
+        assert grace_period_seconds is not None, ValueError(
+            "Grace period seconds must be defined."
+        )
         super().__init__(
             body,
             "DELETE",

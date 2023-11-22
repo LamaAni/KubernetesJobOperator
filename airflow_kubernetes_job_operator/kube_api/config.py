@@ -1,10 +1,18 @@
 import os
 from typing import List, Callable
-from kubernetes.config import kube_config, incluster_config, load_kube_config, list_kube_config_contexts
+from kubernetes.config import (
+    kube_config,
+    incluster_config,
+    load_kube_config,
+    list_kube_config_contexts,
+)
 from kubernetes.config.kube_config import Configuration
 
 from airflow_kubernetes_job_operator.kube_api.exceptions import KubeApiException
-from airflow_kubernetes_job_operator.kube_api.utils import join_locations_list, not_empty_string
+from airflow_kubernetes_job_operator.kube_api.utils import (
+    join_locations_list,
+    not_empty_string,
+)
 from airflow_kubernetes_job_operator.kube_api.collections import KubeResourceKind
 
 DEFAULT_KUBE_CONFIG_LOCATIONS: List[str] = join_locations_list(
@@ -56,7 +64,9 @@ class KubeApiConfiguration:
         Args:
             namespace (str): The namespace
         """
-        assert not_empty_string(namespace), ValueError("namespace must be a non empty string")
+        assert not_empty_string(namespace), ValueError(
+            "namespace must be a non empty string"
+        )
         cls._default_namespace = namespace
 
     def add_kube_config_search_location(file_path: str):
@@ -120,16 +130,21 @@ class KubeApiConfiguration:
             configuration = kube_config.Configuration()
 
             loader = incluster_config.InClusterConfigLoader(
-                incluster_config.SERVICE_TOKEN_FILENAME, incluster_config.SERVICE_CERT_FILENAME
+                incluster_config.SERVICE_TOKEN_FILENAME,
+                incluster_config.SERVICE_CERT_FILENAME,
             )
             loader._load_config()
 
             configuration.host = loader.host
             configuration.ssl_ca_cert = loader.ssl_ca_cert
             configuration.api_key["authorization"] = (
-                loader.token if loader.token.lower().strip().startswith("bearer ") else "bearer " + loader.token
+                loader.token
+                if loader.token.lower().strip().startswith("bearer ")
+                else "bearer " + loader.token
             )
-            default_namespace_file = os.path.join(DEFAULT_SERVICE_ACCOUNT_PATH, "namespace")
+            default_namespace_file = os.path.join(
+                DEFAULT_SERVICE_ACCOUNT_PATH, "namespace"
+            )
             if os.path.exists(default_namespace_file):
                 with open(default_namespace_file, "r") as raw:
                     configuration.default_namespace = raw.read()
@@ -161,14 +176,18 @@ class KubeApiConfiguration:
             configuration = cls._default_kube_config
         # search for config.
         else:
-            default_config_file = cls.find_default_config_file(extra_config_locations=extra_config_locations)
+            default_config_file = cls.find_default_config_file(
+                extra_config_locations=extra_config_locations
+            )
             if default_config_file is not None:
                 configuration = load_from_file(default_config_file)
             elif os.path.isfile(incluster_config.SERVICE_TOKEN_FILENAME):
                 configuration = load_in_cluster()
 
         if configuration is not None:
-            configuration.filepath = configuration.filepath if hasattr(configuration, "filepath") else None
+            configuration.filepath = (
+                configuration.filepath if hasattr(configuration, "filepath") else None
+            )
             configuration.default_namespace = (
                 default_namespace or configuration.default_namespace
                 if hasattr(configuration, "default_namespace")
@@ -197,14 +216,19 @@ class KubeApiConfiguration:
         ):
             return {}
 
-        (contexts, active_context) = list_kube_config_contexts(config_file=configuration.filepath)
+        (contexts, active_context) = list_kube_config_contexts(
+            config_file=configuration.filepath
+        )
         return active_context or {}
 
     @classmethod
     def get_default_namespace(cls, configuration: Configuration):
         """Returns the default namespace for the config."""
         try:
-            if hasattr(configuration, "default_namespace") and configuration.default_namespace is not None:
+            if (
+                hasattr(configuration, "default_namespace")
+                and configuration.default_namespace is not None
+            ):
                 return configuration.default_namespace
             elif (
                 hasattr(configuration, "filepath")

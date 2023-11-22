@@ -13,7 +13,10 @@ from airflow_kubernetes_job_operator.kube_api.collections import (
     KubeResourceKind,
     KubeApiRestQueryConnectionState,
 )
-from airflow_kubernetes_job_operator.kube_api.client import KubeApiRestQuery, KubeApiRestClient
+from airflow_kubernetes_job_operator.kube_api.client import (
+    KubeApiRestQuery,
+    KubeApiRestClient,
+)
 from airflow_kubernetes_job_operator.kube_api.queries import (
     GetNamespaceResources,
     GetPodLogs,
@@ -116,7 +119,9 @@ class NamespaceWatchQueryResourceState(EventHandler):
             self._deleted = True
             self.emit(self.deleted_event_name)
 
-        has_status_changed = json.dumps(self.status) != json.dumps(body.get("status", {}))
+        has_status_changed = json.dumps(self.status) != json.dumps(
+            body.get("status", {})
+        )
         if has_status_changed:
             self.emit(self.status_changed_event_name)
 
@@ -174,7 +179,13 @@ class NamespaceWatchQuery(KubeApiRestQuery):
         # update kinds
         kinds = kinds or KubeResourceKind.watchable()
 
-        self.namespaces = [] if namespace is None else namespace if isinstance(namespace, list) else [namespace]
+        self.namespaces = (
+            []
+            if namespace is None
+            else namespace
+            if isinstance(namespace, list)
+            else [namespace]
+        )
         self.label_selector = label_selector
         self.field_selector = field_selector
         self.watch_pod_logs = watch_pod_logs
@@ -184,11 +195,17 @@ class NamespaceWatchQuery(KubeApiRestQuery):
 
         self.kinds = {}
         for kind in kinds:
-            kind: KubeResourceKind = kind if isinstance(kind, KubeResourceKind) else KubeResourceKind.get_kind(kind)
+            kind: KubeResourceKind = (
+                kind
+                if isinstance(kind, KubeResourceKind)
+                else KubeResourceKind.get_kind(kind)
+            )
             self.kinds[kind.name] = kind
 
         self._executing_queries: List[KubeApiRestQuery] = WeakSet()  # type:ignore
-        self._executing_pod_loggers: Dict[str, GetPodLogs] = WeakValueDictionary()  # type:ignore
+        self._executing_pod_loggers: Dict[
+            str, GetPodLogs
+        ] = WeakValueDictionary()  # type:ignore
         self._object_states: Dict[str, NamespaceWatchQueryResourceState] = dict()
 
     @property
@@ -256,9 +273,10 @@ class NamespaceWatchQuery(KubeApiRestQuery):
 
                     container_name = container.get("name", None)
 
-                    assert isinstance(container_name, str) and len(container_name.strip()) > 0, KubeApiException(
-                        "Invalid container name when reading logs"
-                    )
+                    assert (
+                        isinstance(container_name, str)
+                        and len(container_name.strip()) > 0
+                    ), KubeApiException("Invalid container name when reading logs")
 
                     logger_id = f"{uid}/{container_name}"
 
@@ -274,7 +292,10 @@ class NamespaceWatchQuery(KubeApiRestQuery):
                         is_single=is_single,
                     )
 
-                    osw.emit(self.pod_logs_reader_started_event_name, container=container_name)
+                    osw.emit(
+                        self.pod_logs_reader_started_event_name,
+                        container=container_name,
+                    )
 
                     def handle_error(sender, *args):
                         # Don't throw error if not running.
@@ -282,14 +303,19 @@ class NamespaceWatchQuery(KubeApiRestQuery):
                             return
 
                         if len(args) == 0:
-                            self.emit_error(KubeApiException("Unknown error from sender", sender))
+                            self.emit_error(
+                                KubeApiException("Unknown error from sender", sender)
+                            )
                         else:
                             self.emit_error(args[0])
 
                     # binding only relevant events.
-                    read_logs.on(read_logs.data_event_name, lambda line: self.emit_log(line))
                     read_logs.on(
-                        read_logs.kube_api_event_name, lambda api_event: self.emit_api_event(api_event=api_event)
+                        read_logs.data_event_name, lambda line: self.emit_log(line)
+                    )
+                    read_logs.on(
+                        read_logs.kube_api_event_name,
+                        lambda api_event: self.emit_api_event(api_event=api_event),
                     )
                     read_logs.on(read_logs.error_event_name, handle_error)
                     client.query_async(read_logs)
@@ -300,7 +326,9 @@ class NamespaceWatchQuery(KubeApiRestQuery):
         throw_error_if_not_running: bool = None,
     ):
         for pod_logger in list(self._executing_pod_loggers.values()):
-            pod_logger.stop(timeout=timeout, throw_error_if_not_running=throw_error_if_not_running)
+            pod_logger.stop(
+                timeout=timeout, throw_error_if_not_running=throw_error_if_not_running
+            )
 
     def stop(
         self,
@@ -308,14 +336,18 @@ class NamespaceWatchQuery(KubeApiRestQuery):
         throw_error_if_not_running: bool = None,
     ):
         for q in self._executing_queries:
-            q.stop(timeout=timeout, throw_error_if_not_running=throw_error_if_not_running)
+            q.stop(
+                timeout=timeout, throw_error_if_not_running=throw_error_if_not_running
+            )
 
         self._stop_all_loggers(
             timeout=timeout,
             throw_error_if_not_running=throw_error_if_not_running,
         )
 
-        return super().stop(timeout=timeout, throw_error_if_not_running=throw_error_if_not_running)
+        return super().stop(
+            timeout=timeout, throw_error_if_not_running=throw_error_if_not_running
+        )
 
     def log_event(self, logger: Logger, ev: Event):
         if ev.name == self.query_before_reconnect_event_name:
@@ -327,16 +359,23 @@ class NamespaceWatchQuery(KubeApiRestQuery):
                 )
         elif ev.name == self.state_changed_event_name:
             osw: NamespaceWatchQueryResourceState = ev.sender
-            logger.info(f"[{osw.namespace}/{osw.kind_name.lower()}s/{osw.name}]" + f" {osw.state}")
+            logger.info(
+                f"[{osw.namespace}/{osw.kind_name.lower()}s/{osw.name}]"
+                + f" {osw.state}"
+            )
         elif ev.name == self.pod_log_event_name:
             line: LogLine = ev.args[0]
             line.log(logger)
         elif ev.name == self.pod_logs_reader_started_event_name:
             osw: NamespaceWatchQueryResourceState = ev.sender
             container_name = ev.kwargs.get("container", "[unknown container name]")
-            logger.info(f"[{osw.namespace}/{osw.kind_name.lower()}s/{osw.name}] Reading logs from {container_name}")
+            logger.info(
+                f"[{osw.namespace}/{osw.kind_name.lower()}s/{osw.name}] Reading logs from {container_name}"
+            )
 
-    def pipe_to_logger(self, logger: Logger = kube_logger, allowed_event_names=None) -> int:
+    def pipe_to_logger(
+        self, logger: Logger = kube_logger, allowed_event_names=None
+    ) -> int:
         allowed_event_names = set(
             allowed_event_names
             or [
@@ -380,7 +419,11 @@ class NamespaceWatchQuery(KubeApiRestQuery):
                 return False
 
             osw: NamespaceWatchQueryResourceState = event.sender
-            if osw.name != name or osw.namespace != namespace or osw.kind.name != kind.name:
+            if (
+                osw.name != name
+                or osw.namespace != namespace
+                or osw.kind.name != kind.name
+            ):
                 return False
 
             if osw.state in state:
@@ -410,7 +453,10 @@ class NamespaceWatchQuery(KubeApiRestQuery):
                     field_selector=self.field_selector,
                     label_selector=self.label_selector,
                 )
-                q.on(q.data_event_name, lambda data: self.process_data_state(data, client))
+                q.on(
+                    q.data_event_name,
+                    lambda data: self.process_data_state(data, client),
+                )
                 q.pipe(self)
 
                 queries.append(q)

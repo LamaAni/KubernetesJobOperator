@@ -7,7 +7,9 @@ from airflow_kubernetes_job_operator.config import AIRFLOW_MAJOR_VERSION
 if AIRFLOW_MAJOR_VERSION < 2:
 
     def create_legacy_kubernetes_pod_airflow_from_provider(*args, **kwargs):
-        raise KubernetesJobOperatorException("Kubernetes legacy job operator is supported for airflow 2.0 and up")
+        raise KubernetesJobOperatorException(
+            "Kubernetes legacy job operator is supported for airflow 2.0 and up"
+        )
 
 else:
 
@@ -15,9 +17,13 @@ else:
     from airflow.kubernetes.secret import Secret  # noqa F401
 
     if TYPE_CHECKING:
-        from airflow_kubernetes_job_operator.kubernetes_legacy_job_operator import KubernetesLegacyJobOperator
+        from airflow_kubernetes_job_operator.kubernetes_legacy_job_operator import (
+            KubernetesLegacyJobOperator,
+        )
 
-    def create_legacy_kubernetes_pod_airflow_from_provider(operator: "KubernetesLegacyJobOperator"):
+    def create_legacy_kubernetes_pod_airflow_from_provider(
+        operator: "KubernetesLegacyJobOperator",
+    ):
         env_vars = []
         if isinstance(env_vars, dict):
             for k in env_vars.keys():
@@ -34,7 +40,9 @@ else:
                     env_vars.append(env)
 
         if operator.pod_runtime_info_envs:
-            env_vars.extend([env.to_k8s_client_obj() for env in operator.pod_runtime_info_envs])
+            env_vars.extend(
+                [env.to_k8s_client_obj() for env in operator.pod_runtime_info_envs]
+            )
 
         env_from: List[k8s.V1EnvFromSource] = operator.env_from or []
 
@@ -89,8 +97,12 @@ else:
             pod = secret.attach_to_pod(pod)
 
         return {
-            "metadata": operator.job_runner.client.api_client.sanitize_for_serialization(pod.metadata),
-            "spec": operator.job_runner.client.api_client.sanitize_for_serialization(pod.spec),
+            "metadata": operator.job_runner.client.api_client.sanitize_for_serialization(
+                pod.metadata
+            ),
+            "spec": operator.job_runner.client.api_client.sanitize_for_serialization(
+                pod.spec
+            ),
         }
 
 
