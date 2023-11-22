@@ -1,10 +1,11 @@
 import re
 import logging
 import json
+from time import sleep
 import dateutil.parser
 
 from logging import Logger
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Union, List, Callable
 from zthreading.events import Event
 
@@ -189,6 +190,7 @@ class GetPodLogs(KubeApiRestQuery):
             if auto_reset_last_line_timestamp is not None
             else not follow
         )
+        self.follow_restart_query_timeout = timedelta(seconds=0.5)
         self.container = container
         self.query_params = {
             "follow": follow,
@@ -237,14 +239,45 @@ class GetPodLogs(KubeApiRestQuery):
         if self.auto_reset_last_line_timestamp:
             self.__last_log_line_timestamp = None
 
-        # Sent query will restart execution and call all execution events.
-        while True:
-            super()._execute_query(client)
+        def can_loop_on_query():
             if not self.follow:
+                return False
+            if self._is_being_stopped:
+                return False
+            return self.is_running
+
+        # Sent query will restart execution and call all execution events.
+        was_restarted = False
+        while True:
+            try:
+                super()._execute_query(client)
+            except KubeApiClientException as ex:
+                was_not_found = (
+                    isinstance(ex.rest_api_exception.body, dict)
+                    and ex.rest_api_exception.body.get("reason", None) == "NotFound"
+                )
+                if was_restarted and was_not_found:
+                    kube_logger.debug(
+                        f"{self.debug_tag} Logging stopped, resource not found after restart (Was it deleted?)"
+                    )
+                    break
+                raise ex
+
+            # checking if can loop
+            if not can_loop_on_query():
                 break
+
+            # Sleeping before query restart
+            if self.follow_restart_query_timeout:
+                sleep(self.follow_restart_query_timeout.total_seconds())
+                # Second check, since we slept and waited for execution.
+                if not can_loop_on_query():
+                    break
+
+            was_restarted = True
             kube_logger.debug(
                 f"{self.debug_tag} Get logs query restarted, following"
-                + " (last read line @ {self.__get_last_read_line_timestamp()})"
+                + f" (last read line @ {self.__last_log_line_timestamp})"
             )
 
     def __update_query_since(self):
@@ -313,6 +346,14 @@ class GetPodLogs(KubeApiRestQuery):
 
     def parse_data(self, message_line: str):
         timestamp = dateutil.parser.isoparse(message_line[: message_line.index(" ")])
+
+        if (
+            self.__last_log_line_timestamp
+            and timestamp <= self.__last_log_line_timestamp
+        ):
+            # Older, no need to read.
+            return []
+
         self.__update_last_timestamp(timestamp)
 
         message = message_line[message_line.index(" ") + 1 :]  # noqa: E203
