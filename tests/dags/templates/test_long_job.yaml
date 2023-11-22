@@ -15,7 +15,7 @@ spec:
               #/usr/bin/env bash
               : "${SLEEP_INTERVAL:=10}"
               echo "Starting $PASS_ARG (Sleep interval $SLEEP_INTERVAL)"
-              local elapsed_time=0
+              elapsed_time=0
               while true; do
                   sleep $SLEEP_INTERVAL
                   elapsed_time=$((elapsed_time + $SLEEP_INTERVAL))
@@ -23,7 +23,6 @@ spec:
                   if [ "$elapsed_time" -ge "$TIC_COUNT" ]; then
                       break
                   fi
-                  
               done
               echo "Complete"
           env:

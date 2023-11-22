@@ -187,6 +187,7 @@ class GetPodLogs(KubeApiRestQuery):
             self.query_params["container"] = container
 
         self.since = since
+        self.__follow = follow
         self._last_timestamp = None
         self._active_namespace = None
         self.add_container_name_to_log = (
@@ -203,23 +204,44 @@ class GetPodLogs(KubeApiRestQuery):
             api_event_match_regexp or GetPodLogs.api_event_match_regexp
         )
 
-    def pre_request(self, client: "KubeApiRestClient"):
-        super().pre_request(client)
+    @property
+    def follow(self) -> bool:
+        return self.__follow
 
-        # Updating the since argument.
+    def __get_last_since(self):
         last_ts = (
             self.since
             if self.since is not None and self.since > self._last_timestamp
             else self._last_timestamp
         )
+        since = (datetime.now() - last_ts) if last_ts is not None else None
+        if since is None or since.total_seconds() < 0:
+            return None
+        return since
 
-        since_seconds = None
-        if last_ts is not None:
-            since_seconds = (datetime.now() - last_ts).total_seconds()
-            if since_seconds < 0:
-                since_seconds = 0
+    def __get_last_since_seconds(self):
+        since = self.__get_last_since()
+        return since.total_seconds() if since else None
 
-        self.query_params["sinceSeconds"] = since_seconds
+    def _execute_query(self, client: KubeApiRestClient):
+        # Loop override to enable follow.
+        # The log query may end at some point (Server may not allow query to run as long)
+        # We must create a loop execution for the underlining query.
+
+        # Sent query will restart execution and call all execution events.
+        while True:
+            super()._execute_query(client)
+            if not self.follow:
+                break
+            kube_logger.debug(
+                f"{self.debug_tag} Get logs query restarted, following (sinceSeconds={self.__get_last_since_seconds()})"
+            )
+
+    def pre_request(self, client: "KubeApiRestClient"):
+        super().pre_request(client)
+
+        # Updating the since argument.
+        self.query_params["sinceSeconds"] = self.__get_last_since_seconds()
 
     def on_reconnect(self, client: KubeApiRestClient):
         # updating the since property.
