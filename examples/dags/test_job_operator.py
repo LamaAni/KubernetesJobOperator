@@ -1,10 +1,15 @@
 from airflow import DAG
-from airflow_kubernetes_job_operator.kubernetes_job_operator import KubernetesJobOperator
+from airflow_kubernetes_job_operator.kubernetes_job_operator import (
+    KubernetesJobOperator,
+)
 from airflow.utils.dates import days_ago
 
 default_args = {"owner": "tester", "start_date": days_ago(2), "retries": 0}
 dag = DAG(
-    "job-operator-example", default_args=default_args, description="Test base job operator", schedule_interval=None
+    "job-operator-example",
+    default_args=default_args,
+    description="Test base job operator",
+    schedule_interval=None,
 )
 
 

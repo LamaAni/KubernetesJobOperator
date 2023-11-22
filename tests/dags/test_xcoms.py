@@ -4,7 +4,9 @@ from datetime import datetime
 
 from airflow.models import TaskInstance
 from airflow.operators.python_operator import PythonOperator
-from airflow_kubernetes_job_operator.kubernetes_legacy_job_operator import KubernetesJobOperator
+from airflow_kubernetes_job_operator.kubernetes_legacy_job_operator import (
+    KubernetesJobOperator,
+)
 
 dag = DAG(
     name_from_file(__file__),
@@ -40,4 +42,5 @@ with dag:
 
 if __name__ == "__main__":
     from tests.test_utils import test_dag
+
     test_dag(dag)

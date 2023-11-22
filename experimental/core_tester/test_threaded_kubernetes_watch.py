@@ -1,7 +1,9 @@
 import kubernetes
 import os
 from utils import logging
-from airflow_kubernetes_job_operator.threaded_kubernetes_watch import ThreadedKubernetesWatchNamspeace
+from airflow_kubernetes_job_operator.threaded_kubernetes_watch import (
+    ThreadedKubernetesWatchNamspeace,
+)
 
 logging.basicConfig(level="INFO")
 CUR_DIRECTORY = os.path.abspath(os.path.dirname(__file__))

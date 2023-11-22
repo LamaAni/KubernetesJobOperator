@@ -41,7 +41,10 @@ setup(
     author="Zav Shotan",
     author_email="",
     url="https://github.com/LamaAni/KubernetesJobOperator",
-    packages=["airflow_kubernetes_job_operator", "airflow_kubernetes_job_operator/kube_api"],
+    packages=[
+        "airflow_kubernetes_job_operator",
+        "airflow_kubernetes_job_operator/kube_api",
+    ],
     platforms="any",
     license="LICENSE",
     install_requires=[

@@ -26,4 +26,5 @@ with dag:
 
 if __name__ == "__main__":
     from tests.test_utils import test_dag
+
     test_dag(dag)
