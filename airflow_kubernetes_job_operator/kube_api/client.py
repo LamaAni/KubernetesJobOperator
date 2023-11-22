@@ -17,8 +17,13 @@ from urllib3.response import HTTPResponse
 from kubernetes.config import kube_config
 
 from airflow_kubernetes_job_operator.kube_api.utils import kube_logger
-from airflow_kubernetes_job_operator.kube_api.exceptions import KubeApiException, KubeApiClientException
-from airflow_kubernetes_job_operator.kube_api.collections import KubeApiRestQueryConnectionState
+from airflow_kubernetes_job_operator.kube_api.exceptions import (
+    KubeApiException,
+    KubeApiClientException,
+)
+from airflow_kubernetes_job_operator.kube_api.collections import (
+    KubeApiRestQueryConnectionState,
+)
 from airflow_kubernetes_job_operator.kube_api.config import (
     KubeApiConfiguration,
     DEFAULT_AUTO_RECONNECT_MAX_ATTEMPTS,
@@ -95,7 +100,9 @@ class KubeApiRestQuery(Task):
             throw_on_if_first_api_call_fails (bool, optional): If true the and the first attempt to connect fails,
                 throws an error. Defaults to True.
         """
-        assert use_asyncio is not True, NotImplementedError("AsyncIO not yet implemented.")
+        assert use_asyncio is not True, NotImplementedError(
+            "AsyncIO not yet implemented."
+        )
         super().__init__(
             self._execute_query,
             use_async_loop=use_asyncio or KubeApiRestQuery.default_use_asyncio,
@@ -120,11 +127,19 @@ class KubeApiRestQuery(Task):
         # these event are object specific
         self.query_started_event_name = f"{self.query_started_event_name} {id(self)}"
         self.query_ended_event_name = f"{self.query_started_event_name} {id(self)}"
-        self.connection_state_changed_event_name = f"{self.connection_state_changed_event_name} {id(self)}"
+        self.connection_state_changed_event_name = (
+            f"{self.connection_state_changed_event_name} {id(self)}"
+        )
 
         self._active_responses: Set[HTTPResponse] = WeakSet()  # type:ignore
         self._is_being_stopped: bool = False
-        self._connection_state: KubeApiRestQueryConnectionState = KubeApiRestQueryConnectionState.Disconnected
+        self._connection_state: KubeApiRestQueryConnectionState = (
+            KubeApiRestQueryConnectionState.Disconnected
+        )
+
+    @property
+    def query_type(self) -> str:
+        return type(self).__name__
 
     @property
     def query_running(self) -> bool:
@@ -136,11 +151,13 @@ class KubeApiRestQuery(Task):
         """The state of the connection"""
         return self._connection_state
 
-    def _set_connection_state(self, state: KubeApiRestQueryConnectionState, emit_event: bool = True):
+    def _set_connection_state(
+        self, state: KubeApiRestQueryConnectionState, emit_event: bool = True
+    ):
         if self._connection_state == state:
             return
         self._connection_state = state
-        kube_logger.debug(f"[{self.resource_path}] {self._connection_state}")
+        kube_logger.debug(f"[{self.resource_path}] State: {self._connection_state}")
         if emit_event:
             self.emit(self.connection_state_changed_event_name, state)
 
@@ -281,14 +298,21 @@ class KubeApiRestQuery(Task):
 
         # starting query.
         is_first_connect_attempt = True
-        while self.is_running and not self._is_being_stopped and (is_first_connect_attempt or self.auto_reconnect):
+        while (
+            self.is_running
+            and not self._is_being_stopped
+            and (is_first_connect_attempt or self.auto_reconnect)
+        ):
             try:
                 if not is_first_connect_attempt:
                     # error while running and has wait time
-                    if self.query_running and self.auto_reconnect_wait_between_attempts > 0:
+                    if (
+                        self.query_running
+                        and self.auto_reconnect_wait_between_attempts > 0
+                    ):
                         kube_logger.debug(
-                            f"[{self.resource_path}][Reconnect] Sleeping for "
-                            + f"{self.auto_reconnect_wait_between_attempts}"
+                            f"[{self.resource_path}] Waiting before reconnect "
+                            + f"{self.auto_reconnect_wait_between_attempts} [s]"
                         )
                         time.sleep(self.auto_reconnect_wait_between_attempts)
 
@@ -298,13 +322,17 @@ class KubeApiRestQuery(Task):
                         self.emit(self.query_before_reconnect_event_name)
 
                     # Reset the connection state.
-                    self._set_connection_state(KubeApiRestQueryConnectionState.Disconnected)
+                    self._set_connection_state(
+                        KubeApiRestQueryConnectionState.Disconnected
+                    )
 
                     # Case auto_reconnect has changed.
                     if not self.auto_reconnect or not do_reconnect:
                         break
 
-                    kube_logger.debug(f"[{self.resource_path}] Connection lost, reconnecting..")
+                    kube_logger.debug(
+                        f"[{self.resource_path}] Connection lost, reconnecting.."
+                    )
 
                 # generating the query params
                 path_params = validate_dictionary(self.path_params)
@@ -364,16 +392,25 @@ class KubeApiRestQuery(Task):
                     except Exception:
                         pass
 
-                    exeuctor_name = f"{self.__class__.__module__}.{self.__class__.__name__}"
+                    exeuctor_name = (
+                        f"{self.__class__.__module__}.{self.__class__.__name__}"
+                    )
 
                     if isinstance(ex.body, dict):
-                        exception_message = f"{exeuctor_name}, {ex.reason}: {ex.body.get('message')}"
+                        exception_message = (
+                            f"{exeuctor_name}, {ex.reason}: {ex.body.get('message')}"
+                        )
                     else:
                         exception_message = f"{exeuctor_name}, {ex.reason}: {ex.body}"
 
-                    err = KubeApiClientException(exception_message, rest_api_exception=ex)
+                    err = KubeApiClientException(
+                        exception_message, rest_api_exception=ex
+                    )
 
-                    if is_first_connect_attempt and self.throw_on_if_first_api_call_fails:
+                    if (
+                        is_first_connect_attempt
+                        and self.throw_on_if_first_api_call_fails
+                    ):
                         raise err
 
                     # check if can reconnect.
@@ -396,7 +433,9 @@ class KubeApiRestQuery(Task):
             client (ApiClient): The api client to use.
         """
         assert not self.is_running, "Cannot start a running query"
-        assert isinstance(client, KubeApiRestClient), "client must be of class KubeApiRestClient"
+        assert isinstance(
+            client, KubeApiRestClient
+        ), "client must be of class KubeApiRestClient"
 
         self._query_running = False
         super().start(client)
@@ -439,7 +478,9 @@ class KubeApiRestQuery(Task):
                         rsp.close()
                     except Exception:
                         pass
-            super().stop(timeout=timeout, throw_error_if_not_running=throw_error_if_not_running)  # type:ignore
+            super().stop(
+                timeout=timeout, throw_error_if_not_running=throw_error_if_not_running
+            )  # type:ignore
         finally:
             self._query_running = False
             self._is_being_stopped = False
@@ -453,7 +494,9 @@ class KubeApiRestQuery(Task):
         """
         pass
 
-    def pipe_to_logger(self, logger: Logger = kube_logger, allowed_event_names=None) -> EventHandler:
+    def pipe_to_logger(
+        self, logger: Logger = kube_logger, allowed_event_names=None
+    ) -> EventHandler:
         """Called to pipe logging events to a specific logger. The log_event method
         will be called when a message is emitted.
 
@@ -475,9 +518,15 @@ class KubeApiRestQuery(Task):
 
         def process_log_event(ev: Event):
             if ev.name in [self.error_event_name, self.warning_event_name]:
-                err: Exception = ev.args[-1] if len(ev.args) > 0 else Exception("Unknown error")
+                err: Exception = (
+                    ev.args[-1] if len(ev.args) > 0 else Exception("Unknown error")
+                )
                 msg = (
-                    "\n".join(traceback.format_exception(err.__class__, err, err.__traceback__))
+                    "\n".join(
+                        traceback.format_exception(
+                            err.__class__, err, err.__traceback__
+                        )
+                    )
                     if isinstance(err, Exception)
                     else err
                 )
@@ -536,9 +585,13 @@ class KubeApiRestClient:
         """
         if self._kube_config is None:
             if not self.auto_load_kube_config:
-                raise KubeApiException("Kubernetes configuration not loaded and auto load is set to false.")
+                raise KubeApiException(
+                    "Kubernetes configuration not loaded and auto load is set to false."
+                )
             self.load_kube_config()
-            assert self._kube_config is not None, "Failed to load default kubernetes configuration"
+            assert (
+                self._kube_config is not None
+            ), "Failed to load default kubernetes configuration"
         return self._kube_config
 
     @property
@@ -570,12 +623,14 @@ class KubeApiRestClient:
             persist (bool, optional): If True, config file will be updated when changed
                 (e.g GCP token refresh).
         """
-        self._kube_config: kube_config.Configuration = KubeApiConfiguration.load_kubernetes_configuration(
-            config_file=config_file,
-            is_in_cluster=is_in_cluster,
-            extra_config_locations=extra_config_locations,
-            context=context,
-            persist=persist,
+        self._kube_config: kube_config.Configuration = (
+            KubeApiConfiguration.load_kubernetes_configuration(
+                config_file=config_file,
+                is_in_cluster=is_in_cluster,
+                extra_config_locations=extra_config_locations,
+                context=context,
+                persist=persist,
+            )
         )
 
         assert self._kube_config is not None, KubeApiClientException(
@@ -599,7 +654,9 @@ class KubeApiRestClient:
 
     def _create_query_handler(self, queries: List[KubeApiRestQuery]) -> EventHandler:
         assert isinstance(queries, list), "queries Must be a list of queries"
-        assert all([isinstance(q, KubeApiRestQuery) for q in queries]), "All queries must be of type KubeApiRestQuery"
+        assert all(
+            [isinstance(q, KubeApiRestQuery) for q in queries]
+        ), "All queries must be of type KubeApiRestQuery"
         assert len(queries) > 0, "You must at least send one query"
 
         handler = EventHandler()
@@ -618,7 +675,10 @@ class KubeApiRestClient:
         for q in queries:
             self._active_queries.add(q)
             q.on(q.error_event_name, lambda query, err: remove_from_pending(query, err))
-            q.on(q.query_ended_event_name, lambda query, client: remove_from_pending(query))
+            q.on(
+                q.query_ended_event_name,
+                lambda query, client: remove_from_pending(query),
+            )
             q.pipe(handler)
 
         return handler
@@ -628,7 +688,9 @@ class KubeApiRestClient:
             self._active_queries.add(query)
             query.start(self)
 
-    def query_async(self, queries: Union[List[KubeApiRestQuery], KubeApiRestQuery]) -> EventHandler:
+    def query_async(
+        self, queries: Union[List[KubeApiRestQuery], KubeApiRestQuery]
+    ) -> EventHandler:
         """Asynchronous querying. The queries will be called in the background. Use wait_until_running
         for each query to wait for the queries to start.
 
@@ -710,7 +772,9 @@ class KubeApiRestClient:
             Union[List[object], object]: A single query if a single query is sent. A list if a
                 list is sent
         """
-        strm = self.stream(queries, event_name=event_name, timeout=timeout, throw_errors=throw_errors)
+        strm = self.stream(
+            queries, event_name=event_name, timeout=timeout, throw_errors=throw_errors
+        )
         rslt = [v for v in strm]
         if not isinstance(queries, list):
             return rslt[0] if len(rslt) > 0 else None
