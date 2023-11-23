@@ -1,0 +1,29 @@
+apiVersion: batch/v1
+kind: Job
+metadata: {}
+spec:
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: job-executor
+          image: ubuntu
+          command:
+            - bash
+            - -c
+            - |
+              #/bin/bash
+              echo "Fast print in $SLEEP_INTERVAL seconds"
+              sleep $SLEEP_INTERVAL
+              for i in "$(seq 1 $LINE_COUNT)"; do 
+                echo "$i"
+              done
+              sleep $SLEEP_INTERVAL
+              echo "Done"
+          env:
+            - name: LINE_COUNT
+              value: '10000'
+
+            - name: SLEEP_INTERVAL
+              value: '5'
+  backoffLimit: 0
